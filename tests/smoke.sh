@@ -170,7 +170,9 @@ EOF
 "$SOCOM" hydrate . 2>&1 | grep -q "REFUSED leaky" && ok "hydrate refuses secrets (HR6)" \
                                                   || bad "hydrate leaked a secret (HR6)"
 # hydrate must preserve pre-existing user memory (pilot finding, HR2)
-SLUG="$(pwd | tr '/.' '--')"
+# slug derived EXACTLY as the tool derives it (resolved path — macOS /var
+# is a symlink to /private/var; pwd alone gives a different slug)
+SLUG="$(python3 -c "from pathlib import Path; print(str(Path.cwd().resolve()).replace('/','-').replace('.','-'))")"
 MEMMD="$HOME/.claude/projects/$SLUG/memory/MEMORY.md"
 mkdir -p "$(dirname "$MEMMD")"
 printf '# My index\n- [precious](precious.md) — user entry\n' > "$MEMMD"
