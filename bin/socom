@@ -327,6 +327,47 @@ def cmd_compile(args):
         p.chmod(0o755)
         print(f"  wrote {p}")
 
+    # CI adapters — the R1 floor as GitOps, generated for EVERY provider so
+    # the repo delivers its enforcement to whichever remote it lands on.
+    full = cfg.get("checks", {}).get("full", "true")
+    extra = (cfg.get("ci") or {}).get("extra")
+    gh_steps = [
+        "      - uses: actions/checkout@v4",
+        "      - uses: actions/setup-python@v5",
+        "        with: { python-version: '3.12' }",
+        "      - run: pip install pyyaml",
+        "      - name: re-assert checks.full (socom gate, R1)",
+        f"        run: {full}",
+    ]
+    if extra:
+        gh_steps += ["      - name: extra CI checks (ci.extra)",
+                     f"        run: {extra}"]
+    write_generated(root / ".github" / "workflows" / "socom-gates.yml",
+                    "name: socom-gates\n"
+                    "on: [push, pull_request, workflow_dispatch]\n"
+                    "jobs:\n  gates:\n    runs-on: ubuntu-latest\n    steps:\n"
+                    + "\n".join(gh_steps) + "\n",
+                    h, comment=("#", ""), force=force)
+    gl = ["socom-gates:", "  image: python:3.12",
+          "  rules:", "    - if: $CI_PIPELINE_SOURCE == 'push' || $CI_PIPELINE_SOURCE == 'merge_request_event'",
+          "  script:", "    - pip install pyyaml", f"    - {full}"]
+    if extra:
+        gl.append(f"    - {extra}")
+    write_generated(root / ".gitlab-ci.yml", "\n".join(gl) + "\n",
+                    h, comment=("#", ""), force=force)
+    ado = ["# include as a job in azure-pipelines.yml (or run standalone)",
+           "jobs:", "  - job: socom_gates", "    pool: { vmImage: ubuntu-latest }",
+           "    steps:",
+           "      - task: UsePythonVersion@0",
+           "        inputs: { versionSpec: '3.12' }",
+           "      - script: pip install pyyaml && " + full,
+           "        displayName: re-assert checks.full (socom gate, R1)"]
+    if extra:
+        ado += ["      - script: " + extra,
+                "        displayName: extra CI checks (ci.extra)"]
+    write_generated(root / ".socom" / "ci" / "azure-socom-gates.yml",
+                    "\n".join(ado) + "\n", h, comment=("#", ""), force=force)
+
     settings = root / ".claude" / "settings.json"
     if not settings.exists():
         settings.parent.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,13 @@
+# socom:generated v=0.1 source=4cf1dc433d2d — do not edit; edit .socom/ + socom.yaml, then `socom compile` 
+name: socom-gates
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install pyyaml
+      - name: re-assert checks.full (socom gate, R1)
+        run: tests/smoke.sh && ./bin/socom index . >/dev/null && echo full-ok

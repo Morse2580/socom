@@ -1,0 +1,10 @@
+# socom:generated v=0.1 source=4cf1dc433d2d — do not edit; edit .socom/ + socom.yaml, then `socom compile` 
+# include as a job in azure-pipelines.yml (or run standalone)
+jobs:
+  - job: socom_gates
+    pool: { vmImage: ubuntu-latest }
+    steps:
+      - task: UsePythonVersion@0
+        inputs: { versionSpec: '3.12' }
+      - script: pip install pyyaml && tests/smoke.sh && ./bin/socom index . >/dev/null && echo full-ok
+        displayName: re-assert checks.full (socom gate, R1)

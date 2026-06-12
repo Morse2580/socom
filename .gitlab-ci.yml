@@ -1,0 +1,8 @@
+# socom:generated v=0.1 source=4cf1dc433d2d — do not edit; edit .socom/ + socom.yaml, then `socom compile` 
+socom-gates:
+  image: python:3.12
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'push' || $CI_PIPELINE_SOURCE == 'merge_request_event'
+  script:
+    - pip install pyyaml
+    - tests/smoke.sh && ./bin/socom index . >/dev/null && echo full-ok

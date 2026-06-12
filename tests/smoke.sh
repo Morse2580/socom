@@ -180,7 +180,16 @@ EOF
 grep -q "Forge — git-provider operations" CLAUDE.md \
   && ok "forge table compiled into views" || bad "forge missing from views"
 
-# 12. redaction (HR6)
+# 12. CI adapters — GitOps on any provider
+for f in .github/workflows/socom-gates.yml .gitlab-ci.yml .socom/ci/azure-socom-gates.yml; do
+  [ -f "$f" ] && grep -q "socom:generated" "$f" && ok "CI adapter $f generated+stamped" \
+                                                || bad "CI adapter $f missing/unstamped"
+done
+grep -q "re-assert checks.full" .github/workflows/socom-gates.yml \
+  && ok "CI adapters re-assert the bound full check (R1)" \
+  || bad "CI adapter lost the R1 re-assertion"
+
+# 13. redaction (HR6)
 cat > .socom/memory/memories/leaky.md <<EOF
 a memory containing password = supersecret123 which must not travel
 EOF
