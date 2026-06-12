@@ -77,12 +77,27 @@ def parse_canon(root: Path, name: str):
     return ET.parse(f).getroot()
 
 
-def write_generated(path: Path, body: str, hash_: str, comment=("<!--", "-->")):
+def write_generated(path: Path, body: str, hash_: str, comment=("<!--", "-->"),
+                    force: bool = False):
+    # HR2: never clobber a file we didn't generate. Adoption is explicit.
+    if path.exists() and "socom:generated" not in path.read_text()[:200] and not force:
+        print(f"  REFUSED {path}: exists and is not socom-generated "
+              f"(hand-written?). Re-run with --force to adopt it.", file=sys.stderr)
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     header = (f"{comment[0]} socom:generated v={SOCOM_VERSION} source={hash_} "
               f"— do not edit; edit .socom/ + socom.yaml, then `socom compile` {comment[1]}\n")
     path.write_text(header + body)
     print(f"  wrote {path}")
+
+
+# HR6: redaction at the substrate boundary — index/hydrate refuse
+# secret-shaped content. Focused patterns; full PII taxonomy is roadmap.
+SECRET_RX = re.compile(
+    r"(-----BEGIN [A-Z ]*PRIVATE KEY|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]+"
+    r"|ghp_[A-Za-z0-9]{36}|glpat-[A-Za-z0-9_-]{20}|eyJ[A-Za-z0-9_-]{30,}"
+    r"|(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*['\"]?[^\s'\"]{8,})",
+    re.IGNORECASE)
 
 
 # ── init ─────────────────────────────────────────────────────────────────
@@ -214,37 +229,53 @@ def render_agent(role) -> str:
     return "\n".join(lines) + "\n"
 
 
-# Hooks embed the resolved tool path — `socom` is rarely on PATH in hook env.
+# HR1: hooks resolve the tool (PATH -> $SOCOM_HOME -> builder-machine
+# fallback) and degrade gracefully when absent — the substrate must never be
+# why a fresh clone can't commit. CI re-asserts every gate (R1), so graceful
+# local absence loses nothing.
 SOCOM_BIN = str(TOOL_ROOT / "bin" / "socom")
+HOOK_RESOLVER = f'''SOCOM="$(command -v socom 2>/dev/null)"
+[ -z "$SOCOM" ] && [ -n "$SOCOM_HOME" ] && [ -x "$SOCOM_HOME/bin/socom" ] && SOCOM="$SOCOM_HOME/bin/socom"
+[ -z "$SOCOM" ] && [ -x "{SOCOM_BIN}" ] && SOCOM="{SOCOM_BIN}"
+if [ -z "$SOCOM" ]; then
+  echo "socom: tool not found — gate skipped locally, CI re-asserts. (export SOCOM_HOME=<socom checkout>)" >&2
+  exit 0
+fi
+'''
 HOOK_TEMPLATES = {
-    "pre-commit": f'"{SOCOM_BIN}" gate pre-commit',
-    "commit-msg": f'"{SOCOM_BIN}" gate commit-msg "$1"',
-    "pre-push": f'"{SOCOM_BIN}" gate pre-push',
+    "pre-commit": 'exec "$SOCOM" gate pre-commit',
+    "commit-msg": 'exec "$SOCOM" gate commit-msg "$1"',
+    "pre-push": 'exec "$SOCOM" gate pre-push',
 }
 
 
 def cmd_compile(args):
+    force = "--force" in args
+    args = [a for a in args if a != "--force"]
     root = repo_root(Path(args[0]) if args else None)
     cfg = load_cfg(root)
     h = canonical_hash(root)
     body = render_body(root, cfg)
 
-    write_generated(root / "CLAUDE.md", body, h)
-    write_generated(root / "AGENTS.md", body, h)
+    write_generated(root / "CLAUDE.md", body, h, force=force)
+    write_generated(root / "AGENTS.md", body, h, force=force)
     write_generated(root / ".cursor" / "rules" / "socom.mdc",
-                    "---\nalwaysApply: true\n---\n" + body, h)
+                    "---\nalwaysApply: true\n---\n" + body, h, force=force)
 
     roles = parse_canon(root, "roles.xml")
     for r in roles.findall("role"):
         if r.get("state") == "active":
             write_generated(root / ".claude" / "agents" / f"{r.get('id')}.md",
-                            render_agent(r), h)
+                            render_agent(r), h, force=force)
 
     hooks_dir = root / ".githooks"
     for name, cmd in HOOK_TEMPLATES.items():
         script = (f"#!/bin/sh\n# socom:generated source={h}\n"
-                  f"exec {cmd}\n")
+                  f"{HOOK_RESOLVER}{cmd}\n")
         p = hooks_dir / name
+        if p.exists() and "socom:generated" not in p.read_text()[:200] and not force:
+            print(f"  REFUSED {p}: existing non-socom hook (use --force)", file=sys.stderr)
+            continue
         p.parent.mkdir(exist_ok=True)
         p.write_text(script)
         p.chmod(0o755)
@@ -342,6 +373,18 @@ def cmd_gate(args):
             log_breach(root, "commit-msg", f"amber: missing {missing} blocks")
             print(f"socom gate commit-msg: AMBER — missing {missing}; logged. "
                   "Full blocks belong on the first branch commit.")
+            return
+        # HR4: substance heuristic — evidence should look like evidence
+        # (a command, an exit code, an output line), not a vibe.
+        m = re.search(r"\[test\](.*?)(?:\n\[|\Z)", msg, re.DOTALL)
+        body = (m.group(1) if m else "").strip()
+        looks_like_evidence = (len(body) >= 20 and
+                               re.search(r"(\$ |rc=|exit|PASS|FAIL|\d)", body))
+        if not looks_like_evidence:
+            log_breach(root, "commit-msg", "amber: [test] block has no "
+                                           "evidence-shaped content")
+            print("socom gate commit-msg: AMBER — [test] reads like a claim, "
+                  "not evidence (no command/exit-code/output). Logged; CI replays.")
         return
 
     if name == "session-start":
@@ -355,6 +398,18 @@ def cmd_gate(args):
                 sys.exit(2)
         wt = subprocess.run(["git", "worktree", "list"], cwd=root,
                             capture_output=True, text=True).stdout
+        # HR3: amber closes a loop — every session opens by seeing its debt.
+        # Entries carry gate + detail, never author identity (telemetry about
+        # the system, not surveillance of people).
+        blog = root / ".socom" / "gates" / "breaches.log"
+        if blog.exists():
+            lines = [ln for ln in blog.read_text().splitlines() if ln.strip()]
+            if lines:
+                print(f"socom session-start: {len(lines)} amber breach(es) on "
+                      f"record — oldest {lines[0].split(chr(9))[0]}; last 3:")
+                for ln in lines[-3:]:
+                    print(f"    {ln}")
+                print("  review or resolve before new work piles on top.")
         print(f"socom session-start: source={h} ok; worktrees:\n{wt.strip()}")
         return
 
@@ -398,7 +453,12 @@ def cmd_hydrate(args):
     src = root / ".socom" / "memory"
     n = 0
     for f in (src / "memories").glob("*.md"):
-        (dest / f.name).write_text(f.read_text())
+        text = f.read_text()
+        if SECRET_RX.search(text):  # HR6
+            print(f"  REFUSED {f.name}: secret-shaped content — redact before "
+                  f"hydrating", file=sys.stderr)
+            continue
+        (dest / f.name).write_text(text)
         n += 1
     idx = src / "INDEX.md"
     if idx.exists():
@@ -424,6 +484,10 @@ def cmd_index(args):
         art = tree.getroot()
         for el in art.iter():
             if el.get("embed") == "true" and (el.text or "").strip():
+                if SECRET_RX.search(el.text):  # HR6
+                    print(f"  REDACTED {f.relative_to(root)}#{el.tag}: "
+                          f"secret-shaped content not indexed", file=sys.stderr)
+                    continue
                 parent_attrs = {k: v for k, v in art.attrib.items()}
                 chunks.append({
                     "id": f"{f.relative_to(root)}#{el.tag}"

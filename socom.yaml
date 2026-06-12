@@ -5,10 +5,9 @@ domains:
 - cli
 - canon
 checks:
-  fast: python3 -m py_compile bin/socom
-  medium: python3 -m py_compile bin/socom && python3 -c "import xml.etree.ElementTree as ET,glob; [ET.parse(f) for f in glob.glob('canon/*.xml')+glob.glob('schemas/*.xml')+glob.glob('.socom/canon/*.xml')];
-    print('xml well-formed')"
-  full: python3 -m py_compile bin/socom && ./bin/socom index . >/dev/null && echo full-ok
+  fast: tests/smoke.sh
+  medium: tests/smoke.sh && python3 -c "import xml.etree.ElementTree as ET,glob; [ET.parse(f) for f in glob.glob('canon/*.xml')+glob.glob('schemas/*.xml')+glob.glob('.socom/canon/*.xml')]; print('xml well-formed')"
+  full: tests/smoke.sh && ./bin/socom index . >/dev/null && echo full-ok
 ci:
   status: 'echo ''bind me: cache-free pipeline state query'''
 seats:

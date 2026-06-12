@@ -1,3 +1,10 @@
 #!/bin/sh
-# socom:generated source=e8f07a5fb901
-exec "/Users/arinti-work/Documents/projs/socom/bin/socom" gate pre-commit
+# socom:generated source=9c328d6a0c5d
+SOCOM="$(command -v socom 2>/dev/null)"
+[ -z "$SOCOM" ] && [ -n "$SOCOM_HOME" ] && [ -x "$SOCOM_HOME/bin/socom" ] && SOCOM="$SOCOM_HOME/bin/socom"
+[ -z "$SOCOM" ] && [ -x "/Users/arinti-work/Documents/projs/socom/bin/socom" ] && SOCOM="/Users/arinti-work/Documents/projs/socom/bin/socom"
+if [ -z "$SOCOM" ]; then
+  echo "socom: tool not found — gate skipped locally, CI re-asserts. (export SOCOM_HOME=<socom checkout>)" >&2
+  exit 0
+fi
+exec "$SOCOM" gate pre-commit

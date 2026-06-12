@@ -1,4 +1,4 @@
-<!-- socom:generated v=0.1 source=e8f07a5fb901 — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
+<!-- socom:generated v=0.1 source=9c328d6a0c5d — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
 # socom — SOCOM substrate
 
 Protocol over participants: the rules below bind every participant — agent or human. Canonical source: `.socom/` + `socom.yaml`.
@@ -158,9 +158,9 @@ Local bypass is permitted for flow; CI re-asserts every gate. Run a gate: `socom
 
 | Check | Command |
 |---|---|
-| fast | `python3 -m py_compile bin/socom` |
-| medium | `python3 -m py_compile bin/socom && python3 -c "import xml.etree.ElementTree as ET,glob; [ET.parse(f) for f in glob.glob('canon/*.xml')+glob.glob('schemas/*.xml')+glob.glob('.socom/canon/*.xml')]; print('xml well-formed')"` |
-| full | `python3 -m py_compile bin/socom && ./bin/socom index . >/dev/null && echo full-ok` |
+| fast | `tests/smoke.sh` |
+| medium | `tests/smoke.sh && python3 -c "import xml.etree.ElementTree as ET,glob; [ET.parse(f) for f in glob.glob('canon/*.xml')+glob.glob('schemas/*.xml')+glob.glob('.socom/canon/*.xml')]; print('xml well-formed')"` |
+| full | `tests/smoke.sh && ./bin/socom index . >/dev/null && echo full-ok` |
 | ci.status | `echo 'bind me: cache-free pipeline state query'` |
 
 Domains: protocol, cli, canon
