@@ -729,10 +729,26 @@ def cmd_hydrate(args):
             continue
         (dest / f.name).write_text(text)
         n += 1
+    # HR2 applies here too (pilot finding, mwingz 2026-06-12): a developer's
+    # existing MEMORY.md must survive hydration. socom owns only its marked
+    # block; everything outside it is preserved verbatim.
     idx = src / "INDEX.md"
     if idx.exists():
-        (dest / "MEMORY.md").write_text(
-            idx.read_text().replace("memories/", ""))
+        block = ("<!-- socom:hydrated section — managed by `socom hydrate`, "
+                 "edits above survive -->\n"
+                 + idx.read_text().replace("memories/", "")
+                 + "\n<!-- /socom:hydrated -->\n")
+        mem_md = dest / "MEMORY.md"
+        if mem_md.exists():
+            cur = mem_md.read_text()
+            if "<!-- socom:hydrated" in cur:
+                cur = re.sub(r"<!-- socom:hydrated.*?/socom:hydrated -->\n?",
+                             block, cur, flags=re.DOTALL)
+            else:
+                cur = cur.rstrip() + "\n\n" + block
+            mem_md.write_text(cur)
+        else:
+            mem_md.write_text(block)
     print(f"socom: hydrated {n} memories + index -> {dest}")
 
 

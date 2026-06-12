@@ -169,6 +169,17 @@ a memory containing password = supersecret123 which must not travel
 EOF
 "$SOCOM" hydrate . 2>&1 | grep -q "REFUSED leaky" && ok "hydrate refuses secrets (HR6)" \
                                                   || bad "hydrate leaked a secret (HR6)"
+# hydrate must preserve pre-existing user memory (pilot finding, HR2)
+SLUG="$(pwd | tr '/.' '--')"
+MEMMD="$HOME/.claude/projects/$SLUG/memory/MEMORY.md"
+mkdir -p "$(dirname "$MEMMD")"
+printf '# My index\n- [precious](precious.md) — user entry\n' > "$MEMMD"
+"$SOCOM" hydrate . >/dev/null
+grep -q "precious" "$MEMMD" && ok "hydrate preserves user MEMORY.md (HR2)" \
+                            || bad "hydrate clobbered user MEMORY.md (HR2)"
+"$SOCOM" hydrate . >/dev/null
+[ "$(grep -c 'socom:hydrated section' "$MEMMD")" = "1" ] \
+  && ok "hydrate block is idempotent" || bad "hydrate block duplicated"
 cat > .socom/promises/leak.xml <<EOF
 <promise socom="0.1" id="x"><goal embed="true">token = abcd1234efgh5678</goal></promise>
 EOF
