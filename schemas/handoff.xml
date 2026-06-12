@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  socom handoff — the only way state leaves the room. Artifacts, not vibes:
+  done / undone / commands / exit codes / blockers. Immutable once written.
+  The next-session prompt is GENERATED from this plus the drift scan, then
+  claim-verified before it is trusted.
+-->
+<handoff id="H-S193" session="S193" date="2026-06-12T21:02:00Z"
+         worktree="removed" claims="released">
+
+  <done>
+    <item promise="P-2026-0612-001" state="kept" embed="true">
+      Failed runs recorded in dbo.run before notebook raise; forced-fail
+      verified (run f7a2), reviewer approved, CI green on PR !41.
+    </item>
+  </done>
+
+  <undone>
+    <item promise="P-2026-0612-002" state="open" embed="true">
+      Staleness escalation view drafted, not contracted — needs ratification
+      of what "stale" means per cadence bucket.
+    </item>
+  </undone>
+
+  <evidence>
+    <command exit="0">dbt build --select group:network_kpi</command>
+    <command exit="0">sqlcmd -Q "SELECT status, COUNT(*) FROM dbo.run GROUP BY status"</command>
+    <command exit="1" note="expected — forced-fail test">python nb_run_product.py --force-fail</command>
+  </evidence>
+
+  <blockers>
+    <blocker owner="human" embed="true">
+      SPN lacks EXEC on new proc upsert_run_v2 — grant required before next
+      prod run.
+    </blocker>
+  </blockers>
+
+  <warnings>
+    <warning embed="true">
+      Notebook retry double-fires Livy session creation under 30s timeouts —
+      watch for duplicate run rows; idempotency key added but unverified
+      under real retry.
+    </warning>
+  </warnings>
+
+  <next>
+    <candidate priority="1" promise="P-2026-0612-002">ratify staleness contract, implement view</candidate>
+    <candidate priority="2">memory candidate: Livy retry double-fire (needs second occurrence before lesson)</candidate>
+  </next>
+</handoff>

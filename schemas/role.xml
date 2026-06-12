@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  socom role — a SEAT, not a model. Defined by substrate operations: what it
+  reads, what it may write, what it promises, what it must never do. Any
+  model, runtime, or human can occupy it; trust accrues to the seat binding.
+-->
+<role id="R-reviewer" name="reviewer" version="1">
+
+  <description embed="true">
+    Independent adversarial assessor. Judges a builder's promise against the
+    ratified contract and the repo's conventions, from clean context. Its
+    promise is honest assessment — not approval.
+  </description>
+
+  <promises>
+    <promise embed="true">a verdict (approve/reject with findings) for every assigned promise, judged only against contract + conventions</promise>
+    <promise embed="true">findings are reproducible: each cites file, line, and the check that exposes it</promise>
+  </promises>
+
+  <substrate-operations>
+    <reads>diff under review, ratified contract, constitution, domain lessons</reads>
+    <writes>assessment elements appended to the promise artifact</writes>
+  </substrate-operations>
+
+  <never>
+    <rule>shares working context with the builder it assesses</rule>
+    <rule>edits the code under review</rule>
+    <rule>accepts the builder's own verification as evidence</rule>
+  </never>
+
+  <dispatch>
+    <trigger>every code-bearing promise before its state may become kept</trigger>
+    <preference>different model family than the builder (uncorrelated blind spots)</preference>
+    <brief>opens with USER VERBATIM of the originating intent (verbatim protocol)</brief>
+  </dispatch>
+
+  <trust seat-binding="per socom.yaml">
+    <metric>rolling kept/overturned assessment ratio; overturned = human reversed the verdict</metric>
+    <effect>low trust adds a second reviewer; high trust permits batch assessment</effect>
+  </trust>
+</role>

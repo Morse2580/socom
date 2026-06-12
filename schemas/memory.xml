@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  socom memory — decoded operator feedback (the dominant type), in the
+  canonical voice: verbatim → decoded rule → why → how to apply →
+  counter-cases. Lifecycle attribute drives the deterministic retrieval map;
+  embed flags drive associative retrieval.
+-->
+<memory id="M-verbatim-protocol"
+        type="feedback"
+        lifecycle="mid-session"
+        state="active"
+        originSession="S184">
+
+  <description embed="true">
+    Pass the user's exact words to every dispatched participant — paraphrase
+    loses signal; assessors need the source, not the translator's filter.
+  </description>
+
+  <verbatim from="human" date="2026-04-25" embed="true">
+    capture verbatims sin memry so that we can create a verbatimprotocol,
+    and use aegis for eview
+  </verbatim>
+
+  <decoded-rule embed="true">
+    Every brief to another participant opens with a USER VERBATIM block
+    quoting the human's literal words, typos preserved. The decoded
+    interpretation follows, clearly labeled, so the recipient can compare
+    the two and flag drift.
+  </decoded-rule>
+
+  <why embed="true">
+    The dispatching agent is a translator between the human and the seats.
+    Every paraphrase loses tone, emphasis, and the gap between what was said
+    and what was assumed. Independent adversarial review is only meaningful
+    if the reviewer sees the original requirement, not a recursive read of
+    the decode.
+  </why>
+
+  <how-to-apply>
+    <trigger>any builder/reviewer/scout/adversary brief</trigger>
+    <step>prepend USER VERBATIM (date) block; quote question-answers verbatim too</step>
+    <step>keep typos — they carry urgency/terseness/dictation signal</step>
+    <step>multi-turn intent: include the chain of relevant verbatims</step>
+  </how-to-apply>
+
+  <counter-cases>
+    <case>trivial confirmations ("yes", "go ahead") — no value</case>
+    <case>credentials / personal info — never verbatim into briefs</case>
+    <case>human explicitly asks for a summary brief — opted out for that spawn</case>
+  </counter-cases>
+
+  <links>
+    <link ref="M-mason-aegis-pattern"/>
+  </links>
+  <!-- supersession is explicit and preserving:
+       <superseded-by ref="M-..." date="..."/> — body is never deleted -->
+</memory>

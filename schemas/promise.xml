@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  socom promise — the unit of work agreement.
+  Work is never imposed: an intent is published, a participant ACCEPTS by
+  recording this promise against a validation contract. Only the promiser
+  is bound; only the named assessors judge.
+-->
+<promise id="P-2026-0612-001"
+         state="open"
+         domain="data-pipeline"
+         session="S193">
+
+  <!-- WHO -->
+  <promiser seat="builder" participant="claude-code:default"/>
+  <promisee seat="orchestrator" participant="human:moses"/>
+  <assessors>
+    <assessor seat="gate" ref="gate:task-completion"/>
+    <assessor seat="reviewer" participant="any:different-family-preferred"
+              context="clean"/>   <!-- never shares context with promiser -->
+    <assessor seat="human" participant="human:moses" scope="final"/>
+  </assessors>
+
+  <!-- WHY — the originating intent, human words verbatim, typos preserved.
+       The verbatim is what embeds; the decode is labeled and separate. -->
+  <intent>
+    <verbatim from="human:moses" date="2026-06-12" embed="true">
+      add freshness tracking to teh contracts db so we kno when a product
+      last succeded, and failed runs still show up
+    </verbatim>
+    <decoded embed="true">
+      Record every run (success AND failure) in the contracts DB with a
+      freshness timestamp, queryable per product, written before the
+      notebook raises on failure.
+    </decoded>
+  </intent>
+
+  <!-- WHAT DONE MEANS — falsifiable, written BEFORE implementation,
+       ratified by the promisee. The promiser cannot amend it. -->
+  <contract ref="C-2026-0612-001" state="ratified">
+    <goal embed="true">
+      A failed product run is visible in dbo.run with status='failure'
+      before the orchestrator sees the notebook exception.
+    </goal>
+    <check id="1" assessor="gate:task-completion">
+      <run>sqlcmd -Q "SELECT status, COUNT(*) FROM dbo.run GROUP BY status"</run>
+      <expect>rows for both 'success' and 'failure' after a forced-fail test run</expect>
+    </check>
+    <check id="2" assessor="reviewer">
+      <expect>insert_run is called in the except path BEFORE re-raise; idempotent on retry</expect>
+    </check>
+    <out-of-scope embed="true">
+      Alerting/escalation on staleness — separate intent.
+    </out-of-scope>
+    <regression-surface embed="true">
+      Successful-run recording must not double-insert on notebook retry.
+    </regression-surface>
+  </contract>
+
+  <!-- HOW IT ENDED — append-only; each assessor writes its own verdict. -->
+  <assessments>
+    <assessment by="gate:task-completion" at="2026-06-12T20:14:00Z"
+                verdict="kept">
+      <evidence>check 1 output: success=41 failure=3 (forced-fail run f7a2)</evidence>
+    </assessment>
+    <!-- reviewer + human verdicts append here; promise state becomes
+         kept only when all assessors concur, broken on any final reject -->
+  </assessments>
+</promise>
