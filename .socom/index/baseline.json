@@ -1,0 +1,47 @@
+{
+  "socom": "0.1",
+  "measured_at": "2026-06-12T20:36:55+00:00",
+  "corpus": {
+    "chunks": 51,
+    "artifacts_by_type": {
+      "constitution": 11,
+      "doctrine": 22,
+      "gates": 6,
+      "roles": 9,
+      "session": 3
+    },
+    "total_chars": 13329
+  },
+  "latency_s": {
+    "index_walk": 0.0297,
+    "grep_cold": 0.0668
+  },
+  "probes": {
+    "count": 2,
+    "hit_at_5": 2,
+    "rate": 1.0,
+    "results": [
+      {
+        "query": "how do I prove a task is done",
+        "expect": "verify-never-claim",
+        "hit@5": true,
+        "top": [
+          ".socom/canon/constitution.xml#constitution/principle.verify-never-claim/md",
+          ".socom/canon/gates.xml#gates/gate.task-completion/description",
+          ".socom/canon/constitution.xml#constitution/principle.mitigate-before-perfect/md"
+        ]
+      },
+      {
+        "query": "when should I write the acceptance checks",
+        "expect": "contracts-before-code",
+        "hit@5": true,
+        "top": [
+          ".socom/canon/constitution.xml#constitution/principle.contracts-before-code/md",
+          ".socom/canon/constitution.xml#constitution/principle.verify-never-claim/md",
+          ".socom/canon/constitution.xml#constitution/principle.fix-the-class/md"
+        ]
+      }
+    ]
+  },
+  "l1_acceptance": "same probes, hit@5 strictly greater, latency within 2x index_walk, zero redaction violations"
+}

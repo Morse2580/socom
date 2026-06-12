@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  socom doctrine — the teaching layer. Where the constitution holds RULES
+  (violations are gated), doctrine holds CONCEPTS: named thinking devices an
+  engineer reaches for to frame work. Natural-language payloads in versioned
+  XML envelopes — the prose appreciates as models improve; the envelope keeps
+  it addressable, indexable, and evolvable (concepts enter provisional and
+  earn active, like roles and lessons). Lineage: Akili substrate, 192+
+  sessions; Evans (DDD), Dehghani (Data Mesh), O'Reilly (Residuality).
+-->
+<doctrine socom="0.1">
+
+  <concept id="capability-ladder" state="active" lineage="akili">
+    <title>Capability ladder</title>
+    <fires-when embed="true">Scoping any initiative; answering "what's next" at session start; suspecting false-done.</fires-when>
+    <md embed="true">
+One capability per initiative, one falsifiable exit per capability, tiers per
+increment: T0 substrate missing → T1 present but not wired → T2 wired but not
+tested → T3 tested but not shipped → T4 shipped but not adopted. The ladder is
+O(1) orientation — next work is always the lowest tier whose exit is not
+provably green — and a false-done detector: closure-orientation cannot mask
+incomplete work when every tier has a command-verifiable exit.
+    </md>
+  </concept>
+
+  <concept id="initiative-increment" state="active" lineage="akili">
+    <title>Initiatives and increments</title>
+    <fires-when embed="true">Breaking an objective into sessions of work; sizing what one session may promise.</fires-when>
+    <md embed="true">
+An initiative carries one falsifiable goal and a single success metric — "fix
+class X at root Y" form (constitution §fix-the-class). Increments are the
+rungs it ships on: each is a vertical slice that leaves the system whole and
+provably one tier higher, never a horizontal layer that leaves everything
+half-wired. An increment that cannot state its exit check is not yet an
+increment; it is an intention.
+    </md>
+  </concept>
+
+  <concept id="unison" state="active" lineage="akili">
+    <title>Unison — never compromise one part to fix another</title>
+    <fires-when embed="true">Any fix spanning systems or layers; before implementing a ratified design; when a green check feels too easy.</fires-when>
+    <md embed="true">
+Every session moves the system forward in unison: a change that fixes its
+target while fragmenting the whole fails, even when its code is clean,
+reviewed, and verified. Run the premise-check BEFORE executing: "which engine
+already owns this responsibility?" A parallel mechanism beside an existing
+owner is fragmentation with extra steps. Distrust the green live-proof that
+only shows the symptom gone; trade-offs that bend another component get an
+explicit follow-up task, never silence.
+    </md>
+  </concept>
+
+  <concept id="ratified-not-implemented" state="active" lineage="akili">
+    <title>Ratified ≠ implemented; implemented ≠ accepted</title>
+    <fires-when embed="true">Closing any phase, task, or fix; reading a design doc that says "X happens"; inheriting a prompt's claims.</fires-when>
+    <md embed="true">
+Two distinct gaps, both fatal to trust. A ratified decision is prose recording
+intent — grep the implied code path and run the live operation before treating
+it as built. And shipped code that works is still not accepted until the class
+has a structural guard: ask "if we removed this code, does the class
+reappear?" — if yes, the fix is isolated, not accepted; it needs a gate, a
+type, a contract, or a check that makes recurrence impossible.
+    </md>
+  </concept>
+
+  <concept id="design-artifact-set" state="active" lineage="akili">
+    <title>Design-artifact set — the ready-to-start gate</title>
+    <fires-when embed="true">Any work spanning more than one layer or component; before dispatching builders.</fires-when>
+    <md embed="true">
+No implementation begins until the artifact set exists: solution design,
+implementation design, diagram, and contract — design-reviewed and
+operator-ratified. The same set gates ready-to-close. Sizing is proportional
+to scope (a small fix still surfaces design + diagram, briefly), but the gate
+itself never waives: it pays for itself the first time review catches a false
+invariant before code exists.
+    </md>
+  </concept>
+
+  <concept id="bounded-context" state="active" lineage="evans">
+    <title>Bounded context and ubiquitous language</title>
+    <fires-when embed="true">Organizing domains; naming things; deciding where work or data belongs; noticing the same word meaning two things.</fires-when>
+    <md embed="true">
+A domain is a DDD bounded context: a boundary inside which every term has
+exactly one agreed meaning (the ubiquitous language) and one owning team.
+Boundaries are structural, not tags — things do not migrate casually across
+them, and a domain that accepts everything is a dumping ground that defeats
+the purpose. In the substrate itself, domains scope claims, lessons, and
+buckets; in systems you build, they scope ownership and governance.
+    </md>
+  </concept>
+
+  <concept id="published-language" state="active" lineage="evans+dehghani">
+    <title>Published language and semantic contracts</title>
+    <fires-when embed="true">Two components or products sharing data about the same entity; any breaking-change dispute; coupling decisions.</fires-when>
+    <md embed="true">
+A domain publishes a canonical definition of each shared entity; consumers
+couple to declared semantic intent ("requires: customer_classification"),
+never to internals like column names. The contract is validated structurally
+at deploy/merge time and evaluated on upstream change as holds, stale, or
+broken — broken blocks, with an event, not a surprise six months later. This
+is the use-promise (−) made mechanical: downstream relies only on what
+upstream promised, and the platform enforces the reliance.
+    </md>
+  </concept>
+
+  <concept id="architectural-quantum" state="active" lineage="dehghani">
+    <title>Architectural quantum</title>
+    <fires-when embed="true">Drawing deployment or ownership boundaries; deciding what "one unit" of a system is.</fires-when>
+    <md embed="true">
+The smallest independently deployable unit with high functional cohesion,
+carrying everything its function needs: logic, contract, metadata,
+infrastructure declaration. "Independent" means an independent lifecycle and
+ownership — not necessarily isolated runtime. In socom, the promise is the
+quantum of work; in data platforms, the data product is the quantum of
+architecture; both compose into aggregates without surrendering autonomy.
+    </md>
+  </concept>
+
+  <concept id="published-gate" state="active" lineage="akili">
+    <title>The published gate — safe-by-construction at the right altitude</title>
+    <fires-when embed="true">Designing any validation; deciding WHERE a failure should surface; consumer-facing errors that trace to producer omissions.</fires-when>
+    <md embed="true">
+Move validation to the altitude where the person who can fix it meets it: a
+product missing classification fails at the owner's publish step with an
+actionable message — never as a consumer's read-time 500. By the time anything
+is visible to a consumer it is safe-to-share by construction. Generalized:
+every gate should fire at the desk of whoever owns the fix, as early as that
+desk allows (shift-left applied to governance).
+    </md>
+  </concept>
+
+  <concept id="fail-posture" state="active" lineage="oreilly+akili">
+    <title>Fail-closed vs fail-open — choose the posture per concern</title>
+    <fires-when embed="true">Designing any failure path, fallback, degradation, or health check.</fires-when>
+    <md embed="true">
+Degradation is designed, never discovered. Security concerns (auth, masking,
+classification) fail CLOSED: refuse rather than degrade, a 404 over an
+unmasked row. Quality concerns (freshness, completeness) fail OPEN: serve the
+previous good version with degradation metadata rather than nothing. Every
+external dependency names its fallback at design time; a dependency without a
+declared posture is an undesigned outage.
+    </md>
+  </concept>
+
+  <concept id="falsifiable-success" state="active" lineage="akili">
+    <title>Falsifiable success metrics</title>
+    <fires-when embed="true">Writing any goal, contract, exit criterion, or "definition of done".</fires-when>
+    <md embed="true">
+"How will we know?" must answer with a command and an expected output — "when
+[command] returns [result]" — never with "looks good" or "feels right". If the
+success of work cannot be falsified, the work cannot be promised, assessed, or
+handed off; reframe until it can. This is the doctrine that makes every other
+gate possible.
+    </md>
+  </concept>
+
+</doctrine>

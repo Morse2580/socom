@@ -1,0 +1,1 @@
+2026-06-12T20:07:15+00:00	commit-msg	amber: missing ['[what]', '[test]'] blocks	resolved=2026-06-12T20:36:16+00:00	note=pre-smoke manual band test; bands verified in tests/smoke.sh

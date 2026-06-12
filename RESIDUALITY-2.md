@@ -116,10 +116,28 @@ HR2 (no-clobber compile), HR3 (breach read-back at session-start, no authors),
 HR5 (smoke tests bound as this repo's fast check), HR6 (redaction scan in
 index/hydrate), HR4 (evidence-substance heuristic).
 
-Explicitly deferred (tracked, not hidden): claims, trust scoring (with HR11
-as a standing constraint), orphan reaper beyond listing, prompt generation +
-claim-verification, canon-delta reporting (HR9), packaging/distribution (G7
-— interim: clone + PATH, hooks survive absence via HR1).
+Resolved since (pass-3 sweep, same day): claims with TTL auto-expiry (R2),
+orphan reaper that reaps (R12), handoff + next-session prompt generation with
+mechanical claim-verification (paths/SHAs probed → VERIFIED/HYPOTHESIS),
+canon-delta reporting in doctor (HR9), breach list/resolve closing the amber
+loop (HR3), session-end gate hardened (FILL-field red, prompt-freshness red,
+unreleased-claims amber), doctrine teaching layer (canon/doctrine.xml, 11
+concepts), DB-adaptable identity (full-path chunk ids + content_sha, see
+STORAGE.md) and `socom baseline` — the measured L0 floor that gates L1.
+The baseline probes paid for themselves on first run: they caught duplicate
+chunk ids (ancestor id loss) before any vector store existed.
+
+Pass-3 residual notes: `.socom/claims/` is local-only in v0.1 — cross-machine
+claim propagation (push/fetch of claim files) is deferred until a multi-machine
+pilot needs it; TTL is the safety net either way. Probe expectations rot when
+canon ids change — acceptable, baseline re-run surfaces it as a falling hit
+rate (that is the probe working, not failing).
+
+Still deferred (tracked, not hidden): trust scoring (HR11 standing
+constraint: autonomy bands, never leaderboards — needs real kept/broken
+promise data first), packaging/distribution (G7 — interim: clone + PATH,
+hooks survive absence via HR1), full PII taxonomy for redaction (HR6 covers
+secret shapes today).
 
 **Re-verdict after fixes: suitable for a supervised pilot on one repo.
 "Production grade" is earned at the end of the pilot, when the human residues

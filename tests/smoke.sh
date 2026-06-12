@@ -74,7 +74,73 @@ grep -q "precious" CLAUDE.md && ok "compile refuses to clobber (HR2)" \
 grep -q "socom:generated" CLAUDE.md && ok "--force adopts deliberately (HR2)" \
                                     || bad "--force did not adopt (HR2)"
 
-# 6. redaction (HR6)
+# 6. claims (R2) + reaper (R12)
+cd "$R"
+export SOCOM_SESSION="smoke-a"
+"$SOCOM" claim core >/dev/null;            check "claim acquire" 0 $?
+"$SOCOM" claim core >/dev/null;            check "re-claim by same holder ok" 0 $?
+SOCOM_SESSION="smoke-b" "$SOCOM" claim core >/dev/null 2>&1; check "claim held by other RED" 1 $?
+"$SOCOM" claim nosuch >/dev/null 2>&1;     check "claim unknown domain RED" 1 $?
+"$SOCOM" claim --scan | grep -q "1 live" && ok "claim --scan sees live claim" \
+                                         || bad "claim --scan missed live claim"
+# expire it: backdate the timestamp, reaper must remove it
+python3 - <<EOF
+from pathlib import Path
+p = Path(".socom/claims/core.claim"); ts, rest = p.read_text().split("\t", 1)
+p.write_text("2020-01-01T00:00:00+00:00\t" + rest)
+EOF
+"$SOCOM" gate session-start 2>/dev/null | grep -q "reaped expired claim: core" \
+  && ok "reaper removes expired claim (R12)" || bad "reaper did not reap (R12)"
+"$SOCOM" claim core >/dev/null && "$SOCOM" release core >/dev/null
+check "release" 0 $?
+
+# 7. handoff + prompt + session-end gate
+"$SOCOM" gate session-end >/dev/null 2>&1; check "session-end RED without handoff" 1 $?
+"$SOCOM" handoff "smoke test session" >/dev/null; check "handoff skeleton" 0 $?
+"$SOCOM" gate session-end >/dev/null 2>&1; check "session-end RED with FILL fields" 1 $?
+H="$(ls .socom/handoffs/*.xml | tail -1)"
+python3 - "$H" <<'EOF'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1])
+p.write_text(p.read_text().replace("FILL: what was completed, with evidence refs",
+  "smoke ran tests/smoke.sh rc=0").replace("FILL: what remains, and why",
+  "nothing").replace("FILL or remove", "none").replace(
+  "FILL: ranked candidates for the next session", "1. nothing — smoke repo"))
+EOF
+"$SOCOM" gate session-end >/dev/null 2>&1; check "session-end RED without prompt" 1 $?
+"$SOCOM" prompt >/dev/null;                check "prompt generation" 0 $?
+grep -q "VERIFIED\|HYPOTHESIS\|no probe-able" .socom/prompts/next-session.md \
+  && ok "prompt is claim-verified" || bad "prompt lacks claim verification"
+"$SOCOM" gate session-end >/dev/null;      check "session-end PASS when complete" 0 $?
+
+# 8. breach lifecycle (HR3)
+"$SOCOM" breach list >/dev/null;           check "breach list" 0 $?
+N_OPEN=$("$SOCOM" breach list | tail -1 | grep -o '[0-9]*' | head -1)
+if [ "${N_OPEN:-0}" -gt 0 ]; then
+  "$SOCOM" breach resolve all "smoke cleanup" >/dev/null; check "breach resolve all" 0 $?
+  "$SOCOM" breach list | grep -q "0 open" && ok "breach loop closes" \
+                                          || bad "breaches did not close"
+else
+  ok "breach lifecycle (no open breaches to resolve)"
+fi
+
+# 9. doctrine + greeting + baseline
+grep -q "Doctrine — named thinking devices" CLAUDE.md \
+  && ok "doctrine table compiled into views" || bad "doctrine missing from views"
+grep -q "capability-ladder" .socom/canon/doctrine.xml \
+  && ok "doctrine planted at init" || bad "doctrine.xml not planted"
+"$SOCOM" greet . | grep -q "rung:" && ok "greeting shows adoption rung" \
+                                   || bad "greeting lacks rung"
+"$SOCOM" baseline . >/dev/null;            check "baseline" 0 $?
+python3 - <<'EOF' && ok "chunk ids unique + full-path (STORAGE identity)" || bad "chunk identity violated"
+import json, sys
+ids = [json.loads(l)["id"] for l in open(".socom/index/chunks.jsonl")]
+assert len(set(ids)) == len(ids), "duplicate chunk ids"
+assert any("/principle." in i for i in ids), "ancestor ids missing from paths"
+EOF
+[ -f .socom/index/baseline.json ] && ok "baseline.json written" || bad "no baseline.json"
+
+# 10. redaction (HR6)
 cat > .socom/memory/memories/leaky.md <<EOF
 a memory containing password = supersecret123 which must not travel
 EOF

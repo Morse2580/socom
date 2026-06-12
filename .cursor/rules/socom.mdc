@@ -1,4 +1,4 @@
-<!-- socom:generated v=0.1 source=9c328d6a0c5d — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
+<!-- socom:generated v=0.1 source=c3b4b25ede5e — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
 ---
 alwaysApply: true
 ---
@@ -127,6 +127,24 @@ verified green → handoff written (done / undone / commands / exit codes /
 blockers / warnings) → next-session prompt generated then claim-verified →
 memory distillation (cap 2, five gates) → claims released, worktrees
 removed, clean process table.
+
+## Doctrine — named thinking devices (teaching layer)
+
+Reach for the concept when its trigger fires; full text in `.socom/canon/doctrine.xml` (and via retrieval).
+
+| Concept | Fires when | Essence |
+|---|---|---|
+| **Capability ladder** | Scoping any initiative; answering "what's next" at session start; suspecting false-done. | One capability per initiative, one falsifiable exit per capability, tiers per increment: T0 substrate missing → T1 present but not wired → T2 wired but not tested → T3 tested but not shipped → T4 shipped but not adopted. |
+| **Initiatives and increments** | Breaking an objective into sessions of work; sizing what one session may promise. | An initiative carries one falsifiable goal and a single success metric — "fix class X at root Y" form (constitution §fix-the-class). |
+| **Unison — never compromise one part to fix another** | Any fix spanning systems or layers; before implementing a ratified design; when a green check feels too easy. | Every session moves the system forward in unison: a change that fixes its target while fragmenting the whole fails, even when its code is clean, reviewed, and verified. |
+| **Ratified ≠ implemented; implemented ≠ accepted** | Closing any phase, task, or fix; reading a design doc that says "X happens"; inheriting a prompt's claims. | Two distinct gaps, both fatal to trust. |
+| **Design-artifact set — the ready-to-start gate** | Any work spanning more than one layer or component; before dispatching builders. | No implementation begins until the artifact set exists: solution design, implementation design, diagram, and contract — design-reviewed and operator-ratified. |
+| **Bounded context and ubiquitous language** | Organizing domains; naming things; deciding where work or data belongs; noticing the same word meaning two things. | A domain is a DDD bounded context: a boundary inside which every term has exactly one agreed meaning (the ubiquitous language) and one owning team. Boundaries are structural, not tags — things do not migrate casually across them, and a domain that accepts everything is a dumping ground that defeats the purpose. |
+| **Published language and semantic contracts** | Two components or products sharing data about the same entity; any breaking-change dispute; coupling decisions. | A domain publishes a canonical definition of each shared entity; consumers couple to declared semantic intent ("requires: customer_classification"), never to internals like column names. |
+| **Architectural quantum** | Drawing deployment or ownership boundaries; deciding what "one unit" of a system is. | The smallest independently deployable unit with high functional cohesion, carrying everything its function needs: logic, contract, metadata, infrastructure declaration. |
+| **The published gate — safe-by-construction at the right altitude** | Designing any validation; deciding WHERE a failure should surface; consumer-facing errors that trace to producer omissions. | Move validation to the altitude where the person who can fix it meets it: a product missing classification fails at the owner's publish step with an actionable message — never as a consumer's read-time 500. |
+| **Fail-closed vs fail-open — choose the posture per concern** | Designing any failure path, fallback, degradation, or health check. | Degradation is designed, never discovered. |
+| **Falsifiable success metrics** | Writing any goal, contract, exit criterion, or "definition of done". | "How will we know?" must answer with a command and an expected output — "when [command] returns [result]" — never with "looks good" or "feels right". |
 
 ## Seats (open registry — any model, runtime, or human)
 

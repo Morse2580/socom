@@ -1,0 +1,7 @@
+# query -> expected chunk id substring; scored hit@5 under L0.
+# Grow this set as the substrate grows — it is the RAG contract.
+probes:
+  - query: "how do I prove a task is done"
+    expect: "verify-never-claim"
+  - query: "when should I write the acceptance checks"
+    expect: "contracts-before-code"

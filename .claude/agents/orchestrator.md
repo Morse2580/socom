@@ -1,4 +1,4 @@
-<!-- socom:generated v=0.1 source=9c328d6a0c5d — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
+<!-- socom:generated v=0.1 source=c3b4b25ede5e — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
 ---
 name: orchestrator
 description: Owns decomposition and dispatch. Publishes intents and validation contracts, decomposes initiatives into promises, assigns seats. Never writes production code.
