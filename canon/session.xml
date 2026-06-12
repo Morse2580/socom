@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- socom session protocol — the loop every session runs, regardless of
+     participant. Rendered into every compiled view. -->
+<session socom="0.1">
+
+  <phase id="bootstrap" order="1">
+    <md embed="true">
+1. Fetch + fast-forward main. Create an isolated worktree — never work in
+   the shared checkout. Run the orphan reaper (expired claims, dead
+   worktrees, handoff-less sessions).
+2. Discover the latest next-session prompt AND run the drift scan — the
+   prompt states what was true at write time; the repo states what is true
+   now. Surface every mismatch before planning.
+3. Claim the work: register the promise against a bucket row and its
+   contract.
+4. Load the retrieval map's session-start section and the lessons for the
+   task's domain.
+5. Non-trivial work enters plan mode; the plan is ratified against the
+   contract before any code.
+    </md>
+  </phase>
+
+  <phase id="build" order="2">
+    <md embed="true">
+Contract first if none exists. Implement; run the fast gate after every
+change. Dispatch seats with verbatim briefs; builder and reviewer never
+share context. Run the residuality gate before any fix lands. Capture
+memory/lesson candidates as they occur — distillation happens at closeout,
+recall is not trusted.
+    </md>
+  </phase>
+
+  <phase id="closeout" order="3">
+    <md embed="true">
+One uninterrupted pipeline: bucket rows flipped to reality → push → CI
+verified green → handoff written (done / undone / commands / exit codes /
+blockers / warnings) → next-session prompt generated then claim-verified →
+memory distillation (cap 2, five gates) → claims released, worktrees
+removed, clean process table.
+    </md>
+  </phase>
+
+</session>

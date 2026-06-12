@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- socom gate registry — assessment made mechanical. Two-band (R9):
+     amber warns + records + deadline; red blocks; trust widens amber only.
+     Every gate re-asserts in CI (R1): merge is the real door. `binding`
+     names the check command key in the repo's socom.yaml. -->
+<gates socom="0.1">
+
+  <gate id="session-start" trigger="session open" tier="fast" band="red">
+    <description embed="true">Sync and sanity before any work: fetch + fast-forward main; hash-diff compiled views against canonical (drift = P0, residue R3); orphan reaper — expired claims, dead worktrees, handoff-less sessions (R12); surface pending CI failures.</description>
+    <binding check="none — built-in: hash check + reaper"/>
+    <blocks>working on stale or drifted state</blocks>
+  </gate>
+
+  <gate id="task-completion" trigger="marking work done" tier="fast" band="red">
+    <description embed="true">Runs the repo's fast checks on the changed surface before any task may transition to done. The fast tier has a hard latency budget — a slow check is demoted to CI, never tolerated here.</description>
+    <binding check="checks.fast"/>
+    <blocks>the done transition</blocks>
+  </gate>
+
+  <gate id="pre-commit" trigger="git commit" tier="medium" band="amber">
+    <description embed="true">Repo's medium checks plus the structured-commit format contract. Amber: a failed medium check warns and records; the commit proceeds but the breach is logged with a deadline (CI re-asserts at red).</description>
+    <binding check="checks.medium"/>
+    <blocks>nothing locally (amber); the breach record feeds trust scoring</blocks>
+  </gate>
+
+  <gate id="pre-push" trigger="git push" tier="full" band="red">
+    <description embed="true">Repo's full checks. Local bypass (--no-verify) is permitted for flow but never escapes re-assessment: CI runs the same gate at red.</description>
+    <binding check="checks.full"/>
+    <blocks>the push (bypassable locally; never in CI)</blocks>
+  </gate>
+
+  <gate id="ci" trigger="push / pull request" tier="ci" band="red">
+    <description embed="true">The incorruptible floor (R1): every gate re-asserted, contract checks executed, evidence replayed. The merge is the real door; no participant — human, agent, or hook-less runtime — routes around it.</description>
+    <binding check="ci.status"/>
+    <blocks>the merge</blocks>
+  </gate>
+
+  <gate id="session-end" trigger="session close" tier="medium" band="red">
+    <description embed="true">The closeout pipeline: handoff artifact written (done / undone / commands / exit codes / blockers); next-session prompt generated then claim-verified against the repo (VERIFIED / REWRITTEN / HYPOTHESIS per claim); memory distillation gate (cap 2, five checks incl. falsifiability); claims released; worktrees removed.</description>
+    <binding check="none — built-in: handoff + prompt + distillation"/>
+    <blocks>a vanishing session</blocks>
+  </gate>
+
+</gates>

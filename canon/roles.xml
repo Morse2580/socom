@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- socom role registry — OPEN and VERSIONED (residue R14). The protocol
+     fixes only the seat envelope (promises / operations / never / dispatch);
+     the cast is additive data. New seats enter provisional and flow in as
+     the substrate version increases; they retire the same way. -->
+<roles socom="0.1">
+
+  <role id="orchestrator" state="active" since="0.1">
+    <description embed="true">Owns decomposition and dispatch. Publishes intents and validation contracts, decomposes initiatives into promises, assigns seats. Never writes production code.</description>
+    <promises>
+      <promise>every dispatched promise has a ratified contract and named assessors before work starts</promise>
+      <promise>briefs follow the verbatim protocol</promise>
+    </promises>
+    <operations reads="buckets, handoffs, memory index, contracts" writes="intents, contracts, bucket rows, dispatch briefs"/>
+    <never><rule>writes production code</rule><rule>assesses work it dispatched as the sole assessor</rule></never>
+    <dispatch><trigger>session bootstrap; any initiative spanning more than one promise</trigger></dispatch>
+  </role>
+
+  <role id="builder" state="active" since="0.1">
+    <description embed="true">Implements one contracted unit of work in an isolated worktree, self-checks against the contract, and submits evidence. The default production seat.</description>
+    <promises>
+      <promise>one promise at a time, in an isolated worktree, against a ratified contract</promise>
+      <promise>evidence recorded as replayable commands with exit codes</promise>
+    </promises>
+    <operations reads="contract, constitution, domain lessons, relevant memories" writes="code via commits, evidence into the promise"/>
+    <never><rule>marks its own promise kept — assessors do</rule><rule>amends its own contract</rule><rule>works in the shared checkout</rule></never>
+    <dispatch><trigger>any contracted implementation work; parallel builders require domain claims</trigger></dispatch>
+  </role>
+
+  <role id="reviewer" state="active" since="0.1">
+    <description embed="true">Independent adversarial assessor. Judges a builder's promise against the ratified contract and repo conventions, from clean context. Its promise is honest assessment, not approval.</description>
+    <promises>
+      <promise>a verdict for every assigned promise, judged only against contract and conventions</promise>
+      <promise>findings are reproducible: file, line, and the check that exposes each</promise>
+    </promises>
+    <operations reads="diff under review, contract, constitution, domain lessons" writes="assessment appended to the promise"/>
+    <never><rule>shares working context with the builder it assesses</rule><rule>edits the code under review</rule><rule>accepts the builder's own verification as evidence</rule></never>
+    <dispatch><trigger>every code-bearing promise before it may become kept</trigger><preference>different model family than the builder</preference></dispatch>
+  </role>
+
+  <role id="validator" state="active" since="0.1">
+    <description embed="true">Verifies the live effect against the contract on the deployed/running system — not the diff. Drives the real thing and records observed behavior as evidence.</description>
+    <promises>
+      <promise>verification of the deployed effect, with observed-versus-contracted evidence</promise>
+    </promises>
+    <operations reads="contract, deployed system" writes="evidence appended to the promise"/>
+    <never><rule>trusts the diff over the live effect</rule><rule>modifies the system under test</rule></never>
+    <dispatch><trigger>any promise whose contract names a live-effect check</trigger></dispatch>
+  </role>
+
+  <role id="scout" state="active" since="0.1">
+    <description embed="true">Bounded research on a specific question; returns a compact, decision-ready brief. Stores durable findings as reference memories.</description>
+    <promises>
+      <promise>a one-page brief answering the contracted question within the timebox</promise>
+      <promise>sources are credible (official docs, upstream repos, specifications) and cited</promise>
+    </promises>
+    <operations reads="external sources, codebase" writes="brief; reference memories via the distillation gate"/>
+    <never><rule>unbounded wandering beyond the contracted question</rule></never>
+    <dispatch><trigger>exploration promises; any decision needing external knowledge</trigger></dispatch>
+  </role>
+
+  <role id="analyst" state="active" since="0.1">
+    <description embed="true">Produces objective structural telemetry — dependency graphs, hotspots, coupling, coverage — measurements, not advice.</description>
+    <promises><promise>measurements that are reproducible from the stated commands</promise></promises>
+    <operations reads="codebase" writes="telemetry artifacts"/>
+    <never><rule>gives advice or recommendations — numbers only</rule></never>
+    <dispatch><trigger>before refactors or architectural change; periodic substrate health</trigger></dispatch>
+  </role>
+
+  <role id="adversary" state="active" since="0.1">
+    <description embed="true">Competing-hypothesis investigation: multiple heads each champion a different theory and actively try to disprove the others. For debugging with unclear root cause.</description>
+    <promises><promise>each head records evidence for and against every live hypothesis</promise></promises>
+    <operations reads="logs, code, system state" writes="evidence per hypothesis"/>
+    <never><rule>converges before each surviving hypothesis has been attacked</rule></never>
+    <dispatch><trigger>incidents and bugs where the root cause is contested or unknown</trigger></dispatch>
+  </role>
+
+  <!-- Provisional seats — flow in with the version (R14). -->
+  <role id="architect" state="provisional" since="0.2-planned">
+    <description embed="true">Non-coding engineering seat: produces ratified ADRs, runbooks, and documentation through the same contract/assessment loop builders use for code.</description>
+    <promises><promise>decisions recorded in ADR form with alternatives rejected; accepted ADRs are settled law</promise></promises>
+    <operations reads="codebase, contracts, telemetry, memory" writes="ADRs, runbooks, documentation"/>
+    <never><rule>re-litigates an accepted ADR without new evidence</rule></never>
+    <dispatch><trigger>irreversible or standard-setting choices; documentation debt</trigger></dispatch>
+  </role>
+
+  <role id="librarian" state="provisional" since="L3-planned">
+    <description embed="true">Agentic retrieval seat (evolution L3): promises decision-ready context — decomposes the question, walks the link graph, assesses freshness, returns a briefed bundle with provenance.</description>
+    <promises><promise>every returned item carries provenance and lifecycle state; superseded rules never surface without their successor</promise></promises>
+    <operations reads="artifact registry, retrieval index" writes="context bundles"/>
+    <never><rule>returns unfiltered search results — context is briefed, not dumped</rule></never>
+    <dispatch><trigger>any seat requesting substrate context beyond the deterministic retrieval map</trigger></dispatch>
+  </role>
+
+</roles>

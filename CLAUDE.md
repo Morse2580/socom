@@ -1,0 +1,172 @@
+<!-- socom:generated v=0.1 source=e8f07a5fb901 — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
+# socom — SOCOM substrate
+
+Protocol over participants: the rules below bind every participant — agent or human. Canonical source: `.socom/` + `socom.yaml`.
+
+## Constitution (Non-Negotiable)
+
+### 1. Verify, never claim
+
+No task is done until concrete proof is shown. "It should work" is a
+violation: run the check, paste the output. Evidence from a different
+session, or from before the final change, does not count — re-run after the
+last edit. Evidence is replayable, not quotable: record the command and exit
+code, not just the prose. If verification is impossible from here, state
+explicitly what remains unverified and who must check it.
+
+### 2. Contracts before code
+
+The validation contract — falsifiable acceptance checks with named assessors
+— is written and ratified before implementation begins. Tests confirm
+contracts; they are never retrofitted to bless whatever was built. A worker
+cannot amend its own contract; renegotiation goes back to the originator and
+is deliberately cheaper than bypass. Research-shaped work uses an exploration
+promise: contract the question and a timebox, not an artifact.
+
+### 3. Research-first
+
+Plan before coding for anything non-trivial: multi-file, architectural,
+unfamiliar systems, unclear root cause. Prefer official docs, upstream
+repositories, and specifications over guessing; never rely on unverified
+forum answers. Store what you learn — memory or runbook — so research is
+never repeated.
+
+### 4. Initiative framing — fix the class, not the instance
+
+Every initiative's objective is to make an entire class of problem
+structurally impossible at the root — never to patch the visible symptom.
+State objectives in that form first: "eliminate class X by changing Y at the
+root." When something is live and broken: mitigate the instance fast, but the
+objective remains the class, same session.
+
+### 5. Residuality gate
+
+Before proposing any fix or hard-to-reverse decision, run the 60-second
+adversarial check: does this relocate stress rather than remove it? hide a
+quantitative assumption? patch a symptom instead of the class? open a one-way
+door? Trigger words that demand the gate: pin, bump, raise the limit, add a
+retry, add a buffer, bigger node, works for now, temporarily, good enough.
+
+### 6. Git is the single source of truth
+
+No manual change to a live system that is not first — or same-session —
+declarative in git. Temporary live patches reconcile in the same session; a
+break-glass without same-session reconciliation is itself a new P0.
+Operational state (tasks, handoffs, memories, lessons) lives in the repo:
+any clone on any machine has the full state. Drift is a P0.
+
+### 7. Mitigate before perfect
+
+Outage time is a first-class cost. Rapid read-only diagnosis, then the
+narrowest possible mitigation, then the permanent class-level fix — in that
+order, in the same session. Do not delay live recovery to design the ideal
+solution.
+
+### 8. Context economy
+
+The primary's context is the scarcest resource. Offload bulk, mechanical,
+and fan-out work to subordinate seats whose success is verifiable from
+output (a count, a diff, a passing check). Retain judgment and final
+verification in the primary — assessment is never delegated to the promiser.
+
+### 9. Verbatim protocol
+
+Every brief to another participant opens with the originating human's words
+verbatim — typos preserved, they carry signal — followed by the decoded
+interpretation, clearly labeled, so the recipient can compare the two and
+flag drift. Never verbatim credentials or personal data; redact before any
+substrate write.
+
+### 10. No quick fixes without a leash
+
+Every change must be one you would accept in the codebase a year from now.
+An unavoidable shortcut gets three things: a documented why, a follow-up
+task with an ID, and a TODO carrying that ID. A shortcut without a leash is
+a violation, not a pragmatic call.
+
+### 11. Structured commits
+
+One commit format, enforced by hook: `type(scope): description` followed by
+`[what] [why] [how] [test] [broke] [next]` blocks. Write full blocks on the
+first branch commit — squash merges inherit it. The [test] block carries the
+verification evidence; an empty [test] block is a verify-never-claim
+violation in writing.
+
+## Session protocol
+
+### Bootstrap
+
+1. Fetch + fast-forward main. Create an isolated worktree — never work in
+   the shared checkout. Run the orphan reaper (expired claims, dead
+   worktrees, handoff-less sessions).
+2. Discover the latest next-session prompt AND run the drift scan — the
+   prompt states what was true at write time; the repo states what is true
+   now. Surface every mismatch before planning.
+3. Claim the work: register the promise against a bucket row and its
+   contract.
+4. Load the retrieval map's session-start section and the lessons for the
+   task's domain.
+5. Non-trivial work enters plan mode; the plan is ratified against the
+   contract before any code.
+
+### Build
+
+Contract first if none exists. Implement; run the fast gate after every
+change. Dispatch seats with verbatim briefs; builder and reviewer never
+share context. Run the residuality gate before any fix lands. Capture
+memory/lesson candidates as they occur — distillation happens at closeout,
+recall is not trusted.
+
+### Closeout
+
+One uninterrupted pipeline: bucket rows flipped to reality → push → CI
+verified green → handoff written (done / undone / commands / exit codes /
+blockers / warnings) → next-session prompt generated then claim-verified →
+memory distillation (cap 2, five gates) → claims released, worktrees
+removed, clean process table.
+
+## Seats (open registry — any model, runtime, or human)
+
+| Seat | State | Promise |
+|---|---|---|
+| **orchestrator** | active | Owns decomposition and dispatch. Publishes intents and validation contracts, decomposes initiatives into promises, assigns seats. Never writes production code. |
+| **builder** | active | Implements one contracted unit of work in an isolated worktree, self-checks against the contract, and submits evidence. The default production seat. |
+| **reviewer** | active | Independent adversarial assessor. Judges a builder's promise against the ratified contract and repo conventions, from clean context. Its promise is honest assessment, not approval. |
+| **validator** | active | Verifies the live effect against the contract on the deployed/running system — not the diff. Drives the real thing and records observed behavior as evidence. |
+| **scout** | active | Bounded research on a specific question; returns a compact, decision-ready brief. Stores durable findings as reference memories. |
+| **analyst** | active | Produces objective structural telemetry — dependency graphs, hotspots, coupling, coverage — measurements, not advice. |
+| **adversary** | active | Competing-hypothesis investigation: multiple heads each champion a different theory and actively try to disprove the others. For debugging with unclear root cause. |
+| **architect** | provisional | Non-coding engineering seat: produces ratified ADRs, runbooks, and documentation through the same contract/assessment loop builders use for code. |
+| **librarian** | provisional | Agentic retrieval seat (evolution L3): promises decision-ready context — decomposes the question, walks the link graph, assesses freshness, returns a briefed bundle with provenance. |
+
+Full seat envelopes: `.socom/canon/roles.xml` (compiled agents in `.claude/agents/`). Builder and reviewer never share context. Briefs open with the user's words verbatim.
+
+## Gates
+
+| Gate | Trigger | Tier | Band | Blocks |
+|---|---|---|---|---|
+| session-start | session open | fast | red | working on stale or drifted state |
+| task-completion | marking work done | fast | red | the done transition |
+| pre-commit | git commit | medium | amber | nothing locally (amber); the breach record feeds trust scoring |
+| pre-push | git push | full | red | the push (bypassable locally; never in CI) |
+| ci | push / pull request | ci | red | the merge |
+| session-end | session close | medium | red | a vanishing session |
+
+Local bypass is permitted for flow; CI re-asserts every gate. Run a gate: `socom gate <id>`.
+
+## Repo bindings (socom.yaml)
+
+| Check | Command |
+|---|---|
+| fast | `python3 -m py_compile bin/socom` |
+| medium | `python3 -m py_compile bin/socom && python3 -c "import xml.etree.ElementTree as ET,glob; [ET.parse(f) for f in glob.glob('canon/*.xml')+glob.glob('schemas/*.xml')+glob.glob('.socom/canon/*.xml')]; print('xml well-formed')"` |
+| full | `python3 -m py_compile bin/socom && ./bin/socom index . >/dev/null && echo full-ok` |
+| ci.status | `echo 'bind me: cache-free pipeline state query'` |
+
+Domains: protocol, cli, canon
+
+## Retrieval map
+
+- Entering a phase? Load that section of `.socom/memory/INDEX.md` (session-start / mid-session / closeout / always-on).
+- Working a domain? Load its file via `.socom/lessons/index.md`.
+- Associative recall: `socom index` emits chunks for any vector store; the substrate never depends on it (L0 floor: this file + grep).
