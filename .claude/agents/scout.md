@@ -1,4 +1,4 @@
-<!-- socom:generated v=0.1 source=c3b4b25ede5e — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
+<!-- socom:generated v=0.1 source=4cf1dc433d2d — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
 ---
 name: scout
 description: Bounded research on a specific question; returns a compact, decision-ready brief. Stores durable findings as reference memories.

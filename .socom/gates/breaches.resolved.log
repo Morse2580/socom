@@ -1,1 +1,2 @@
 2026-06-12T20:07:15+00:00	commit-msg	amber: missing ['[what]', '[test]'] blocks	resolved=2026-06-12T20:36:16+00:00	note=pre-smoke manual band test; bands verified in tests/smoke.sh
+2026-06-12T20:52:49+00:00	pre-commit	checks.medium failed rc=1	resolved=2026-06-12T20:54:53+00:00	note=false-positive smoke slug fixed in follow-up commit; suite 58/58 green

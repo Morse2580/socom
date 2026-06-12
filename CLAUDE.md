@@ -1,4 +1,4 @@
-<!-- socom:generated v=0.1 source=c3b4b25ede5e — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
+<!-- socom:generated v=0.1 source=4cf1dc433d2d — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
 # socom — SOCOM substrate
 
 Protocol over participants: the rules below bind every participant — agent or human. Canonical source: `.socom/` + `socom.yaml`.
@@ -171,6 +171,25 @@ Full seat envelopes: `.socom/canon/roles.xml` (compiled agents in `.claude/agent
 | session-end | session close | medium | red | a vanishing session |
 
 Local bypass is permitted for flow; CI re-asserts every gate. Run a gate: `socom gate <id>`.
+
+## Forge — git-provider operations (universal verbs, repo-bound commands)
+
+Run `socom forge <verb>` — NEVER improvise provider mechanics (auth, polling, MR calls) inline.
+
+- **poll-yourself** — Long-running forge operations (CI runs, merge checks) are watched BY the agent — background loop or watcher — never framed back to the human as "should I keep monitoring?". The human hears outcomes.
+- **cache-free-state** — State queries (ci-status, mr-status) must hit the provider's API directly. Provider CLIs that serve cached listings are bound through their cache-free forms; a stale answer is worse than a slow one.
+- **verify-after-push** — A push is not done at exit 0: after every push, query ci-status and carry the result into the evidence. A push with a failing pipeline is not "done" (constitution §verify-never-claim).
+- **auth-is-bound-not-improvised** — Credentials and token plumbing live in the binding (or the provider's credential helper), never improvised per-session. If auth fails, fix the binding — do not inline secrets into commands or files.
+
+| Verb | Intent | This repo |
+|---|---|---|
+| `push` | Push the current branch to the canonical remote, with whatever auth the provider needs. | *unbound* |
+| `ci-status` | Latest pipeline/workflow state for this repo — result, status, branch. Cache-free. | *unbound* |
+| `ci-run` | Queue the repo's primary pipeline on a branch (extra args pass through). | *unbound* |
+| `ci-watch` | Block-and-poll a run to a terminal state, emitting transitions; used by background watchers per rule poll-yourself. | *unbound* |
+| `mr-open` | Open a merge/pull request from the current branch to the default branch (title from args). | *unbound* |
+| `mr-status` | State of open MRs/PRs for this repo — id, title, vote/check state. Cache-free. | *unbound* |
+| `repo-web` | Print the repo's web URL (for handoffs and humans). | *unbound* |
 
 ## Repo bindings (socom.yaml)
 

@@ -163,7 +163,24 @@ EOF
   || ok "retired artifacts never surface (lifecycle filter)"
 rm .socom/promises/retired-thing.xml && "$SOCOM" embed . >/dev/null
 
-# 11. redaction (HR6)
+# 11. forge verbs
+"$SOCOM" forge list | grep -q "ci-status" && ok "forge lists canon verbs" \
+                                          || bad "forge verbs missing"
+"$SOCOM" forge ci-status >/dev/null 2>&1; check "unbound forge verb fails honestly" 1 $?
+"$SOCOM" forge nosuchverb >/dev/null 2>&1; check "unknown forge verb RED" 1 $?
+python3 - <<'EOF'
+import yaml, pathlib
+p = pathlib.Path("socom.yaml"); c = yaml.safe_load(p.read_text())
+c["forge"] = {"ci-status": "echo result=succeeded status=completed"}
+p.write_text(yaml.safe_dump(c, sort_keys=False))
+EOF
+"$SOCOM" forge ci-status 2>/dev/null | grep -q "succeeded" \
+  && ok "bound forge verb dispatches" || bad "bound forge verb failed"
+"$SOCOM" compile . --force >/dev/null
+grep -q "Forge — git-provider operations" CLAUDE.md \
+  && ok "forge table compiled into views" || bad "forge missing from views"
+
+# 12. redaction (HR6)
 cat > .socom/memory/memories/leaky.md <<EOF
 a memory containing password = supersecret123 which must not travel
 EOF

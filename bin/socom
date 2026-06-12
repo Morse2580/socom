@@ -42,7 +42,7 @@ except ImportError:
 
 SOCOM_VERSION = "0.1"
 CANON_FILES = ["constitution.xml", "roles.xml", "gates.xml", "session.xml",
-               "doctrine.xml"]
+               "doctrine.xml", "forge.xml"]
 TOOL_ROOT = Path(__file__).resolve().parent.parent  # the socom checkout
 
 
@@ -218,6 +218,26 @@ def render_body(root: Path, cfg: dict) -> str:
                    f"| {g.get('band')} | {g.findtext('blocks')} |")
     out.append("\nLocal bypass is permitted for flow; CI re-asserts every gate. "
                "Run a gate: `socom gate <id>`.\n")
+
+    forge_f = root / ".socom" / "canon" / "forge.xml"
+    if forge_f.exists():
+        forge = ET.parse(forge_f).getroot()
+        fb = cfg.get("forge", {}) or {}
+        out.append("## Forge — git-provider operations (universal verbs, "
+                   "repo-bound commands)\n")
+        out.append("Run `socom forge <verb>` — NEVER improvise provider "
+                   "mechanics (auth, polling, MR calls) inline.\n")
+        for r in forge.findall("rules/rule"):
+            out.append(f"- **{r.get('id')}** — " +
+                       " ".join((r.text or "").split()))
+        out.append("\n| Verb | Intent | This repo |\n|---|---|---|")
+        for v in forge.findall("verb"):
+            vid = v.get("id")
+            intent = (v.findtext("intent") or "").strip()
+            b = fb.get(vid)
+            out.append(f"| `{vid}` | {intent} | "
+                       + (f"`{b}`" if b else "*unbound*") + " |")
+        out.append("")
 
     out.append("## Repo bindings (socom.yaml)\n")
     checks = cfg.get("checks", {})
@@ -797,6 +817,42 @@ def cmd_index(args):
                 walk(child, path, meta)
 
         walk(art, "", {})
+
+    # The memory bank is markdown (frontmatter + body) — pilot finding #2
+    # (mwingz): un-indexed memories made the bank invisible to query. Each
+    # memory contributes its description and body as chunks; frontmatter
+    # becomes filter metadata (state drives the lifecycle filter).
+    for f in sorted((root / ".socom" / "memory" / "memories").glob("*.md")):
+        text = f.read_text()
+        fm, body = {}, text
+        m = re.match(r"\A---\n(.*?)\n---\n(.*)\Z", text, re.DOTALL)
+        if m:
+            try:
+                fm = yaml.safe_load(m.group(1)) or {}
+            except yaml.YAMLError:
+                fm = {}
+            body = m.group(2).strip()
+        meta = {k: str(v) for k, v in fm.items()
+                if k in ("type", "lifecycle", "state", "originSession")}
+        rel = f.relative_to(root)
+        for element, payload in (("description", str(fm.get("description", ""))),
+                                 ("body", body)):
+            if not payload.strip():
+                continue
+            if SECRET_RX.search(payload):
+                print(f"  REDACTED {rel}#{element}: secret-shaped content "
+                      f"not indexed", file=sys.stderr)
+                continue
+            chunks.append({
+                "id": f"{rel}#{element}",
+                "artifact_id": str(rel),
+                "artifact": "memory",
+                "element": element,
+                "text": payload.strip(),
+                "content_sha": hashlib.sha256(
+                    " ".join(payload.split()).encode()).hexdigest()[:16],
+                "metadata": meta,
+            })
     with out.open("w") as fh:
         for c in chunks:
             fh.write(json.dumps(c, ensure_ascii=False) + "\n")
@@ -1058,6 +1114,42 @@ def cmd_baseline(args):
           "this floor on the same probes.")
 
 
+# ── forge (universal git-provider operations) ────────────────────────────
+# Verbs + rules are protocol (canon/forge.xml); commands are per-repo
+# bindings (socom.yaml `forge:`). Agents run `socom forge <verb>` and never
+# re-derive provider mechanics. Unbound verbs fail honestly with guidance.
+
+def cmd_forge(args):
+    root = repo_root()
+    cfg = load_cfg(root)
+    forge = parse_canon(root, "forge.xml")
+    verbs = {v.get("id"): (v.findtext("intent") or "").strip()
+             for v in forge.findall("verb")}
+    bindings = cfg.get("forge", {}) or {}
+    if not args or args[0] in ("list", "--list"):
+        print("socom forge — verbs (canon) and this repo's bindings:")
+        for vid, intent in verbs.items():
+            b = bindings.get(vid)
+            print(f"  {vid:10} {'BOUND' if b else 'unbound':8} {intent}")
+            if b:
+                print(f"             $ {b}")
+        return
+    verb, extra = args[0], args[1:]
+    if verb not in verbs:
+        sys.exit(f"socom forge: unknown verb '{verb}' — canon verbs: "
+                 f"{', '.join(verbs)} (extend canon/forge.xml to add one)")
+    cmd = bindings.get(verb)
+    if not cmd:
+        sys.exit(f"socom forge: '{verb}' is not bound for this repo.\n"
+                 f"  intent: {verbs[verb]}\n"
+                 f"  bind it in socom.yaml under forge.{verb} (provider-"
+                 f"specific command), then `socom compile`. Do not improvise "
+                 f"provider mechanics inline.")
+    full = cmd + (" " + " ".join(shlex.quote(a) for a in extra) if extra else "")
+    print(f"socom forge {verb}: $ {full}", file=sys.stderr)
+    sys.exit(subprocess.run(full, shell=True, cwd=root).returncode)
+
+
 # ── greet ────────────────────────────────────────────────────────────────
 # The greeting is itself a capability ladder (doctrine): it probes the
 # substrate's adoption state and teaches exactly the next rung — O(1)
@@ -1132,7 +1224,8 @@ COMMANDS = {"init": cmd_init, "compile": cmd_compile, "doctor": cmd_doctor,
             "claim": cmd_claim, "release": cmd_release, "handoff": cmd_handoff,
             "prompt": cmd_prompt, "breach": cmd_breach,
             "baseline": cmd_baseline, "greet": cmd_greet,
-            "embed": cmd_embed, "query": cmd_query, "eval": cmd_eval}
+            "embed": cmd_embed, "query": cmd_query, "eval": cmd_eval,
+            "forge": cmd_forge}
 
 if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
