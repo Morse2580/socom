@@ -1,7 +1,42 @@
-# query -> expected chunk id substring; scored hit@5 under L0.
-# Grow this set as the substrate grows — it is the RAG contract.
+# query -> expected chunk id substring; the retrieval acceptance contract.
+# Queries are deliberately PARAPHRASED (an engineer's words, not the canon's
+# words) so lexical-floor saturation can't fake competence. Grow this set as
+# the substrate grows; never delete a probe that still has a right answer.
+#
+# Contract amendment (R10, 2026-06-12): original acceptance "hit@5 strictly
+# greater" was unfalsifiable against a 2-probe saturated floor. Amended to:
+# hit@5 >= L0 AND MRR@5 strictly greater, on >=12 probes, latency within
+# budget, zero redaction violations. Recorded here + in baseline.json.
 probes:
   - query: "how do I prove a task is done"
     expect: "verify-never-claim"
   - query: "when should I write the acceptance checks"
     expect: "contracts-before-code"
+  - query: "I want to just bump the limit temporarily to get past this"
+    expect: "residuality-gate"
+  - query: "someone hotfixed the live system without committing anything"
+    expect: "git-source-of-truth"
+  - query: "production is down, should I design the proper solution now"
+    expect: "mitigate-before-perfect"
+  - query: "should I paraphrase the user's request when briefing another agent"
+    expect: "verbatim-protocol"
+  - query: "what's next, where do I pick up work in this initiative"
+    expect: "capability-ladder"
+  - query: "my fix works but maybe another component should own this logic"
+    expect: "unison"
+  - query: "the design doc was approved so the feature must exist right"
+    expect: "ratified-not-implemented"
+  - query: "two teams disagree what the customer field means"
+    expect: "bounded-context"
+  - query: "upstream renamed a column and broke everyone downstream"
+    expect: "published-language"
+  - query: "should this error page show partial stale data or refuse entirely"
+    expect: "fail-posture"
+  - query: "definition of done feels subjective, looks good to me"
+    expect: "falsifiable-success"
+  - query: "which agent reviews code independently without the builder's context"
+    expect: "role.reviewer"
+  - query: "what happens when I close my session, what must I leave behind"
+    expect: "phase.closeout"
+  - query: "catch validation mistakes at the producer not the consumer"
+    expect: "published-gate"

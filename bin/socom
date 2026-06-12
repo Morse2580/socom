@@ -14,6 +14,11 @@ Commands:
   handoff  generate a handoff skeleton from git state; fill before closeout
   prompt   generate next-session prompt from latest handoff, claim-verified
   breach   list/resolve amber breaches — the loop amber must close (HR3)
+  baseline measure the L0 retrieval floor; plants probes.yaml (the L1 contract)
+  embed    build the L1 index (BM25, stdlib, offline) from the redacted registry
+  query    ask the substrate a question; L1 with loud L0 fallback (R6)
+  eval     L1 acceptance gate: beats the floor on the probes or exits RED
+  greet    adoption-ladder greeting — where you are, what's next
 
 All intelligence is canonical (.socom/); compiled views are one-way renders
 carrying a source hash (residue R3). Local gates may be bypassed for flow;
@@ -783,6 +788,190 @@ def cmd_index(args):
     return chunks
 
 
+# ── L1 retrieval — naive RAG, offline and deterministic ─────────────────
+# Ranker: BM25 over the post-redaction chunk registry. Pure stdlib — no
+# vendor, no keys, no network — so the seat is fillable anywhere; an external
+# embedding model is a pluggable upgrade (L2 hybrid), never a dependency.
+# The L0 keyword floor remains mandatory (R6): query degrades to it when the
+# vector index is absent, loudly.
+
+BM25_K1, BM25_B = 1.5, 0.75
+EXCLUDED_STATES = {"retired", "superseded", "broken"}
+
+
+def tokenize(text: str) -> list:
+    return re.findall(r"\w+", text.lower())
+
+
+def load_chunks(root: Path) -> list:
+    import json
+    f = root / ".socom" / "index" / "chunks.jsonl"
+    if not f.exists():
+        sys.exit("socom: no chunk index — run `socom index` first")
+    return [json.loads(ln) for ln in f.read_text().splitlines() if ln.strip()]
+
+
+def cmd_embed(args):
+    """Build the L1 index (term stats) from the post-redaction registry."""
+    import json, math, time
+    root = repo_root(Path(args[0]) if args else None)
+    t0 = time.monotonic()
+    chunks = cmd_index([str(root)])  # always rebuilt from canonical, fresh
+    docs = {c["id"]: tokenize(c["text"]) for c in chunks}
+    df: dict = {}
+    for toks in docs.values():
+        for t in set(toks):
+            df[t] = df.get(t, 0) + 1
+    n = len(docs)
+    avgdl = sum(len(t) for t in docs.values()) / max(n, 1)
+    index = {
+        "socom": SOCOM_VERSION, "ranker": f"bm25(k1={BM25_K1},b={BM25_B})",
+        "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "n_docs": n, "avgdl": round(avgdl, 2),
+        "idf": {t: round(math.log((n - d + 0.5) / (d + 0.5) + 1), 6)
+                for t, d in df.items()},
+        "docs": {cid: {"len": len(toks),
+                       "tf": {t: toks.count(t) for t in set(toks)}}
+                 for cid, toks in docs.items()},
+    }
+    out = root / ".socom" / "index" / "vectors.json"
+    out.write_text(json.dumps(index) + "\n")
+    print(f"socom embed: BM25 index over {n} chunks, {len(df)} terms, "
+          f"{time.monotonic() - t0:.3f}s -> {out}")
+
+
+def l1_score(query: str, index: dict, k: int = 5,
+             allowed_ids=None) -> list:
+    q = tokenize(query)
+    idf, docs, avgdl = index["idf"], index["docs"], index["avgdl"]
+    scored = []
+    for cid, d in docs.items():
+        if allowed_ids is not None and cid not in allowed_ids:
+            continue
+        s = 0.0
+        for t in q:
+            tf = d["tf"].get(t)
+            if tf and t in idf:
+                s += idf[t] * tf * (BM25_K1 + 1) / (
+                    tf + BM25_K1 * (1 - BM25_B + BM25_B * d["len"] / avgdl))
+        if s > 0:
+            scored.append((s, cid))
+    scored.sort(key=lambda x: -x[0])
+    return [cid for _, cid in scored[:k]]
+
+
+def live_chunk_ids(chunks: list) -> set:
+    """Lifecycle filter: never surface retired/superseded/broken artifacts."""
+    return {c["id"] for c in chunks
+            if c["metadata"].get("state") not in EXCLUDED_STATES}
+
+
+def cmd_query(args):
+    import json
+    k = 5
+    if "-k" in args:
+        i = args.index("-k")
+        k = int(args[i + 1])
+        args = args[:i] + args[i + 2:]
+    if not args:
+        sys.exit('usage: socom query "<question>" [-k N]')
+    q = " ".join(args)
+    root = repo_root()
+    chunks = load_chunks(root)
+    by_id = {c["id"]: c for c in chunks}
+    allowed = live_chunk_ids(chunks)
+    vf = root / ".socom" / "index" / "vectors.json"
+    if vf.exists():
+        level, top = "L1/bm25", l1_score(q, json.loads(vf.read_text()), k, allowed)
+    else:  # R6: the floor is mandatory and the degrade is loud
+        print("socom query: vector index absent — degraded to L0 keyword floor "
+              "(run `socom embed`)", file=sys.stderr)
+        level, top = "L0/keyword", [cid for cid in l0_score(q, chunks, k * 2)
+                                    if cid in allowed][:k]
+    print(f"socom query [{level}] — {q!r}")
+    for rank, cid in enumerate(top, 1):
+        c = by_id[cid]
+        first = " ".join(c["text"].split())[:110]
+        meta = c["metadata"]
+        prov = ",".join(f"{a}={meta[a]}" for a in ("state", "lineage", "domain")
+                        if meta.get(a))
+        print(f"  {rank}. {cid}" + (f"  [{prov}]" if prov else ""))
+        print(f"     {first}{'…' if len(c['text']) > 110 else ''}")
+
+
+def cmd_eval(args):
+    """The L1 acceptance gate: same probes, hit@5 >= L0 AND MRR@5 strictly
+    greater, latency within budget, zero redaction violations. RED on fail —
+    verify-never-claim applied to retrieval itself."""
+    import json, time
+    root = repo_root(Path(args[0]) if args else None)
+    chunks = load_chunks(root)
+    allowed = live_chunk_ids(chunks)
+    vf = root / ".socom" / "index" / "vectors.json"
+    if not vf.exists():
+        sys.exit("socom eval: no L1 index — run `socom embed` first")
+    index = json.loads(vf.read_text())
+    probes = yaml.safe_load(
+        (root / ".socom" / "index" / "probes.yaml").read_text()).get("probes", [])
+    if len(probes) < 12:
+        sys.exit(f"socom eval: RED — contract requires >=12 probes, found "
+                 f"{len(probes)}; a saturated floor proves nothing")
+
+    def run(scorer):
+        hits, rr, t0 = 0, 0.0, time.monotonic()
+        rows = []
+        for p in probes:
+            top = scorer(p["query"])
+            rank = next((i for i, cid in enumerate(top, 1)
+                         if p["expect"] in cid), None)
+            hits += rank is not None
+            rr += 1 / rank if rank else 0.0
+            rows.append({"query": p["query"], "expect": p["expect"],
+                         "rank": rank})
+        return {"hit_at_5": hits, "mrr_at_5": round(rr / len(probes), 4),
+                "latency_s": round(time.monotonic() - t0, 4), "rows": rows}
+
+    l0 = run(lambda q: [c for c in l0_score(q, chunks, 10) if c in allowed][:5])
+    l1 = run(lambda q: l1_score(q, index, 5, allowed))
+
+    # redaction violations: any indexed text matching the secret scan = fail
+    violations = sum(1 for c in chunks if SECRET_RX.search(c["text"]))
+    budget = max(0.5, 2 * l0["latency_s"] + 0.5)
+    verdict = {
+        "hit_not_worse": l1["hit_at_5"] >= l0["hit_at_5"],
+        "mrr_strictly_better": l1["mrr_at_5"] > l0["mrr_at_5"],
+        "latency_in_budget": l1["latency_s"] <= budget,
+        "zero_redaction_violations": violations == 0,
+    }
+    passed = all(verdict.values())
+    out = root / ".socom" / "index" / "eval.json"
+    out.write_text(json.dumps({
+        "socom": SOCOM_VERSION,
+        "evaluated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "contract": "hit@5 >= L0 AND MRR@5 > L0, >=12 probes, latency <= "
+                    f"{budget}s, zero redaction violations (amended per R10, "
+                    "see probes.yaml)",
+        "probes": len(probes), "l0": l0, "l1": l1,
+        "verdict": verdict, "passed": passed,
+    }, indent=2) + "\n")
+
+    print(f"socom eval — {len(probes)} probes")
+    print(f"  L0 keyword : hit@5 {l0['hit_at_5']}/{len(probes)}  "
+          f"MRR@5 {l0['mrr_at_5']}  {l0['latency_s']}s")
+    print(f"  L1 bm25    : hit@5 {l1['hit_at_5']}/{len(probes)}  "
+          f"MRR@5 {l1['mrr_at_5']}  {l1['latency_s']}s")
+    for k_, v in verdict.items():
+        print(f"  {'✓' if v else '✗'} {k_}")
+    misses = [r for r in l1["rows"] if r["rank"] is None]
+    for m in misses:
+        print(f"    L1 miss: {m['query']!r} -> wanted {m['expect']}")
+    print(f"  -> {out}")
+    if not passed:
+        sys.exit("socom eval: RED — L1 does not satisfy the acceptance "
+                 "contract; it may not replace the floor")
+    print("socom eval: PASS — L1 accepted against the baseline contract")
+
+
 # ── baseline (the gate before naive RAG) ─────────────────────────────────
 # L1 may start only once an L0 floor is measured: corpus shape, L0 latency,
 # and probe hit@k under keyword matching. The L1 acceptance contract is
@@ -842,8 +1031,9 @@ def cmd_baseline(args):
         "probes": {"count": len(probes), "hit_at_5": hits,
                    "rate": round(hits / len(probes), 3) if probes else None,
                    "results": results},
-        "l1_acceptance": "same probes, hit@5 strictly greater, latency within "
-                         "2x index_walk, zero redaction violations",
+        "l1_acceptance": "same probes (>=12), hit@5 >= L0 AND MRR@5 strictly "
+                         "greater, latency within budget, zero redaction "
+                         "violations (amended per R10, recorded in probes.yaml)",
     }
     out = root / ".socom" / "index" / "baseline.json"
     out.write_text(json.dumps(baseline, indent=2) + "\n")
@@ -890,9 +1080,13 @@ def adoption_rung(root: Path) -> tuple[str, str]:
     if not (root / ".socom" / "index" / "baseline.json").exists():
         return ("T4 — wired, no retrieval floor",
                 "run `socom baseline` so L1 retrieval has a floor to beat")
-    return ("T5 — operational",
+    if not (root / ".socom" / "index" / "vectors.json").exists():
+        return ("T5 — floored, retrieval at L0",
+                "run `socom embed && socom eval` — L1 must beat the recorded "
+                "floor before it serves")
+    return ("T6 — operational (L1 retrieval live)",
             "work the loop: claim -> contract -> build -> verify -> handoff "
-            "-> prompt. `socom doctor` if anything feels off")
+            "-> prompt. Ask the substrate things: `socom query \"...\"`")
 
 
 def cmd_greet(args):
@@ -921,7 +1115,8 @@ COMMANDS = {"init": cmd_init, "compile": cmd_compile, "doctor": cmd_doctor,
             "gate": cmd_gate, "hydrate": cmd_hydrate, "index": cmd_index,
             "claim": cmd_claim, "release": cmd_release, "handoff": cmd_handoff,
             "prompt": cmd_prompt, "breach": cmd_breach,
-            "baseline": cmd_baseline, "greet": cmd_greet}
+            "baseline": cmd_baseline, "greet": cmd_greet,
+            "embed": cmd_embed, "query": cmd_query, "eval": cmd_eval}
 
 if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):

@@ -140,7 +140,30 @@ assert any("/principle." in i for i in ids), "ancestor ids missing from paths"
 EOF
 [ -f .socom/index/baseline.json ] && ok "baseline.json written" || bad "no baseline.json"
 
-# 10. redaction (HR6)
+# 10. L1 retrieval against the baseline contract
+"$SOCOM" embed . >/dev/null;               check "embed builds L1 index" 0 $?
+"$SOCOM" query "how do I prove work is finished" | grep -q "L1/bm25" \
+  && ok "query serves from L1" || bad "query not using L1"
+"$SOCOM" eval . >/dev/null 2>&1; EV=$?
+[ "$EV" = "0" ] || [ "$EV" = "1" ] && ok "eval runs contract (rc=$EV)" \
+                                   || bad "eval crashed (rc=$EV)"
+mv .socom/index/vectors.json /tmp/socom-smoke-v.json
+"$SOCOM" query "prove work done" 2>&1 | grep -q "degraded to L0" \
+  && ok "query degrades loudly to L0 floor (R6)" || bad "silent/failed degrade (R6)"
+mv /tmp/socom-smoke-v.json .socom/index/vectors.json
+# lifecycle filter: a retired artifact must never surface
+cat > .socom/promises/retired-thing.xml <<EOF
+<memory socom="0.1" id="M-old" state="retired">
+  <decoded-rule embed="true">zebra quokka xylophone unique retired content</decoded-rule>
+</memory>
+EOF
+"$SOCOM" embed . >/dev/null
+"$SOCOM" query "zebra quokka xylophone" 2>/dev/null | grep -q "retired-thing" \
+  && bad "retired artifact surfaced (lifecycle filter)" \
+  || ok "retired artifacts never surface (lifecycle filter)"
+rm .socom/promises/retired-thing.xml && "$SOCOM" embed . >/dev/null
+
+# 11. redaction (HR6)
 cat > .socom/memory/memories/leaky.md <<EOF
 a memory containing password = supersecret123 which must not travel
 EOF

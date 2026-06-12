@@ -1,0 +1,187 @@
+{
+  "socom": "0.1",
+  "evaluated_at": "2026-06-12T20:44:22+00:00",
+  "contract": "hit@5 >= L0 AND MRR@5 > L0, >=12 probes, latency <= 0.5276s, zero redaction violations (amended per R10, see probes.yaml)",
+  "probes": 16,
+  "l0": {
+    "hit_at_5": 13,
+    "mrr_at_5": 0.6687,
+    "latency_s": 0.0138,
+    "rows": [
+      {
+        "query": "how do I prove a task is done",
+        "expect": "verify-never-claim",
+        "rank": 1
+      },
+      {
+        "query": "when should I write the acceptance checks",
+        "expect": "contracts-before-code",
+        "rank": 1
+      },
+      {
+        "query": "I want to just bump the limit temporarily to get past this",
+        "expect": "residuality-gate",
+        "rank": 1
+      },
+      {
+        "query": "someone hotfixed the live system without committing anything",
+        "expect": "git-source-of-truth",
+        "rank": 1
+      },
+      {
+        "query": "production is down, should I design the proper solution now",
+        "expect": "mitigate-before-perfect",
+        "rank": 1
+      },
+      {
+        "query": "should I paraphrase the user's request when briefing another agent",
+        "expect": "verbatim-protocol",
+        "rank": 2
+      },
+      {
+        "query": "what's next, where do I pick up work in this initiative",
+        "expect": "capability-ladder",
+        "rank": 2
+      },
+      {
+        "query": "my fix works but maybe another component should own this logic",
+        "expect": "unison",
+        "rank": 2
+      },
+      {
+        "query": "the design doc was approved so the feature must exist right",
+        "expect": "ratified-not-implemented",
+        "rank": null
+      },
+      {
+        "query": "two teams disagree what the customer field means",
+        "expect": "bounded-context",
+        "rank": 5
+      },
+      {
+        "query": "upstream renamed a column and broke everyone downstream",
+        "expect": "published-language",
+        "rank": 1
+      },
+      {
+        "query": "should this error page show partial stale data or refuse entirely",
+        "expect": "fail-posture",
+        "rank": null
+      },
+      {
+        "query": "definition of done feels subjective, looks good to me",
+        "expect": "falsifiable-success",
+        "rank": 1
+      },
+      {
+        "query": "which agent reviews code independently without the builder's context",
+        "expect": "role.reviewer",
+        "rank": 1
+      },
+      {
+        "query": "what happens when I close my session, what must I leave behind",
+        "expect": "phase.closeout",
+        "rank": null
+      },
+      {
+        "query": "catch validation mistakes at the producer not the consumer",
+        "expect": "published-gate",
+        "rank": 1
+      }
+    ]
+  },
+  "l1": {
+    "hit_at_5": 14,
+    "mrr_at_5": 0.7812,
+    "latency_s": 0.0015,
+    "rows": [
+      {
+        "query": "how do I prove a task is done",
+        "expect": "verify-never-claim",
+        "rank": 2
+      },
+      {
+        "query": "when should I write the acceptance checks",
+        "expect": "contracts-before-code",
+        "rank": 1
+      },
+      {
+        "query": "I want to just bump the limit temporarily to get past this",
+        "expect": "residuality-gate",
+        "rank": 1
+      },
+      {
+        "query": "someone hotfixed the live system without committing anything",
+        "expect": "git-source-of-truth",
+        "rank": 1
+      },
+      {
+        "query": "production is down, should I design the proper solution now",
+        "expect": "mitigate-before-perfect",
+        "rank": 2
+      },
+      {
+        "query": "should I paraphrase the user's request when briefing another agent",
+        "expect": "verbatim-protocol",
+        "rank": 1
+      },
+      {
+        "query": "what's next, where do I pick up work in this initiative",
+        "expect": "capability-ladder",
+        "rank": 1
+      },
+      {
+        "query": "my fix works but maybe another component should own this logic",
+        "expect": "unison",
+        "rank": 1
+      },
+      {
+        "query": "the design doc was approved so the feature must exist right",
+        "expect": "ratified-not-implemented",
+        "rank": 1
+      },
+      {
+        "query": "two teams disagree what the customer field means",
+        "expect": "bounded-context",
+        "rank": 2
+      },
+      {
+        "query": "upstream renamed a column and broke everyone downstream",
+        "expect": "published-language",
+        "rank": 1
+      },
+      {
+        "query": "should this error page show partial stale data or refuse entirely",
+        "expect": "fail-posture",
+        "rank": null
+      },
+      {
+        "query": "definition of done feels subjective, looks good to me",
+        "expect": "falsifiable-success",
+        "rank": 1
+      },
+      {
+        "query": "which agent reviews code independently without the builder's context",
+        "expect": "role.reviewer",
+        "rank": 1
+      },
+      {
+        "query": "what happens when I close my session, what must I leave behind",
+        "expect": "phase.closeout",
+        "rank": null
+      },
+      {
+        "query": "catch validation mistakes at the producer not the consumer",
+        "expect": "published-gate",
+        "rank": 1
+      }
+    ]
+  },
+  "verdict": {
+    "hit_not_worse": true,
+    "mrr_strictly_better": true,
+    "latency_in_budget": true,
+    "zero_redaction_violations": true
+  },
+  "passed": true
+}

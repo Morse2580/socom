@@ -110,7 +110,19 @@ Naive RAG starts **only after an L0 performance baseline exists** — otherwise
   pairs (`.socom/index/probes.yaml`), scored by hit@k under L0 (substring/
   keyword match) — the floor any L1 implementation must beat
 
-L1 acceptance contract: same probes, hit@k strictly better than baseline,
-latency within budget, zero redaction violations. That contract is written
-*before* any vector store is chosen — contracts before code, applied to the
-substrate's own evolution.
+L1 acceptance contract (amended per R10, recorded in `probes.yaml`): ≥12
+probes, hit@5 ≥ L0 AND MRR@5 strictly greater, latency within budget, zero
+redaction violations. The contract was written *before* the ranker was chosen
+— contracts before code, applied to the substrate's own evolution — and
+`socom eval` enforces it as a red gate: an L1 that doesn't beat the floor may
+not serve.
+
+**L1 status: implemented and accepted** (2026-06-12). Ranker: BM25 over the
+post-redaction registry — pure stdlib, offline, deterministic; no vendor, no
+keys. `socom embed` builds `.socom/index/vectors.json`; `socom query`
+serves L1 with a loud L0 degrade when the index is absent (R6), filters
+retired/superseded/broken artifacts (lifecycle-aware), and prints provenance
+per hit. First acceptance run: L1 14/16 hit@5, 0.7812 MRR@5 vs L0 13/16,
+0.6687 — accepted. The two recorded misses are paraphrase gaps; closing them
+is L2's job (semantic embeddings as a *pluggable upgrade* into the same
+`embedding(chunk_id, model)` slot above — never a dependency).
