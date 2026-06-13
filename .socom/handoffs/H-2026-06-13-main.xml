@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<handoff socom="0.1" id="H-2026-06-13-main" branch="main"
+         date="2026-06-13T22:06:04+00:00">
+  <summary embed="true">evals extraction: socom cycle (ledger->cycle measurement spine) + next-session prompt id/timestamp</summary>
+  <done embed="true">
+    Two increments, all gates green, pushed to origin/main, CI verified green
+    (run 27480499785 -> success).
+
+    1. next-session prompt identity (4181b81, 6af363a): `socom prompt` now stamps
+       every generated prompt with id=P-&lt;date&gt;-&lt;branch&gt; +
+       generated=&lt;ts&gt; + source-handoff, inherited from the handoff (single
+       ordering authority, no second clock). .socom/prompts/ is now tracked.
+       Smoke locks the header. WHY: the session-start drift scan needs a
+       write-time IN the prompt, not git mtime.
+
+    2. evals extraction = backlog #1 (c405560, 095a923): the ledger->cycle
+       measurement spine, the first Akili->SOCOM port.
+       - schemas/ledger.xml: append-only JSONL run ledger (.socom/ledger/runs.jsonl),
+         one row per promise execution (seat, promise, contract, gate_band,
+         exit_code, duration_s, attempt, verdict kept|broken).
+       - `socom cycle`: rolls the ledger into a scored cycle — pass@1/pass@k BY
+         SEAT, hotspots, exit-codes, attempts, contract-coverage. Flags
+         --since/--seat/--cycle/--gate --threshold. Read-only, cache-free,
+         degrades loudly with no ledger.
+       - `eval` gate (canon/gates.xml + .socom/canon/gates.xml) bound to
+         checks.eval = `socom cycle --gate --threshold 70`; fails below threshold.
+       - Gate dispatch generalized: unknown gate id -> checks.&lt;id&gt; (so canon
+         can add gates with no new dispatch code); unknown-gate guard kept.
+       - Renamed from the prompt's `socom eval` (collides with the existing L1
+         retrieval-acceptance gate) to `socom cycle` — operator-ratified.
+
+    Contract (all 4 checks PASS, evidence in c405560 [test] block): ledger.xml
+    well-formed; seeded hand-count matches (builder 1/2 &amp; 2/2, reviewer 0/1,
+    pass@1 1/3, pass@k 2/3); gate RED below / PASS above; doctor clean
+    (source=fce8a0829b46), compile idempotent. Full smoke green (9 new
+    cycle/gate assertions). CI green post-push.
+  </done>
+  <undone embed="true">
+    Deliberately deferred (scope discipline — ONE increment): auto-append of
+    ledger rows from gates/closeout (MVP seeds by hand); the full query suite as
+    flags (health/trends/reliability); efficiency/journal-quality metrics;
+    amber-band measurement gating (eval gate is red for testable both-directions).
+    No ledger is wired to write yet — `socom cycle` works but nothing populates
+    .socom/ledger/runs.jsonl in normal operation. That wiring + the lessons
+    bridge are the next session.
+  </undone>
+  <recent-commits>
+    <commit>095a923 docs(socom): backlog — mark #1 evals DONE (socom cycle), promote #2 lessons to NEXT</commit>
+    <commit>c405560 feat(cli): socom cycle — the eval measurement spine (ledger -> scored cycle)</commit>
+    <commit>6af363a test(cli): smoke locks the next-session prompt id+timestamp+provenance header</commit>
+    <commit>4181b81 feat(cli): next-session prompt carries an id + generation timestamp + source-handoff</commit>
+    <commit>8330566 docs(socom): extraction backlog — mature SOCOM by porting Akili capabilities (evals first)</commit>
+    <commit>785cee0 fix(cli): commit-msg evidence heuristic anchors [test] to line-start</commit>
+    <commit>70aacb7 feat(cli): socom install/uninstall — self-bootstrap onto PATH</commit>
+    <commit>024f830 feat(cli): CI adapters — the R1 floor as GitOps on any git provider</commit>
+    <commit>7c7b8ca feat(cli): forge — universal git-provider verbs, repo-bound commands</commit>
+    <commit>238f7b0 test(cli): smoke derives memory slug from resolved path — kills a false positive</commit>
+  </recent-commits>
+  <uncommitted>
+M .socom/gates/breaches.log
+ M .socom/index/chunks.jsonl
+?? .socom/claims/
+  </uncommitted>
+  <blockers embed="true">None.</blockers>
+  <warnings embed="true">
+    - canonical_hash() reads .socom/canon/, NOT canon/. Editing a canon file
+      (e.g. gates.xml) requires syncing BOTH canon/ (shipped template) and
+      .socom/canon/ (this repo's live canon) then `socom compile`, or doctor
+      shows HR9 divergence / stale views. Cost a detour this session.
+    - `socom cycle` is built but no ledger is auto-populated yet — it will
+      degrade-loud ("no ledger") until something appends runs. Expected.
+    - Pre-existing uncommitted churn left untouched on purpose: .socom/gates/
+      breaches.log (amber breach records) and .socom/index/chunks.jsonl — not
+      part of this work; sweep them deliberately or leave for their owner.
+  </warnings>
+  <next embed="true">
+    1. Backlog #2 — Lessons system: wire the cycle's hotspots (repeated
+       broken promises) into lesson candidates; LESSON-SYSTEM-ENGINEERING.md is
+       the Akili source. This is the natural continuation of evals.
+    2. Wire ledger auto-append: gates/closeout append a run row per promise
+       execution so `socom cycle` measures real operation, not just seeds.
+    3. (smaller) cycle query flags: --health/--trends as read-only views.
+  </next>
+</handoff>
