@@ -1,4 +1,4 @@
-<!-- socom:generated v=0.1 source=4cf1dc433d2d — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
+<!-- socom:generated v=0.1 source=fce8a0829b46 — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
 ---
 alwaysApply: true
 ---
@@ -170,6 +170,7 @@ Full seat envelopes: `.socom/canon/roles.xml` (compiled agents in `.claude/agent
 | task-completion | marking work done | fast | red | the done transition |
 | pre-commit | git commit | medium | amber | nothing locally (amber); the breach record feeds trust scoring |
 | pre-push | git push | full | red | the push (bypassable locally; never in CI) |
+| eval | measurement / on demand / pre-ship | fast | red | shipping on an unmeasured or below-threshold pass-rate |
 | ci | push / pull request | ci | red | the merge |
 | session-end | session close | medium | red | a vanishing session |
 

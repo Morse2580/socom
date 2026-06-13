@@ -18,6 +18,8 @@ Commands:
   embed    build the L1 index (BM25, stdlib, offline) from the redacted registry
   query    ask the substrate a question; L1 with loud L0 fallback (R6)
   eval     L1 acceptance gate: beats the floor on the probes or exits RED
+  cycle    roll the run ledger into a scored cycle: pass@1/pass@k by seat,
+           hotspots; --gate --threshold N for the pass-rate gate (R: evals)
   greet    adoption-ladder greeting — where you are, what's next
   install  symlink this checkout onto PATH (~/.local/bin) so `socom` just works
   uninstall remove the socom symlink (only if it points at this checkout)
@@ -768,10 +770,16 @@ def cmd_gate(args):
               "five gates) before you go.")
         return
 
-    tier = {"task-completion": "fast", "pre-commit": "medium", "pre-push": "full"}.get(name)
-    if tier is None:
-        sys.exit(f"socom: unknown gate '{name}'")
+    # Built-ins are handled above; every other gate id resolves to its own
+    # bound check (checks.<id>) — so canon can add gates like `eval` that bind
+    # to a repo check without new dispatch code.
+    builtins = ("task-completion", "pre-commit", "pre-push")
+    tier = {"task-completion": "fast", "pre-commit": "medium",
+            "pre-push": "full"}.get(name, name)
     cmd = checks.get(tier)
+    if cmd is None and name not in builtins:
+        sys.exit(f"socom: unknown gate '{name}' (no built-in handler and no "
+                 f"checks.{name} binding in socom.yaml)")
     if not cmd or cmd == "true":
         print(f"socom gate {name}: checks.{tier} unbound — passing (bind it in socom.yaml)")
         return
@@ -1098,6 +1106,167 @@ def cmd_eval(args):
     print("socom eval: PASS — L1 accepted against the baseline contract")
 
 
+# ── cycle — the eval rollup: run ledger -> scored cycle artifact ──────────
+# Ported from Akili's evals/cycle-*.json (ledger -> cycle -> query). SOCOM
+# vocabulary: seats not roles, promises not tasks, verdict kept/broken not
+# DONE/FAILED. Read-only, cache-free: reads the append-only run ledger and
+# rolls it into pass@1 / pass@k by seat + hotspots — giving verify-never-claim
+# a scored, replayable spine. Distils the *essential* rollup; the full query
+# suite (health/trends/reliability) is deliberately deferred.
+def cmd_cycle(args):
+    import json
+    from collections import defaultdict
+
+    def flag_val(name):
+        return args[args.index(name) + 1] if name in args \
+            and args.index(name) + 1 < len(args) else None
+
+    root = repo_root()
+    since = flag_val("--since")
+    seat_filter = flag_val("--seat")
+    threshold = flag_val("--threshold")
+    gate = "--gate" in args
+    print_only = "--cycle" in args or gate
+
+    ledger = root / ".socom" / "ledger" / "runs.jsonl"
+    if not ledger.exists():
+        sys.exit("socom cycle: no ledger — .socom/ledger/runs.jsonl absent. "
+                 "Nothing measured yet; append runs before rolling a cycle "
+                 "(R6: degrade loudly, never a silent empty cycle).")
+    rows = []
+    for ln in ledger.read_text().splitlines():
+        ln = ln.strip()
+        if not ln:
+            continue
+        try:
+            r = json.loads(ln)
+        except json.JSONDecodeError:
+            sys.exit(f"socom cycle: RED — malformed ledger row: {ln[:80]!r}")
+        if since and r.get("ts", "") < since:
+            continue
+        if seat_filter and r.get("seat") != seat_filter:
+            continue
+        rows.append(r)
+    if not rows:
+        sys.exit("socom cycle: no rows after filters — nothing to roll up.")
+
+    # Group attempts by promise, ordered by (attempt, ts). pass@1 reads the
+    # first attempt's verdict; pass@k reads whether ANY attempt kept.
+    by_promise = defaultdict(list)
+    for r in rows:
+        by_promise[r["promise"]].append(r)
+    for p in by_promise.values():
+        p.sort(key=lambda r: (r.get("attempt", 1), r.get("ts", "")))
+    all_promises = list(by_promise.values())
+    uniq = len(all_promises)
+
+    # Per-seat tally — a promise is attributed to the seat of its first attempt.
+    seat_promises = defaultdict(list)
+    for attempts in all_promises:
+        seat_promises[attempts[0].get("seat", "?")].append(attempts)
+    seats = []
+    for seat, plist in sorted(seat_promises.items()):
+        total = len(plist)
+        p1 = sum(1 for p in plist if p[0].get("verdict") == "kept")
+        pk = sum(1 for p in plist
+                 if any(r.get("verdict") == "kept" for r in p))
+        durs = [r.get("duration_s", 0) for p in plist for r in p
+                if r.get("verdict") == "kept"]
+        seats.append({
+            "seat": seat, "promises": total, "pass_at_1": p1, "pass_at_k": pk,
+            "pass_rate": round(100 * pk / total, 1) if total else 0.0,
+            "avg_duration_s": round(sum(durs) / len(durs)) if durs else 0,
+        })
+
+    p1_total = sum(1 for p in all_promises if p[0].get("verdict") == "kept")
+    pk_total = sum(1 for p in all_promises
+                   if any(r.get("verdict") == "kept" for r in p))
+    kept_rows = sum(1 for r in rows if r.get("verdict") == "kept")
+    pass_rate = round(100 * kept_rows / len(rows), 1) if rows else 0.0
+
+    # Hotspots: promises with >=1 broken attempt, worst first.
+    hotspots = []
+    for pid, attempts in by_promise.items():
+        broken = sum(1 for r in attempts if r.get("verdict") == "broken")
+        if broken:
+            hotspots.append({"promise": pid, "broken": broken,
+                             "total": len(attempts)})
+    hotspots.sort(key=lambda h: (-h["broken"], h["promise"]))
+
+    exit_codes = {}
+    for r in rows:
+        k = str(r.get("exit_code", "?"))
+        exit_codes[k] = exit_codes.get(k, 0) + 1
+
+    # Attempts-to-success + worst (most-attempted) promise.
+    succ_attempts, worst = [], (None, 0)
+    for pid, attempts in by_promise.items():
+        if len(attempts) > worst[1]:
+            worst = (pid, len(attempts))
+        kept_at = next((i for i, r in enumerate(attempts, 1)
+                        if r.get("verdict") == "kept"), None)
+        if kept_at:
+            succ_attempts.append(kept_at)
+
+    with_contract = sum(1 for p in all_promises if p[0].get("contract"))
+    cycle = {
+        "socom": SOCOM_VERSION,
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "ledger": str(ledger.relative_to(root)),
+        "filters": {"since": since, "seat": seat_filter},
+        "summary": {
+            "total_runs": len(rows), "unique_promises": uniq,
+            "pass_rate": pass_rate,
+            "pass_at_1": p1_total,
+            "pass_at_1_rate": round(100 * p1_total / uniq, 1) if uniq else 0.0,
+            "pass_at_k": pk_total,
+            "pass_at_k_rate": round(100 * pk_total / uniq, 1) if uniq else 0.0,
+            "contract_coverage": round(100 * with_contract / uniq, 1)
+                                 if uniq else 0.0,
+        },
+        "seats": seats, "hotspots": hotspots, "exit_codes": exit_codes,
+        "attempts": {
+            "avg_to_success": round(sum(succ_attempts) / len(succ_attempts), 2)
+                              if succ_attempts else None,
+            "worst_promise": worst[0], "worst_promise_attempts": worst[1],
+        },
+    }
+
+    # --gate: pass-rate threshold — the testable both-directions unit.
+    if gate:
+        thr = float(threshold) if threshold is not None else 70.0
+        ok = pass_rate >= thr
+        print(f"socom cycle: pass_rate {pass_rate}% vs threshold {thr}% "
+              f"-> {'PASS' if ok else 'BELOW'}")
+        if not ok:
+            sys.exit(1)
+        return
+
+    written = None
+    if not print_only:
+        cdir = root / ".socom" / "cycles"
+        cdir.mkdir(parents=True, exist_ok=True)
+        stamp = cycle["generated_at"].replace(":", "").replace("-", "")
+        out = cdir / f"cycle-{stamp}.json"
+        out.write_text(json.dumps(cycle, indent=2) + "\n")
+        written = out.relative_to(root)
+
+    s = cycle["summary"]
+    print(f"socom cycle — {s['total_runs']} runs, {s['unique_promises']} promises")
+    print(f"  pass@1 {s['pass_at_1']}/{s['unique_promises']} ({s['pass_at_1_rate']}%)  "
+          f"pass@k {s['pass_at_k']}/{s['unique_promises']} ({s['pass_at_k_rate']}%)  "
+          f"pass_rate {s['pass_rate']}%  contract-coverage {s['contract_coverage']}%")
+    for st in cycle["seats"]:
+        print(f"  seat {st['seat']:<10} pass@1 {st['pass_at_1']}/{st['promises']}  "
+              f"pass@k {st['pass_at_k']}/{st['promises']}  ({st['pass_rate']}%)")
+    if hotspots:
+        print("  hotspots (promises that keep failing assessment):")
+        for h in hotspots[:10]:
+            print(f"    {h['promise']}  broken {h['broken']}/{h['total']}")
+    if written:
+        print(f"  -> {written}")
+
+
 # ── baseline (the gate before naive RAG) ─────────────────────────────────
 # L1 may start only once an L0 floor is measured: corpus shape, L0 latency,
 # and probe hit@k under keyword matching. The L1 acceptance contract is
@@ -1333,7 +1502,7 @@ COMMANDS = {"init": cmd_init, "compile": cmd_compile, "doctor": cmd_doctor,
             "prompt": cmd_prompt, "breach": cmd_breach,
             "baseline": cmd_baseline, "greet": cmd_greet,
             "embed": cmd_embed, "query": cmd_query, "eval": cmd_eval,
-            "forge": cmd_forge, "install": cmd_install,
+            "cycle": cmd_cycle, "forge": cmd_forge, "install": cmd_install,
             "uninstall": cmd_uninstall}
 
 if __name__ == "__main__":

@@ -170,6 +170,44 @@ EOF
   || ok "retired artifacts never surface (lifecycle filter)"
 rm .socom/promises/retired-thing.xml && "$SOCOM" embed . >/dev/null
 
+# 10c. cycle — the eval rollup (ledger -> scored cycle: pass@1/pass@k by seat)
+"$SOCOM" cycle >/dev/null 2>&1; check "cycle degrades loudly without ledger" 1 $?
+mkdir -p .socom/ledger
+cat > .socom/ledger/runs.jsonl <<EOF
+{"ts":"2026-06-10T01:00:00Z","seat":"builder","promise":"P-A","contract":"C-A","gate_band":"fast","exit_code":0,"duration_s":100,"attempt":1,"verdict":"kept"}
+{"ts":"2026-06-10T02:00:00Z","seat":"builder","promise":"P-B","contract":"C-B","gate_band":"fast","exit_code":1,"duration_s":50,"attempt":1,"verdict":"broken"}
+{"ts":"2026-06-10T03:00:00Z","seat":"builder","promise":"P-B","contract":"C-B","gate_band":"fast","exit_code":0,"duration_s":80,"attempt":2,"verdict":"kept"}
+{"ts":"2026-06-10T04:00:00Z","seat":"reviewer","promise":"P-C","gate_band":"fast","exit_code":1,"duration_s":30,"attempt":1,"verdict":"broken"}
+EOF
+CY="$("$SOCOM" cycle --cycle)"
+echo "$CY" | grep -q "pass@1 1/3" && echo "$CY" | grep -q "pass@k 2/3" \
+  && ok "cycle summary pass@1 1/3, pass@k 2/3 (hand-count)" \
+  || bad "cycle summary wrong:
+$CY"
+echo "$CY" | grep -Eq "seat builder .*pass@1 1/2 .*pass@k 2/2" \
+  && ok "cycle pass@1/pass@k BY SEAT (builder 1/2, 2/2)" || bad "builder seat numbers wrong"
+echo "$CY" | grep -Eq "seat reviewer .*pass@1 0/1 .*pass@k 0/1" \
+  && ok "cycle scores reviewer seat (0/1, 0/1)" || bad "reviewer seat numbers wrong"
+echo "$CY" | grep -q "P-B" && echo "$CY" | grep -q "P-C" \
+  && ok "cycle surfaces hotspots (P-B, P-C)" || bad "hotspots missing"
+# gate tie-in, BOTH directions (contract): bind checks.eval, flip the threshold
+"$SOCOM" gate eval >/dev/null 2>&1; check "gate eval unknown before binding" 1 $?
+python3 - "$SOCOM" <<'PYEOF'
+import sys, yaml, pathlib
+p = pathlib.Path("socom.yaml"); c = yaml.safe_load(p.read_text())
+c["checks"]["eval"] = f"{sys.argv[1]} cycle --gate --threshold 90"
+p.write_text(yaml.safe_dump(c, sort_keys=False))
+PYEOF
+"$SOCOM" gate eval >/dev/null 2>&1; check "gate eval RED below threshold (90)" 1 $?
+python3 - "$SOCOM" <<'PYEOF'
+import sys, yaml, pathlib
+p = pathlib.Path("socom.yaml"); c = yaml.safe_load(p.read_text())
+c["checks"]["eval"] = f"{sys.argv[1]} cycle --gate --threshold 10"
+p.write_text(yaml.safe_dump(c, sort_keys=False))
+PYEOF
+"$SOCOM" gate eval >/dev/null 2>&1; check "gate eval PASS above threshold (10)" 0 $?
+rm -rf .socom/ledger .socom/cycles
+
 # 11. forge verbs
 "$SOCOM" forge list | grep -q "ci-status" && ok "forge lists canon verbs" \
                                           || bad "forge verbs missing"

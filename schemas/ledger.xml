@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  socom ledger — the run ledger. One row per PROMISE EXECUTION: a seat ran a
+  promise against a contract, a gate assessed it, it ended kept or broken.
+  This is the measurement substrate behind verify-never-claim — `socom cycle`
+  rolls these rows into a scored, replayable cycle artifact (pass@1, pass@k by
+  seat, hotspots). Ported from Akili's logs/agent/ledger.csv (role->seat,
+  task->promise, DONE/FAILED->verdict kept/broken).
+
+  STORAGE — the live ledger is append-only JSONL at .socom/ledger/runs.jsonl
+  (one JSON object per line, keys exactly the <field> names below). JSONL not
+  XML because the ledger is high-volume and written by automation: a flat
+  `>>` append is robust and race-light, where rewriting an XML close-tag is
+  not (Akili used flat CSV for the same reason; cf. .socom/index/chunks.jsonl).
+  This document is the schema-by-example: the canonical row contract plus a
+  worked instance. Append-only and in-repo (§git-is-source-of-truth) — a row,
+  once written, is never edited; a correction is a new row.
+
+  Example JSONL line (the wire format, verbatim):
+  {"ts":"2026-06-13T20:14:00Z","seat":"builder","promise":"P-2026-0612-001","contract":"C-2026-0612-001","gate_band":"red","exit_code":0,"duration_s":357,"attempt":1,"verdict":"kept"}
+-->
+<ledger socom="0.1">
+
+  <!-- Field contract — these key names ARE the JSONL keys. -->
+  <fields>
+    <field name="ts"        type="iso-8601"  required="true">When the execution ended (UTC). Orders attempts within a promise.</field>
+    <field name="seat"      type="string"    required="true">The executing seat — builder, reviewer, validator, scout, … (schemas/role.xml).</field>
+    <field name="promise"   type="id"        required="true">The promise executed (P-…). The unit pass@1/pass@k group by.</field>
+    <field name="contract"  type="id"        required="false">The ratified contract assessed against (C-…). Empty = uncontracted run; lowers contract_coverage.</field>
+    <field name="gate_band" type="enum"      required="true" values="fast|medium|full|ci|red|amber">The band at which this execution was gated.</field>
+    <field name="exit_code" type="int"       required="true">Process exit code (0 ok; 1 error; 124 timeout; 143 SIGTERM; …). Feeds the exit-code distribution.</field>
+    <field name="duration_s" type="int"      required="true">Wall-clock seconds. 0 marks a pre-flight skip.</field>
+    <field name="attempt"   type="int"       required="true">Attempt number for this promise, 1-based. Attempt 1's verdict decides pass@1.</field>
+    <field name="verdict"   type="enum"      required="true" values="kept|broken">The promise outcome (schemas/promise.xml vocabulary). kept = success.</field>
+  </fields>
+
+  <!-- Worked example: the canonical view of three rows (two attempts of one
+       promise plus a clean run). The live form is the JSONL above, one object
+       per line; this XML is the readable contract, not the storage. -->
+  <example>
+    <run ts="2026-06-12T20:14:00Z" seat="builder"  promise="P-2026-0612-001" contract="C-2026-0612-001" gate_band="red"    exit_code="0"   duration_s="357" attempt="1" verdict="kept"/>
+    <run ts="2026-06-12T21:03:11Z" seat="builder"  promise="P-2026-0612-002" contract="C-2026-0612-002" gate_band="medium" exit_code="1"   duration_s="120" attempt="1" verdict="broken"/>
+    <run ts="2026-06-12T21:40:55Z" seat="builder"  promise="P-2026-0612-002" contract="C-2026-0612-002" gate_band="medium" exit_code="0"   duration_s="210" attempt="2" verdict="kept"/>
+  </example>
+
+</ledger>

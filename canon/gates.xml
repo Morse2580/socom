@@ -29,6 +29,12 @@
     <blocks>the push (bypassable locally; never in CI)</blocks>
   </gate>
 
+  <gate id="eval" trigger="measurement / on demand / pre-ship" tier="fast" band="red">
+    <description embed="true">Rolls the run ledger into a scored cycle and fails when the measured pass-rate is below the bound threshold (checks.eval -> `socom cycle --gate --threshold N`). Verify-never-claim made quantitative: a seat's promises are scored (pass@1/pass@k by seat), not just asserted done; repeated below-threshold cycles surface hotspots as lesson candidates.</description>
+    <binding check="checks.eval"/>
+    <blocks>shipping on an unmeasured or below-threshold pass-rate</blocks>
+  </gate>
+
   <gate id="ci" trigger="push / pull request" tier="ci" band="red">
     <description embed="true">The incorruptible floor (R1): every gate re-asserted, contract checks executed, evidence replayed. The merge is the real door; no participant — human, agent, or hook-less runtime — routes around it.</description>
     <binding check="ci.status"/>
