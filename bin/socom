@@ -588,11 +588,20 @@ def cmd_prompt(args):
     unfilled = body.count("FILL")
     claims = verify_claims(root, body)
     verified = sum(1 for c in claims if c.startswith("VERIFIED"))
+    # Prompt identity: id derived from the source handoff (the single ordering
+    # authority — H-<date>-<branch>), plus an in-file generation timestamp so the
+    # session-start drift scan has a write-time it can read without git mtime.
+    pid = "P" + latest.stem[1:]
+    gen_ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    src_date_m = re.search(r'date="([^"]+)"', body)
+    src_date = src_date_m.group(1) if src_date_m else "unknown"
     out = root / ".socom" / "prompts" / "next-session.md"
     out.parent.mkdir(parents=True, exist_ok=True)
     notes = "\n".join(f"- {c}" for c in claims) or "- (no probe-able claims)"
-    out.write_text(f"""<!-- socom:generated next-session prompt — regenerated each closeout, do not commit by hand -->
+    out.write_text(f"""<!-- socom:prompt id={pid} generated={gen_ts} source-handoff={latest.name} — regenerated each closeout, do not commit by hand -->
 # Next session — {cfg.get('project', root.name)}
+
+**Prompt-id:** `{pid}` · **Generated:** {gen_ts} · **From handoff:** `{latest.name}` (as-of {src_date})
 
 You are resuming work on this repo's SOCOM substrate. Begin by:
 
