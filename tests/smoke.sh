@@ -116,6 +116,8 @@ EOF
 "$SOCOM" prompt >/dev/null;                check "prompt generation" 0 $?
 grep -q "VERIFIED\|HYPOTHESIS\|no probe-able" .socom/prompts/next-session.md \
   && ok "prompt is claim-verified" || bad "prompt lacks claim verification"
+grep -Eq "socom:prompt id=P-.* generated=.* source-handoff=" .socom/prompts/next-session.md \
+  && ok "prompt carries id+timestamp+provenance" || bad "prompt lacks id/timestamp header"
 "$SOCOM" gate session-end >/dev/null;      check "session-end PASS when complete" 0 $?
 
 # 8. breach lifecycle (HR3)
