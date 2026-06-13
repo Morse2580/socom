@@ -214,6 +214,25 @@ EOF
 "$SOCOM" index . 2>&1 | grep -q "REDACTED" && ok "index redacts secrets (HR6)" \
                                            || bad "index embedded a secret (HR6)"
 
+# 14. install/uninstall — symlink the checkout onto PATH, .resolve()-safe.
+#     Isolated: targets an explicit dir, never the real ~/.local/bin.
+BIN="$T/bin"
+"$SOCOM" install "$BIN" >/dev/null;    check "install links onto a bin dir" 0 $?
+[ -L "$BIN/socom" ] && [ "$(readlink "$BIN/socom")" = "$SOCOM" ] \
+  && ok "install symlink points at this checkout" \
+  || bad "install symlink wrong target"
+"$BIN/socom" greet . >/dev/null 2>&1 && ok "linked socom runs (.resolve() TOOL_ROOT)" \
+                                     || bad "linked socom failed to resolve resources"
+"$SOCOM" install "$BIN" >/dev/null;    check "install is idempotent" 0 $?
+mkdir -p "$T/foreign"; echo "not socom" > "$T/foreign/socom"
+"$SOCOM" install "$T/foreign" >/dev/null 2>&1; check "install refuses foreign file" 1 $?
+grep -q "not socom" "$T/foreign/socom" && ok "foreign file left untouched" \
+                                       || bad "install clobbered a foreign file"
+"$SOCOM" uninstall "$T/foreign" >/dev/null 2>&1; check "uninstall refuses foreign file" 1 $?
+"$SOCOM" uninstall "$BIN" >/dev/null;  check "uninstall removes our symlink" 0 $?
+[ -e "$BIN/socom" ] && bad "uninstall left the symlink" \
+                    || ok "uninstall cleaned the symlink"
+
 rm -rf "$T"
 if [ "$FAIL" -gt 0 ]; then echo "smoke: $FAIL FAILURE(S)"; exit 1; fi
 echo "smoke: all checks passed"
