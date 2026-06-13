@@ -58,6 +58,11 @@ printf 'feat(x): y\n\n[what] z\n[test] it works fine\n' > "$T/m3"
 printf 'feat(x): y\n\n[what] z\n[test] $ run tests; rc=0 PASS 12/12\n' > "$T/m4"
 "$SOCOM" gate commit-msg "$T/m4" | grep -q "AMBER" && bad "real evidence wrongly ambered (HR4)" \
                                                    || ok "real evidence passes (HR4)"
+# 4b. a prose mention of [test] in an earlier block must not capture a
+#     digit-less fragment and false-flag a real, evidence-shaped [test] block.
+printf 'feat(x): y\n\n[what] z\n[why] cleared the n/a [test] block from before\n[test] $ smoke; rc=0 PASS 9/9\n' > "$T/m5"
+"$SOCOM" gate commit-msg "$T/m5" | grep -q "AMBER" && bad "prose [test] mention false-flags real evidence (HR4)" \
+                                                   || ok "line-start anchor ignores prose [test] mention (HR4)"
 grep -c "amber" .socom/gates/breaches.log >/dev/null && ok "breaches logged (HR3)" \
                                                      || bad "no breach log (HR3)"
 "$SOCOM" gate session-start 2>/dev/null | grep -q "breach" && ok "session-start surfaces breach debt (HR3)" \

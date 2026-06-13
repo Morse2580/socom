@@ -689,8 +689,10 @@ def cmd_gate(args):
                   "Full blocks belong on the first branch commit.")
             return
         # HR4: substance heuristic — evidence should look like evidence
-        # (a command, an exit code, an output line), not a vibe.
-        m = re.search(r"\[test\](.*?)(?:\n\[|\Z)", msg, re.DOTALL)
+        # (a command, an exit code, an output line), not a vibe. Anchor the
+        # block token to line-start so a prose mention of "[test]" inside an
+        # earlier block can't capture a digit-less fragment (false negative).
+        m = re.search(r"^\[test\](.*?)(?:\n\[|\Z)", msg, re.DOTALL | re.M)
         body = (m.group(1) if m else "").strip()
         looks_like_evidence = (len(body) >= 20 and
                                re.search(r"(\$ |rc=|exit|PASS|FAIL|\d)", body))
