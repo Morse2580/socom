@@ -25,6 +25,18 @@ Method per extraction (constitution §contracts-before-code, §research-first):
 
 ---
 
+## Maintenance debt (not extractions — surfaced by drift scan)
+
+- **CI runner Node-20 deprecation** (flagged by CI annotation on run 27509263690,
+  2026-06-14). GitHub forces Node-20 actions to Node-24 by **2026-06-16**, removes
+  Node-20 from runners 2026-09-16. The compiled workflow pins `actions/checkout@v4`
+  + `actions/setup-python@v5` (Node-20). Fix at the ROOT, not the compiled view:
+  bump the action versions in `bin/socom`'s CI-adapter template (cmd_compile, the
+  `.github/workflows/socom-gates.yml` generator), then `socom compile`. Low urgency,
+  hard deadline 2026-06-16.
+
+---
+
 ## #1 — Evals (the chosen first extract)
 
 ### What Akili does (the essential pattern)
