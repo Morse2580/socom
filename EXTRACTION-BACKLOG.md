@@ -35,6 +35,30 @@ Method per extraction (constitution §contracts-before-code, §research-first):
   `.github/workflows/socom-gates.yml` generator), then `socom compile`. Low urgency,
   hard deadline 2026-06-16.
 
+## Initiative: substrate self-maintenance — `bin/socom` quality
+
+Distinct from the Akili-extraction track. Triggered by operator: "the bin for socom py is
+not good quality code … just one monolithic script". **Analyst telemetry (read-only, this
+session) reframed the diagnosis**: the problem is NOT the single file.
+
+- The file is **91% IO by SLOC**; the pure unit-testable core is only **~137 SLOC / 16 helpers**.
+- **Single-file is deliberate + load-bearing** — `TOOL_ROOT = Path(__file__).resolve()…` (L60)
+  resolves through the install symlink and is baked into every repo's generated git hooks
+  (L313). A naive split into a package is a **one-way door** on `socom install` (residuality.xml).
+- The real debt: (a) **untested pure core** — BM25/overlap/hash math had 0 direct assertions;
+  (b) **structural duplication** — `root / ".socom" / …` inlined **52×**, `sys.exit` re-rolled
+  **45×** (no `die()`), `datetime.now(tz)` stamped **13×** in 3 shapes; (c) **3 hotspots** —
+  `cmd_cycle` (152 lines, **cyclomatic 61**, a 4× outlier), `cmd_gate` (CC 39), `render_body` (CC 23).
+
+Residuality-ordered increment ladder (tests FIRST, then refactor under the net):
+
+| # | Increment | State |
+|---|---|---|
+| SM-1 | Unit-test the pure core (`tests/unit.py`, 28 assertions, chained into smoke + CI) | **DONE** (commit cd01bfe) |
+| SM-2 | Utility layer: path-constant helper, `die()`, `now_stamp()` — migrate the 52×/45×/13× duplication in place. No packaging change. Now safe under SM-1's net. | NEXT |
+| SM-3 | Decompose the 3 hotspots (`cmd_cycle` CC 61 first), guarded by SM-1 + smoke | pending |
+| SM-4 | Internal package **+ bundler emitting the single file** — ONLY if SM-2/3 don't resolve navigation; a gated one-way door, defer until proven necessary | deferred |
+
 ---
 
 ## #1 — Evals (the chosen first extract)
