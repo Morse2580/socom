@@ -242,6 +242,38 @@ else
 fi
 rm -rf .socom/ledger .socom/cycles .socom/lessons
 
+# 10d2. contract — the validation contract made testable (verify runs <check> <run>)
+"$SOCOM" contract verify >/dev/null 2>&1; check "contract verify usage without file" 1 $?
+mkdir -p .socom/promises
+cat > .socom/promises/contract-fix.xml <<'EOF'
+<promise id="P-CT" state="open"><contract ref="C-CT" state="ratified">
+  <goal>verify executes auto checks, flags manual ones</goal>
+  <check id="1" assessor="gate:task-completion"><run>true</run><expect>auto check passes</expect></check>
+  <check id="2" assessor="gate:task-completion"><run>false</run><expect>auto check fails</expect></check>
+  <check id="3" assessor="reviewer"><expect>human reads the diff</expect></check>
+</contract></promise>
+EOF
+CV="$("$SOCOM" contract verify .socom/promises/contract-fix.xml 2>&1)"; CVR=$?
+[ "$CVR" = 1 ] && ok "contract verify exits nonzero when an auto check fails (rc=$CVR)" \
+              || bad "contract verify rc wrong (expected 1, got $CVR)"
+echo "$CV" | grep -q "check 1 .* PASS" && echo "$CV" | grep -q "check 2 .* FAIL" \
+  && echo "$CV" | grep -q "check 3 .* MANUAL" \
+  && ok "contract verify reports PASS / FAIL / MANUAL per check" || bad "contract verify report wrong:
+$CV"
+# passing-only + manual -> exit 0 (manual never auto-passed, but never fails the run)
+cat > .socom/promises/contract-ok.xml <<'EOF'
+<promise id="P-OK" state="open"><contract ref="C-OK" state="ratified">
+  <goal>only an auto-passing check plus a manual one</goal>
+  <check id="1" assessor="gate:task-completion"><run>true</run><expect>passes</expect></check>
+  <check id="2" assessor="reviewer"><expect>human judgment</expect></check>
+</contract></promise>
+EOF
+"$SOCOM" contract verify .socom/promises/contract-ok.xml >/dev/null 2>&1
+check "contract verify PASSes when no auto check fails (manual pending)" 0 $?
+"$SOCOM" contract show .socom/promises/contract-ok.xml | grep -q "only an auto-passing check" \
+  && ok "contract show prints the goal + checks" || bad "contract show wrong"
+rm -rf .socom/promises
+
 # 10e. precond — velocity-first work-readiness pre-flight (the published gate)
 "$SOCOM" precond >/dev/null 2>&1; check "precond passes on a healthy repo" 0 $?
 rm -rf .socom/promises

@@ -26,6 +26,8 @@ Commands:
            warns by default, blocks only the unrecoverable; --no-heal for CI
   introspect post-session self-capture: handoff evidence -> replayable
            assertion log (+ lesson candidates from captured failures), no model
+  contract make the contract testable: verify runs a contract's <check> <run>
+           commands (PASS/FAIL on exit), flags no-run checks MANUAL | show
   greet    adoption-ladder greeting — where you are, what's next
   install  symlink this checkout onto PATH (~/.local/bin) so `socom` just works
   uninstall remove the socom symlink (only if it points at this checkout)
@@ -1414,6 +1416,113 @@ def cmd_cycle(args):
         print(f"  -> {written}")
 
 
+# ── contract — make the validation contract testable, not inert ──────────
+# §contracts-before-code: a contract's <check> elements carry a <run> command
+# and an <expect> outcome. `verify` RUNS each runnable check (PASS/FAIL on exit
+# code) and flags the rest MANUAL — the SOCOM-native conformance-test runner.
+
+def _contract_el(root_el):
+    """The <contract> element of a promise root, or root itself if it IS one.
+    Pure: returns the element or None."""
+    if root_el.tag == "contract":
+        return root_el
+    return root_el.find("contract")
+
+
+def _contract_checks(contract_el) -> list:
+    """Pure: a contract element -> [{id, assessor, run, expect, auto}]. A check
+    with a <run> command is auto-verifiable; one without is MANUAL."""
+    checks = []
+    for c in contract_el.findall("check"):
+        run = c.findtext("run")
+        run = run.strip() if run and run.strip() else None
+        checks.append({
+            "id": c.get("id", "?"),
+            "assessor": c.get("assessor", "?"),
+            "run": run,
+            "expect": " ".join((c.findtext("expect") or "").split()),
+            "auto": run is not None,
+        })
+    return checks
+
+
+def _verify_summary(results: list) -> dict:
+    """Pure: [{auto, passed}] -> tallies. ok iff no auto check FAILED. Manual
+    checks never count as passed (fail-closed) and never as failed."""
+    passed = sum(1 for r in results if r["auto"] and r["passed"])
+    failed = sum(1 for r in results if r["auto"] and not r["passed"])
+    manual = sum(1 for r in results if not r["auto"])
+    return {"passed": passed, "failed": failed, "manual": manual,
+            "ok": failed == 0}
+
+
+def cmd_contract(args):
+    if not args or args[0] not in ("verify", "show"):
+        sys.exit("usage: socom contract <verify|show> <promise-or-contract.xml>")
+    sub = args[0]
+    if len(args) < 2:
+        sys.exit(f"usage: socom contract {sub} <promise-or-contract.xml>")
+    root = repo_root()
+    f = Path(args[1])
+    if not f.is_absolute():
+        f = root / args[1]
+    if not f.exists():
+        sys.exit(f"socom contract: no such file '{args[1]}' (R6: degrade loudly).")
+    try:
+        root_el = ET.parse(f).getroot()
+    except ET.ParseError as e:
+        sys.exit(f"socom contract: {f.name} is not well-formed XML — {e}")
+    contract = _contract_el(root_el)
+    if contract is None:
+        sys.exit(f"socom contract: no <contract> in {f.name} "
+                 "(a promise embeds one, or pass a standalone contract).")
+    checks = _contract_checks(contract)
+    state = contract.get("state", "?")
+    goal = " ".join((contract.findtext("goal") or "").split())
+
+    if sub == "show":
+        print(f"socom contract {contract.get('ref', '?')} [{state}]")
+        print(f"  goal: {goal}")
+        for c in checks:
+            kind = f"run: {c['run']}" if c["auto"] else "MANUAL (no <run>)"
+            print(f"  check {c['id']} · {c['assessor']} · {kind}")
+            print(f"    expect: {c['expect']}")
+        return
+
+    # verify: run each auto check, report; manual checks flagged, never passed.
+    if state != "ratified":
+        print(f"socom contract: WARN — {contract.get('ref', '?')} state is "
+              f"'{state}', not 'ratified' (work runs against ratified contracts).")
+    results = []
+    for c in checks:
+        if c["auto"]:
+            cp = subprocess.run(c["run"], shell=True, cwd=root,
+                                capture_output=True, text=True)
+            passed = cp.returncode == 0
+            tail = (cp.stdout + cp.stderr).strip().splitlines()[-1:] or [""]
+            print(f"  check {c['id']} · {c['assessor']} · "
+                  f"{'PASS' if passed else 'FAIL'} (exit {cp.returncode})")
+            print(f"    $ {c['run']}")
+            print(f"    expect: {c['expect']}")
+            if tail[0]:
+                print(f"    output: {tail[0][:100]}")
+            results.append({**c, "passed": passed})
+        else:
+            print(f"  check {c['id']} · {c['assessor']} · MANUAL — "
+                  f"needs {c['assessor']}, not auto-verifiable")
+            print(f"    expect: {c['expect']}")
+            results.append({**c, "passed": False})
+
+    s = _verify_summary(results)
+    print(f"socom contract verify: {s['passed']} passed, {s['failed']} failed, "
+          f"{s['manual']} manual -> {'OK' if s['ok'] else 'FAILED'}")
+    if s["manual"]:
+        print(f"  {s['manual']} manual check(s) still need an assessor — "
+              "verify confirms the auto checks only (fail-closed on the rest).")
+    if not s["ok"]:
+        sys.exit(1)
+
+
 # ── lesson — experience earned into durable, retrievable rules ────────────
 # Ported from Akili's lesson system. A lesson is BORN provisional from a cycle
 # hotspot (the eval->lesson bridge), EARNS active by re-confirmation, and is
@@ -1949,7 +2058,7 @@ COMMANDS = {"init": cmd_init, "compile": cmd_compile, "doctor": cmd_doctor,
             "baseline": cmd_baseline, "greet": cmd_greet,
             "embed": cmd_embed, "query": cmd_query, "eval": cmd_eval,
             "cycle": cmd_cycle, "lesson": cmd_lesson, "precond": cmd_precond,
-            "introspect": cmd_introspect,
+            "introspect": cmd_introspect, "contract": cmd_contract,
             "forge": cmd_forge, "install": cmd_install,
             "uninstall": cmd_uninstall}
 

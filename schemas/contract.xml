@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  socom contract — the validation contract: falsifiable acceptance checks with
+  named assessors, written and ratified BEFORE implementation (constitution
+  §contracts-before-code). A promise (schemas/promise.xml) embeds one inline or
+  references one by `ref`; this schema documents that artifact as a first-class
+  shape so it can be made TESTABLE rather than inert.
+
+  WHY — "Tests confirm contracts; they are never retrofitted to bless whatever
+  was built." A contract whose checks only sit in XML is a claim, not a test.
+  `socom contract verify <file>` RUNS each check that carries a <run> command and
+  reports PASS/FAIL on its exit code — the SOCOM-native form of Akili's
+  conformance-test runner (contracts/tests/ + the contract:conformance CI gate),
+  collapsed to one verb over the contract we already write.
+
+  ASSESSOR MODEL — each <check> names the assessor that may judge it. A check
+  with a <run> is MECHANICALLY assessable (assessor="gate:*"): verify executes
+  it. A check WITHOUT a <run> (assessor="reviewer"/"human") is MANUAL: verify
+  reports it as needing that assessor and NEVER auto-passes it (fail-closed —
+  the mechanical assessor does not claim a human's verdict, §context-economy:
+  assessment is never delegated to the promiser, nor faked by the runner).
+
+  Example standalone contract (the readable form a promise embeds or refs):
+  the auto check runs `true` (exit 0 -> PASS); the manual check has no <run>.
+-->
+<contract socom="0.1">
+
+  <!-- Field contract — the elements/attributes a contract artifact carries. -->
+  <fields>
+    <field name="ref"               type="id"     required="true">C-&lt;date&gt;-&lt;nnn&gt;. The contract id; a promise points at it via &lt;contract ref="…"&gt;.</field>
+    <field name="state"             type="enum"   required="true" values="open|ratified|broken|renegotiated">open = drafted, not yet ratified; ratified = accepted before code (the only state work may start against); broken = a check falsified mid-build; renegotiated = superseded by a new version via the originator (a worker cannot amend its own — §contracts-before-code).</field>
+    <field name="goal"              type="string" required="true">The falsifiable definition of done, embed="true". What must be true, not how.</field>
+    <field name="check"             type="element" required="true">One acceptance check; repeatable. Attributes: id, assessor. Children: optional &lt;run&gt; (the command — its exit code is the verdict, 0=PASS), required &lt;expect&gt; (the outcome the assessor compares against). A check with a &lt;run&gt; is auto-verifiable; one without is MANUAL.</field>
+    <field name="out-of-scope"      type="string" required="false">What this contract deliberately does NOT cover, embed="true" — bounds the promise.</field>
+    <field name="regression-surface" type="string" required="false">What must keep working, embed="true" — the blast radius a fix must not break.</field>
+  </fields>
+
+  <!-- Worked example: a standalone contract. `socom contract verify` on this
+       reports check 1 PASS (true -> exit 0), check 2 MANUAL (no <run>), exit 0. -->
+  <example>
+    <contract ref="C-2026-0614-002" state="ratified">
+      <goal embed="true">
+        `socom contract verify` runs a contract's checks and exits nonzero iff an
+        auto check fails; manual checks are reported, never auto-passed.
+      </goal>
+      <check id="1" assessor="gate:task-completion">
+        <run>true</run>
+        <expect>exit 0 — the auto check passes and is reported PASS</expect>
+      </check>
+      <check id="2" assessor="reviewer">
+        <expect>verify prints this as MANUAL with assessor=reviewer; never auto-passed</expect>
+      </check>
+      <out-of-scope embed="true">
+        Comparing a check's live output against the prose &lt;expect&gt; — verify
+        runs the command and judges on exit code; the assessor reads the rest.
+      </out-of-scope>
+      <regression-surface embed="true">
+        A contract embedded in a promise must verify identically to a standalone one.
+      </regression-surface>
+    </contract>
+  </example>
+
+</contract>

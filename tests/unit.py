@@ -187,6 +187,36 @@ eq("rollup worst (most-attempted) promise", _m["attempts"]["worst_promise"], "P-
 eq("rollup empty rows -> 0 promises",
    socom._cycle_rollup([])["summary"]["unique_promises"], 0)
 
+# ── contract machinery (#6: _contract_el / _contract_checks / _verify_summary) ─
+_promise_xml = """<promise id="P-x" state="open">
+  <contract ref="C-x" state="ratified">
+    <goal>g</goal>
+    <check id="1" assessor="gate:task-completion"><run>true</run><expect>passes</expect></check>
+    <check id="2" assessor="reviewer"><expect>human reads the diff</expect></check>
+  </contract></promise>"""
+_pe = ET.fromstring(_promise_xml)
+_ce = socom._contract_el(_pe)
+check("_contract_el finds <contract> inside a promise", _ce is not None and _ce.get("ref") == "C-x")
+_bare = ET.fromstring('<contract ref="C-y" state="ratified"><goal>g</goal></contract>')
+check("_contract_el returns a bare contract unchanged", socom._contract_el(_bare) is _bare)
+check("_contract_el None when absent", socom._contract_el(ET.fromstring("<promise/>")) is None)
+
+_cks = socom._contract_checks(_ce)
+eq("_contract_checks count", len(_cks), 2)
+check("_contract_checks marks <run> check auto",
+      _cks[0]["auto"] is True and _cks[0]["run"] == "true" and _cks[0]["assessor"] == "gate:task-completion")
+check("_contract_checks marks no-run check MANUAL",
+      _cks[1]["auto"] is False and _cks[1]["run"] is None and _cks[1]["assessor"] == "reviewer")
+
+eq("_verify_summary ok when no auto fails (pass + manual)",
+   socom._verify_summary([{"auto": True, "passed": True}, {"auto": False, "passed": False}]),
+   {"passed": 1, "failed": 0, "manual": 1, "ok": True})
+eq("_verify_summary FAILS when an auto check fails",
+   socom._verify_summary([{"auto": True, "passed": True}, {"auto": True, "passed": False}]),
+   {"passed": 1, "failed": 1, "manual": 0, "ok": False})
+check("_verify_summary: a manual check is never counted passed",
+      socom._verify_summary([{"auto": False, "passed": False}])["passed"] == 0)
+
 # ── summary ──────────────────────────────────────────────────────────────────
 print(f"unit: {_PASS} passed, {_FAIL} failed")
 raise SystemExit(1 if _FAIL else 0)
