@@ -361,6 +361,14 @@ grep -q "not socom" "$T/foreign/socom" && ok "foreign file left untouched" \
 [ -e "$BIN/socom" ] && bad "uninstall left the symlink" \
                     || ok "uninstall cleaned the symlink"
 
+# 15. white-box unit tests on the pure core — complements the black-box checks
+#     above. Chained here so every check that runs smoke (fast/medium/full + CI)
+#     also pins the scoring/hash/regex/template contracts. ROOT is absolute, so
+#     this tests the real bin/socom regardless of the temp working dir.
+U="$(python3 "$ROOT/tests/unit.py" 2>&1)"; UR=$?
+[ "$UR" = 0 ] && ok "unit: pure core ($(printf '%s' "$U" | tail -1))" \
+             || { bad "unit tests on pure core"; printf '%s\n' "$U"; }
+
 rm -rf "$T"
 if [ "$FAIL" -gt 0 ]; then echo "smoke: $FAIL FAILURE(S)"; exit 1; fi
 echo "smoke: all checks passed"
