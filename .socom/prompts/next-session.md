@@ -1,7 +1,7 @@
-<!-- socom:prompt id=P-2026-06-14-main generated=2026-06-14T19:15:16+00:00 source-handoff=H-2026-06-14-main.xml — regenerated each closeout, do not commit by hand -->
+<!-- socom:prompt id=P-2026-06-14-main generated=2026-06-14T21:16:04+00:00 source-handoff=H-2026-06-14-main.xml — regenerated each closeout, do not commit by hand -->
 # Next session — socom
 
-**Prompt-id:** `P-2026-06-14-main` · **Generated:** 2026-06-14T19:15:16+00:00 · **From handoff:** `H-2026-06-14-main.xml` (as-of 2026-06-14T19:14:40+00:00)
+**Prompt-id:** `P-2026-06-14-main` · **Generated:** 2026-06-14T21:16:04+00:00 · **From handoff:** `H-2026-06-14-main.xml` (as-of 2026-06-14T21:15:14+00:00)
 
 You are resuming work on this repo's SOCOM substrate. Begin by:
 
@@ -15,22 +15,21 @@ You are resuming work on this repo's SOCOM substrate. Begin by:
 ## Inherited state (from H-2026-06-14-main.xml)
 handoff was fully filled at closeout
 
-## Claim verification (13/16 verified at generation time)
-- VERIFIED: path .socom/gates/breaches.resolved.log exists
-- VERIFIED: path .socom/prompts/next-session.md exists
-- VERIFIED: path tests/smoke.sh exists
-- HYPOTHESIS: path CLAUDE.md/AGENTS.md NOT FOUND in repo
-- VERIFIED: commit ea71c32
-- VERIFIED: commit fe67254
-- VERIFIED: commit 0cd128d
-- VERIFIED: commit d0e0cfe
-- VERIFIED: commit 6719d49
-- HYPOTHESIS: commit 6e5595b
+## Claim verification (15/15 verified at generation time)
+- VERIFIED: path schemas/contract.xml exists
+- VERIFIED: path .socom/index/chunks.jsonl exists
+- VERIFIED: path schemas/promise.xml exists
+- VERIFIED: path tests/unit.py exists
 - VERIFIED: commit cb00b98
-- VERIFIED: commit 41d2875
-- HYPOTHESIS: commit fce8a08
-- VERIFIED: commit bd8b7a1
-- VERIFIED: commit 37be469
-- VERIFIED: commit ef1cdb3
+- VERIFIED: commit 2e47cfb
+- VERIFIED: commit 1b33918
+- VERIFIED: commit b28ada4
+- VERIFIED: commit 336ca8e
+- VERIFIED: commit f5bb53c
+- VERIFIED: commit cd01bfe
+- VERIFIED: commit b9400bf
+- VERIFIED: commit 41a1cce
+- VERIFIED: commit 3f0aa5a
+- VERIFIED: commit eb7f490
 
 Anything marked HYPOTHESIS must be re-checked before you rely on it.

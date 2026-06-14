@@ -1,85 +1,83 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <handoff socom="0.1" id="H-2026-06-14-main" branch="main"
-         date="2026-06-14T19:14:40+00:00">
-  <summary embed="true">residuality: §residuality-gate made falsifiable canon (backlog #5)</summary>
+         date="2026-06-14T21:15:14+00:00">
+  <summary embed="true">contract verify (#6) + bin/socom self-maintenance SM-1/2/3</summary>
   <done embed="true">
-    Backlog #5 (Protocol docs -&gt; canon) shipped, gates green, committed.
-    Fifth Akili-&gt;SOCOM extraction.
+    Two tracks shipped, gates green, all pushed + CI-verified green.
 
-    `residuality.xml` (commit cb00b98): the constitution §residuality-gate
-    (rank 5) promoted from one prose paragraph into a falsifiable, retrievable
-    canon artifact. Contents: the 4 gate questions + trigger-words as
-    embed="true" rules; Saltzer &amp; Schroeder (1975) ten protection principles,
-    each a test a design can be FAILED against, with its SOCOM embodiment named;
-    and an &lt;evidence&gt; block — what running the gate records (trigger, questions
-    tested, verdict, resolution-or-leash). Created in both .socom/canon/ and the
-    canon/ shipped twin (identical); added to CANON_FILES; render_body emits a
-    `## Residuality` section into CLAUDE.md/AGENTS.md/.cursor (mirrors forge).
+    **Backlog #6 — Contract machinery** (commit 1b33918): `socom contract
+    verify|show`. The validation contract was doctrine + inert XML; verify now
+    EXECUTES each `<check><run>` command a promise embeds (schemas/promise.xml),
+    PASS/FAIL on exit code, and flags no-run checks MANUAL (fail-closed — never
+    auto-passed; the mechanical assessor never claims the human verdict). New
+    schemas/contract.xml (schema-by-example). Pure helpers _contract_el /
+    _contract_checks / _verify_summary, unit-tested. Reframe from research:
+    SOCOM already HAD the contract shape; #6 made it executable, not a new
+    notion. Sixth Akili-&gt;SOCOM extraction. Evidence: verify on a
+    true/false/no-run fixture -&gt; PASS/FAIL/MANUAL, exit 1; pass+manual -&gt; exit
+    0; unit 51 passed; smoke all green; doctor clean.
 
-    Non-duplication PROVEN (the #5 requirement): of 5 candidate docs only
-    residuality earned a file. success-failure / incident-response /
-    agent-protocol are ALREADY fully covered by the constitution (not ported).
-    commit-protocol deferred to backlog #7 (real gap, but fits socom.yaml/hooks
-    not canon). Akili's INFRA residuality scoring tables deliberately NOT ported
-    — different bounded context (decision residuality vs infra residuality).
-
-    Evidence (all run after last edit): well-formed both dirs; `socom index` ->
-    16 residuality chunks (grep -c artifact); `socom compile` + `socom doctor`
-    -> clean rc=0; `## Residuality` present in CLAUDE.md+AGENTS.md+.cursor;
-    `tests/smoke.sh` -> all checks passed exit 0; adapter diffs hash-restamp
-    only (fce8a08-&gt;6e5595b). Commits cb00b98 (feat), 0cd128d (backlog).
+    **Substrate self-maintenance SM-1/2/3** (operator-triggered: "bin for socom
+    py is not good quality... one monolithic script"). Analyst telemetry
+    reframed it (file is 91% IO; single-file is deliberate/load-bearing; real
+    debt = untested core + duplication + 3 hotspots).
+    - SM-1 (cd01bfe): tests/unit.py, white-box assertions on the pure core,
+      chained into smoke+CI — the refactor safety net.
+    - SM-2 (eb7f490): SOCOM_DIR constant (52 magic strings) + _now_iso() (9
+      stamps); die() residuality-REJECTED (lateral, risks smoke-grepped text).
+    - SM-3 (b9400bf): decomposed cmd_cycle (CC 61 -&gt; the 4x outlier eliminated),
+      extracted pure _cycle_rollup + 14 white-box tests; 152-&gt;80 lines.
+    Unit suite grew 0 -&gt; 51 assertions; every step behaviour-preserving (doctor
+    clean = byte-identical compile, smoke green, each push CI-green).
   </done>
   <undone embed="true">
-    NOT pushed yet at handoff-write time — push + CI-verify is the final
-    closeout step after this handoff + prompt commit (see warnings).
-    commit-protocol -&gt; canon is backlog #7 (the #5 deferred half): per-block
-    [what][why][how][test][broke][next] semantics + templates; likely fits
-    socom.yaml/hook config rather than a canon file — decide at pickup.
-    No `socom gate residuality` command built — deliberate (velocity: the gate
-    is a judgment device, not a blocking mechanical gate; retrieval via
-    `socom query` is the adoption path).
+    #6 followups (backlog row 6f, deferred — NOT built, residuality: no sprawl):
+    standalone `.socom/contracts/&lt;id&gt;.xml` storage + lifecycle; §R10
+    renegotiation (new version + originator re-ratification + diff); record
+    verify results into the assertion log (#4 bridge) or auto-append a ledger
+    row; per-contract pass@1/pass@k in cmd_cycle.
+    SM-3 remainder (optional): cmd_gate (CC 39) + render_body (CC 23) — far
+    below the cmd_cycle outlier; decompose only if they bite. SM-4 (package +
+    bundler) stays deferred behind its one-way-door gate.
   </undone>
   <recent-commits>
-    <commit>0cd128d docs(socom): backlog — #5 residuality DONE, #6 contract machinery NEXT</commit>
-    <commit>cb00b98 feat(canon): socom residuality — the §residuality-gate made falsifiable</commit>
-    <commit>d0e0cfe docs(socom): backlog — #4 introspect DONE (socom introspect), #5 promoted NEXT</commit>
-    <commit>bd8b7a1 feat(cli): socom introspect — handoff evidence into a replayable assertion log</commit>
-    <commit>41d2875 docs(socom): hand-author next-session prompt — backlog #4 agent introspection</commit>
-    <commit>fe67254 chore(platform): session closeout — handoff, prompt, gates-velocity-first memory</commit>
-    <commit>ef1cdb3 docs(socom): backlog — #3 precond DONE (socom precond), assessment half deferred, #4 NEXT</commit>
-    <commit>ea71c32 feat(cli): socom precond — velocity-first work-readiness pre-flight (the published gate)</commit>
-    <commit>37be469 chore(platform): session closeout — handoff, prompt, lesson-system memory, HR3 resolve</commit>
-    <commit>6719d49 docs(socom): backlog — mark #2 lessons DONE (socom lesson), promote #3 to NEXT</commit>
+    <commit>2e47cfb docs(socom): backlog — #6 contract verify DONE, #7 commit-protocol NEXT</commit>
+    <commit>1b33918 feat(cli): socom contract verify — make the validation contract testable</commit>
+    <commit>41a1cce docs(socom): backlog — SM-3 cmd_cycle DONE (CC-61 outlier eliminated)</commit>
+    <commit>b9400bf refactor(cli): SM-3 decompose cmd_cycle — extract pure _cycle_rollup, kill the CC-61 outlier</commit>
+    <commit>3f0aa5a docs(socom): backlog — SM-2 DONE (utility layer), SM-3 decompose NEXT</commit>
+    <commit>eb7f490 refactor(cli): SM-2 utility layer — SOCOM_DIR + _now_iso(), kill the magic strings</commit>
+    <commit>336ca8e docs(socom): backlog — substrate self-maintenance initiative (SM-1 DONE)</commit>
+    <commit>cd01bfe test(cli): unit tests for the pure core — the refactor safety net</commit>
+    <commit>b28ada4 docs(socom): backlog — record CI Node-20 deprecation as maintenance debt</commit>
+    <commit>f5bb53c chore(platform): session closeout — handoff #5, regenerated prompt, leash closed</commit>
   </recent-commits>
   <uncommitted>
-M .socom/gates/breaches.resolved.log
- M .socom/prompts/next-session.md
+M .socom/index/chunks.jsonl
   </uncommitted>
   <blockers embed="true">None.</blockers>
   <warnings embed="true">
-    - This handoff OVERWROTE the prior H-2026-06-14-main.xml (which described
-      #3 precond). That is the tool's design (one rolling handoff per
-      day+branch, H-{date}-{branch}); the precond closeout detail is preserved
-      in git history + commit ef1cdb3's message. Same-day sessions collide by
-      design — not data loss.
-    - This session resolved the stale-prompt LEASH from earlier: the prior
-      next-session.md was hand-authored to point at #5 because the then-latest
-      handoff still said #4. ROOT FIX applied here: this handoff now names #5
-      DONE / #6 NEXT, so `socom prompt` regenerates correctly from it — the
-      hand-authored bridge retires.
-    - .socom/gates/breaches.resolved.log shows modified: pre-existing churn
-      carried from session start, unrelated to #5. Left for the closeout commit.
-    - Push + CI-verify still owed at write time (constitution §verify-never-claim
-      / forge §verify-after-push): a push is not done until ci-status is green.
+    - `socom contract verify` EXECUTES the contract's `<run>` commands via the
+      shell in the repo context — by design (it is the verification runner), and
+      the author of a ratified contract owns those commands, like any test. Do
+      not point verify at an untrusted contract.
+    - This handoff OVERWROTE the prior H-2026-06-14-main.xml (which described #5
+      + closeout). Tool design: one rolling handoff per day+branch; the #5
+      detail is preserved in git history + commits f5bb53c/cb00b98. The SM-1/2/3
+      increments shipped AFTER that #5 handoff were not yet captured — this
+      refresh is what makes the handoff catch up to repo reality.
+    - .socom/index/chunks.jsonl shows modified: pre-push `full` runs `socom
+      index .`; pre-existing non-stable-output churn, left untouched.
+    - Push + CI-verify still owed at write time (forge §verify-after-push).
   </warnings>
   <next embed="true">
-    1. Backlog #6 — Contract machinery: make "contracts before code" a real,
-       testable artifact (schema + examples + tests), porting Akili `contracts/`.
-       The natural next rung now that the protocol/gate layer is canon.
-    2. Backlog #7 — commit-protocol -&gt; canon (the #5 deferred half): per-block
-       semantics + templates; decide canon-file vs socom.yaml/hook config.
-    3. Still open from earlier: ledger auto-append (cycle/lesson measure real
-       operation, still synthetic); precond wired into bootstrap guidance (not a
-       blocking gate); #3 assessment-artifact + #4 LLM halves only if needed.
+    1. Backlog #7 — commit-protocol -&gt; canon (or socom.yaml): per-block
+       [what][why][how][test][broke][next] semantics + templates (the #5
+       deferred half). Decide canon-file vs socom.yaml/hook config at pickup.
+    2. Backlog #6f — contract followups: standalone storage, §R10
+       renegotiation, verify-&gt;assertion/ledger recording, per-contract metrics.
+    3. Still open: ledger auto-append (cycle/lesson still synthetic) — #6f's
+       "record verify -&gt; ledger" would start closing this; precond bootstrap
+       guidance; SM-3 remainder (cmd_gate/render_body) only if they bite.
   </next>
 </handoff>
