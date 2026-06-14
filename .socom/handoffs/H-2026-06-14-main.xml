@@ -1,75 +1,85 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <handoff socom="0.1" id="H-2026-06-14-main" branch="main"
-         date="2026-06-14T08:13:37+00:00">
-  <summary embed="true">precond: socom precond velocity-first pre-flight (backlog #3 precond half)</summary>
+         date="2026-06-14T19:14:40+00:00">
+  <summary embed="true">residuality: §residuality-gate made falsifiable canon (backlog #5)</summary>
   <done embed="true">
-    Backlog #3 (precond half) shipped, gates green, pushed, CI verified green
-    (headSha ef1cdb3 -> success). Third Akili-&gt;SOCOM extraction.
+    Backlog #5 (Protocol docs -&gt; canon) shipped, gates green, committed.
+    Fifth Akili-&gt;SOCOM extraction.
 
-    `socom precond [seat] [--no-heal]` (commit ea71c32): a velocity-first
-    work-readiness pre-flight — the "published gate" doctrine made real, the
-    before-bookend to gates (which only check after work).
-    - Checks: substrate dirs, git+python3, hooks wired, checks bound, drift,
-      claim held (production seats). Each prints pass/healed/warn/block.
-    - Velocity-first per operator feedback: AUTO-HEALS safe gaps (mkdir, git
-      config), WARNS by default, blocks ONLY the unrecoverable; exit 0 unless a
-      real blocker. --no-heal is the CI assert posture. Prints elapsed ms.
-    - Distinct from doctor (substrate health, static) — precond is work
-      readiness, seat-aware, healing. Extracted SUBSTRATE_DIRS as the single
-      source of truth shared by init + precond.
+    `residuality.xml` (commit cb00b98): the constitution §residuality-gate
+    (rank 5) promoted from one prose paragraph into a falsifiable, retrievable
+    canon artifact. Contents: the 4 gate questions + trigger-words as
+    embed="true" rules; Saltzer &amp; Schroeder (1975) ten protection principles,
+    each a test a design can be FAILED against, with its SOCOM embodiment named;
+    and an &lt;evidence&gt; block — what running the gate records (trigger, questions
+    tested, verdict, resolution-or-leash). Created in both .socom/canon/ and the
+    canon/ shipped twin (identical); added to CANON_FILES; render_body emits a
+    `## Residuality` section into CLAUDE.md/AGENTS.md/.cursor (mirrors forge).
 
-    Contract (all PASS, evidence in ea71c32 [test]): healthy repo -&gt; PASS
-    25ms exit 0; missing dir + --no-heal -&gt; RED exit 1, dir NOT created;
-    plain run -&gt; heals it, exit 0; no-claim -&gt; WARN but exit 0. Full smoke
-    green (6 new precond assertions, heal+block directions). doctor clean
-    (source=fce8a0829b46, no canon change). CI green post-push.
+    Non-duplication PROVEN (the #5 requirement): of 5 candidate docs only
+    residuality earned a file. success-failure / incident-response /
+    agent-protocol are ALREADY fully covered by the constitution (not ported).
+    commit-protocol deferred to backlog #7 (real gap, but fits socom.yaml/hooks
+    not canon). Akili's INFRA residuality scoring tables deliberately NOT ported
+    — different bounded context (decision residuality vs infra residuality).
+
+    Evidence (all run after last edit): well-formed both dirs; `socom index` ->
+    16 residuality chunks (grep -c artifact); `socom compile` + `socom doctor`
+    -> clean rc=0; `## Residuality` present in CLAUDE.md+AGENTS.md+.cursor;
+    `tests/smoke.sh` -> all checks passed exit 0; adapter diffs hash-restamp
+    only (fce8a08-&gt;6e5595b). Commits cb00b98 (feat), 0cd128d (backlog).
   </done>
   <undone embed="true">
-    #3's ASSESSMENT-ARTIFACT half is deferred (not built): schemas/assessment.xml
-    + multi-dimensional assessment beyond a single reviewer. Judged
-    already-covered-enough by the reviewer/adversary/validator seats +
-    promise.&lt;assessments&gt;; revisit only if the seats prove insufficient.
-    Also deferred: a formal `work-start` gate in canon + checks.precond CI
-    binding (kept precond advisory per the velocity constraint — no mandatory
-    blocking stop); seat-specific worktree/contract-exists checks.
+    NOT pushed yet at handoff-write time — push + CI-verify is the final
+    closeout step after this handoff + prompt commit (see warnings).
+    commit-protocol -&gt; canon is backlog #7 (the #5 deferred half): per-block
+    [what][why][how][test][broke][next] semantics + templates; likely fits
+    socom.yaml/hook config rather than a canon file — decide at pickup.
+    No `socom gate residuality` command built — deliberate (velocity: the gate
+    is a judgment device, not a blocking mechanical gate; retrieval via
+    `socom query` is the adoption path).
   </undone>
   <recent-commits>
+    <commit>0cd128d docs(socom): backlog — #5 residuality DONE, #6 contract machinery NEXT</commit>
+    <commit>cb00b98 feat(canon): socom residuality — the §residuality-gate made falsifiable</commit>
+    <commit>d0e0cfe docs(socom): backlog — #4 introspect DONE (socom introspect), #5 promoted NEXT</commit>
+    <commit>bd8b7a1 feat(cli): socom introspect — handoff evidence into a replayable assertion log</commit>
+    <commit>41d2875 docs(socom): hand-author next-session prompt — backlog #4 agent introspection</commit>
+    <commit>fe67254 chore(platform): session closeout — handoff, prompt, gates-velocity-first memory</commit>
     <commit>ef1cdb3 docs(socom): backlog — #3 precond DONE (socom precond), assessment half deferred, #4 NEXT</commit>
     <commit>ea71c32 feat(cli): socom precond — velocity-first work-readiness pre-flight (the published gate)</commit>
     <commit>37be469 chore(platform): session closeout — handoff, prompt, lesson-system memory, HR3 resolve</commit>
     <commit>6719d49 docs(socom): backlog — mark #2 lessons DONE (socom lesson), promote #3 to NEXT</commit>
-    <commit>116f5c1 feat(cli): socom lesson — experience earned into retrievable rules (eval->lesson bridge)</commit>
-    <commit>d625d7c chore(platform): session closeout — handoff, next-session prompt, distilled memory</commit>
-    <commit>095a923 docs(socom): backlog — mark #1 evals DONE (socom cycle), promote #2 lessons to NEXT</commit>
-    <commit>c405560 feat(cli): socom cycle — the eval measurement spine (ledger -> scored cycle)</commit>
-    <commit>6af363a test(cli): smoke locks the next-session prompt id+timestamp+provenance header</commit>
-    <commit>4181b81 feat(cli): next-session prompt carries an id + generation timestamp + source-handoff</commit>
   </recent-commits>
   <uncommitted>
-M .socom/index/chunks.jsonl
-?? .socom/claims/
+M .socom/gates/breaches.resolved.log
+ M .socom/prompts/next-session.md
   </uncommitted>
   <blockers embed="true">None.</blockers>
   <warnings embed="true">
-    - precond is advisory (a command), not wired into any gate or the bootstrap
-      ritual yet — nothing calls it automatically. Deliberate (velocity: no
-      mandatory stop). If adopted into session bootstrap, add it as guidance,
-      not a blocking gate.
-    - precond's claim check keys on claim_holder() (SOCOM_SESSION env or
-      pid-&lt;ppid&gt;); across separate shells the pid differs, so it may warn
-      "no claim" even when one was taken in another shell. Fine in a real
-      single-session run.
-    - .socom/index/chunks.jsonl shows modified: pre-push `full` check runs
-      `socom index .` on the real repo. Pre-existing churn, left untouched.
+    - This handoff OVERWROTE the prior H-2026-06-14-main.xml (which described
+      #3 precond). That is the tool's design (one rolling handoff per
+      day+branch, H-{date}-{branch}); the precond closeout detail is preserved
+      in git history + commit ef1cdb3's message. Same-day sessions collide by
+      design — not data loss.
+    - This session resolved the stale-prompt LEASH from earlier: the prior
+      next-session.md was hand-authored to point at #5 because the then-latest
+      handoff still said #4. ROOT FIX applied here: this handoff now names #5
+      DONE / #6 NEXT, so `socom prompt` regenerates correctly from it — the
+      hand-authored bridge retires.
+    - .socom/gates/breaches.resolved.log shows modified: pre-existing churn
+      carried from session start, unrelated to #5. Left for the closeout commit.
+    - Push + CI-verify still owed at write time (constitution §verify-never-claim
+      / forge §verify-after-push): a push is not done until ci-status is green.
   </warnings>
   <next embed="true">
-    1. Backlog #4 — Agent introspection (Akili: agent/extract-{assertions,
-       beliefs,plan,reflections,skills}.sh): structured self-capture feeding
-       memory/lessons.
-    2. Optional: wire precond into session bootstrap guidance; a `work-start`
-       gate + checks.precond CI binding if a hard pre-flight is wanted.
+    1. Backlog #6 — Contract machinery: make "contracts before code" a real,
+       testable artifact (schema + examples + tests), porting Akili `contracts/`.
+       The natural next rung now that the protocol/gate layer is canon.
+    2. Backlog #7 — commit-protocol -&gt; canon (the #5 deferred half): per-block
+       semantics + templates; decide canon-file vs socom.yaml/hook config.
     3. Still open from earlier: ledger auto-append (cycle/lesson measure real
-       operation); lesson distillation in the closeout canon ritual; #3
-       assessment-artifact half if seats prove insufficient.
+       operation, still synthetic); precond wired into bootstrap guidance (not a
+       blocking gate); #3 assessment-artifact + #4 LLM halves only if needed.
   </next>
 </handoff>
