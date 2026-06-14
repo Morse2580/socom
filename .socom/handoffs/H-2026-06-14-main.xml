@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<handoff socom="0.1" id="H-2026-06-14-main" branch="main"
+         date="2026-06-14T07:18:23+00:00">
+  <summary embed="true">lessons system: socom lesson (eval->lesson bridge), backlog #2 done</summary>
+  <done embed="true">
+    Backlog #2 (lessons) shipped, gates green, pushed, CI verified green
+    (headSha 6719d49 -> success). The second Akili->SOCOM extraction.
+
+    `socom lesson` (commit 116f5c1) + schemas/lesson.xml:
+    - Lesson artifact: id/domain/state(provisional|active|retired)/source/
+      lifecycle attrs + embed-flagged statement/why/derived-from/evidence +
+      validated counter. Lives at .socom/lessons/&lt;id&gt;.xml.
+    - candidates: born provisional from the LATEST cycle's published hotspots
+      (broken &gt;= --min-broken, default 2), idempotent one-per-source-promise.
+      The eval-&gt;lesson bridge the eval-gate canon already promised.
+    - list (--domain/--state filters), promote (provisional-&gt;active),
+      retire (-&gt;retired, sets &lt;retire&gt;, body never deleted).
+    - Retrieval is FREE: lessons are XML under .socom/, so existing `socom
+      index` (rglob .socom/**.xml) chunks them and the existing lifecycle
+      filter hides state="retired" from query. No new retrieval code.
+
+    Contract (all checks PASS, evidence in 116f5c1 [test]): schema well-formed;
+    seeded hotspots (P-HOT 2/3, P-COLD 2/2) -&gt; 2 candidates born; re-run
+    idempotent (0); promote-&gt;active + list --state filters; retire-&gt;retired
+    preserved on disk; query surfaces active L-P-HOT, filters retired L-P-COLD.
+    Full smoke green (8 new lesson assertions). doctor clean
+    (source=fce8a0829b46, no canon change). CI green post-push.
+
+    Also at session open: resolved 2 amber commit-msg breaches from the prior
+    session (HR3 loop-close) — early [test] blocks carried evidence in prose,
+    not the $cmd/rc= shape; corrected from c405560 on.
+  </done>
+  <undone embed="true">
+    Deferred (scope discipline — ONE increment): lesson distillation is NOT
+    wired into the closeout canon step (the command exists but the protocol
+    ritual doesn't call it yet); auto-promote at validated&gt;=N (list could
+    suggest it); the validated counter is never incremented (no re-confirm
+    path yet); ledger still has no auto-append, so cycles/lessons run on seeds
+    not real operation. Dropped from the Akili port: vectors, confidence
+    decay, consolidation, cold archival, contradiction edges.
+  </undone>
+  <recent-commits>
+    <commit>6719d49 docs(socom): backlog — mark #2 lessons DONE (socom lesson), promote #3 to NEXT</commit>
+    <commit>116f5c1 feat(cli): socom lesson — experience earned into retrievable rules (eval->lesson bridge)</commit>
+    <commit>d625d7c chore(platform): session closeout — handoff, next-session prompt, distilled memory</commit>
+    <commit>095a923 docs(socom): backlog — mark #1 evals DONE (socom cycle), promote #2 lessons to NEXT</commit>
+    <commit>c405560 feat(cli): socom cycle — the eval measurement spine (ledger -> scored cycle)</commit>
+    <commit>6af363a test(cli): smoke locks the next-session prompt id+timestamp+provenance header</commit>
+    <commit>4181b81 feat(cli): next-session prompt carries an id + generation timestamp + source-handoff</commit>
+    <commit>8330566 docs(socom): extraction backlog — mature SOCOM by porting Akili capabilities (evals first)</commit>
+    <commit>785cee0 fix(cli): commit-msg evidence heuristic anchors [test] to line-start</commit>
+    <commit>70aacb7 feat(cli): socom install/uninstall — self-bootstrap onto PATH</commit>
+  </recent-commits>
+  <uncommitted>
+M .socom/gates/breaches.resolved.log
+ M .socom/index/chunks.jsonl
+?? .socom/claims/
+  </uncommitted>
+  <blockers embed="true">None.</blockers>
+  <warnings embed="true">
+    - XML comments cannot contain '--' (double hyphen). The generated lesson
+      template f-string had 'socom lesson retire ... --reason' in a comment,
+      which made every born lesson malformed; `socom index` silently SKIPPED
+      them (ParseError to stderr) so they never reached retrieval. Fixed by
+      rewording the comment. Lesson distilled to memory this session.
+    - .socom/index/chunks.jsonl shows as modified: the pre-push `full` check
+      runs `socom index .` on the real repo, rewriting it. Pre-existing churn,
+      not this work — left untouched (also breaches.resolved.log from the HR3
+      resolve).
+    - `socom lesson candidates` reads only the LATEST cycle artifact; old
+      hotspots in earlier cycles are not reconsidered. Fine for now.
+  </warnings>
+  <next embed="true">
+    1. Backlog #3 — Assessments + precondition audits (Akili: assessments/ 50
+       files, precondition-audit.md): structured adversarial assessment beyond
+       the single reviewer role.
+    2. Wire lesson distillation into the closeout canon step (session.xml) so
+       the protocol ritual actually calls `socom lesson candidates`.
+    3. Ledger auto-append from gates/closeout so cycle + lesson measure real
+       operation, not just seeds.
+  </next>
+</handoff>
