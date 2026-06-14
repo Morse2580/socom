@@ -51,6 +51,7 @@ except ImportError:
     sys.exit("socom: needs PyYAML (pip install pyyaml)")
 
 SOCOM_VERSION = "0.1"
+SOCOM_DIR = ".socom"  # the substrate root under any repo — single source of truth
 CANON_FILES = ["constitution.xml", "roles.xml", "gates.xml", "session.xml",
                "doctrine.xml", "forge.xml", "residuality.xml"]
 # The substrate dirs every repo needs under .socom/ — single source of truth,
@@ -70,6 +71,11 @@ def repo_root(start: Path | None = None) -> Path:
     return p
 
 
+def _now_iso() -> str:
+    """UTC now as a second-precision ISO stamp — the substrate's one time shape."""
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
 def md_text(el) -> str:
     """Dedented text content of an <md> child (or the element itself)."""
     node = el.find("md") if el.find("md") is not None else el
@@ -79,7 +85,7 @@ def md_text(el) -> str:
 def canonical_hash(root: Path) -> str:
     h = hashlib.sha256()
     for name in CANON_FILES:
-        f = root / ".socom" / "canon" / name
+        f = root / SOCOM_DIR / "canon" / name
         if f.exists():
             h.update(f.read_bytes())
     cfg = root / "socom.yaml"
@@ -96,7 +102,7 @@ def load_cfg(root: Path) -> dict:
 
 
 def parse_canon(root: Path, name: str):
-    f = root / ".socom" / "canon" / name
+    f = root / SOCOM_DIR / "canon" / name
     if not f.exists():
         sys.exit(f"socom: missing canonical file {f} — run `socom init`")
     return ET.parse(f).getroot()
@@ -129,7 +135,7 @@ SECRET_RX = re.compile(
 
 def cmd_init(args):
     root = repo_root(Path(args[0]) if args else None)
-    socom_dir = root / ".socom"
+    socom_dir = root / SOCOM_DIR
     (socom_dir / "canon").mkdir(parents=True, exist_ok=True)
     for sub in SUBSTRATE_DIRS:
         (socom_dir / sub).mkdir(parents=True, exist_ok=True)
@@ -201,7 +207,7 @@ def render_body(root: Path, cfg: dict) -> str:
         out.append(f"### {ph.get('id').capitalize()}\n")
         out.append(md_text(ph) + "\n")
 
-    doctrine_f = root / ".socom" / "canon" / "doctrine.xml"
+    doctrine_f = root / SOCOM_DIR / "canon" / "doctrine.xml"
     if doctrine_f.exists():
         doctrine = ET.parse(doctrine_f).getroot()
         out.append("## Doctrine — named thinking devices (teaching layer)\n")
@@ -233,7 +239,7 @@ def render_body(root: Path, cfg: dict) -> str:
     out.append("\nLocal bypass is permitted for flow; CI re-asserts every gate. "
                "Run a gate: `socom gate <id>`.\n")
 
-    forge_f = root / ".socom" / "canon" / "forge.xml"
+    forge_f = root / SOCOM_DIR / "canon" / "forge.xml"
     if forge_f.exists():
         forge = ET.parse(forge_f).getroot()
         fb = cfg.get("forge", {}) or {}
@@ -253,7 +259,7 @@ def render_body(root: Path, cfg: dict) -> str:
                        + (f"`{b}`" if b else "*unbound*") + " |")
         out.append("")
 
-    resid_f = root / ".socom" / "canon" / "residuality.xml"
+    resid_f = root / SOCOM_DIR / "canon" / "residuality.xml"
     if resid_f.exists():
         resid = ET.parse(resid_f).getroot()
         out.append("## Residuality — the falsifiable gate (constitution "
@@ -396,7 +402,7 @@ def cmd_compile(args):
     if extra:
         ado += ["      - script: " + extra,
                 "        displayName: extra CI checks (ci.extra)"]
-    write_generated(root / ".socom" / "ci" / "azure-socom-gates.yml",
+    write_generated(root / SOCOM_DIR / "ci" / "azure-socom-gates.yml",
                     "\n".join(ado) + "\n", h, comment=("#", ""), force=force)
 
     settings = root / ".claude" / "settings.json"
@@ -449,7 +455,7 @@ def cmd_doctor(args):
     # chosen, never accidental. Informational — divergence IS binding.
     deltas = []
     for name in CANON_FILES:
-        local = root / ".socom" / "canon" / name
+        local = root / SOCOM_DIR / "canon" / name
         shipped = TOOL_ROOT / "canon" / name
         if local.exists() and shipped.exists() and \
                 local.read_bytes() != shipped.read_bytes():
@@ -487,12 +493,12 @@ def cmd_precond(args):
 
     # 1. Substrate dirs — heal-on: mkdir; heal-off: block (work writes will fail).
     missing = [d for d in SUBSTRATE_DIRS
-               if not (root / ".socom" / d).is_dir()]
+               if not (root / SOCOM_DIR / d).is_dir()]
     if not missing:
         rows.append(("✓", "substrate dirs present"))
     elif heal:
         for d in missing:
-            (root / ".socom" / d).mkdir(parents=True, exist_ok=True)
+            (root / SOCOM_DIR / d).mkdir(parents=True, exist_ok=True)
         healed += 1
         rows.append(("~", f"healed: mkdir .socom/{{{','.join(missing)}}}"))
     else:
@@ -543,7 +549,7 @@ def cmd_precond(args):
 
     # 6. Claim — only meaningful for production seats; warn if none held by you (R2).
     if seat in ("builder", "reviewer", "validator", "analyst"):
-        cdir = root / ".socom" / "claims"
+        cdir = root / SOCOM_DIR / "claims"
         mine = [p.stem for p in cdir.glob("*.claim")
                 if not claim_expired(p) and claim_holder() in p.read_text()] \
             if cdir.exists() else []
@@ -575,7 +581,7 @@ CLAIM_TTL_HOURS = 8
 
 
 def claim_path(root: Path, domain: str) -> Path:
-    return root / ".socom" / "claims" / f"{domain}.claim"
+    return root / SOCOM_DIR / "claims" / f"{domain}.claim"
 
 
 def claim_holder() -> str:
@@ -596,7 +602,7 @@ def cmd_claim(args):
         sys.exit("usage: socom claim <domain> | socom claim --scan")
     root = repo_root()
     cfg = load_cfg(root)
-    cdir = root / ".socom" / "claims"
+    cdir = root / SOCOM_DIR / "claims"
     cdir.mkdir(parents=True, exist_ok=True)
     if args[0] == "--scan":
         live = expired = 0
@@ -619,7 +625,7 @@ def cmd_claim(args):
         if claim_holder() not in holder:
             sys.exit(f"socom claim: '{domain}' held by another session "
                      f"({holder}) — yield or wait for TTL expiry")
-    ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    ts = _now_iso()
     p.write_text(f"{ts}\t{claim_holder()}\tttl={CLAIM_TTL_HOURS}h\n")
     print(f"socom claim: acquired '{domain}' as {claim_holder()} "
           f"(expires in {CLAIM_TTL_HOURS}h)")
@@ -629,7 +635,7 @@ def cmd_release(args):
     root = repo_root()
     if not args:
         sys.exit("usage: socom release <domain>|--all")
-    cdir = root / ".socom" / "claims"
+    cdir = root / SOCOM_DIR / "claims"
     targets = sorted(cdir.glob("*.claim")) if args[0] == "--all" \
         else [claim_path(root, args[0])]
     for p in targets:
@@ -641,7 +647,7 @@ def cmd_release(args):
 def reap_orphans(root: Path) -> list[str]:
     """R12: expired claims removed; dead worktrees pruned. Returns report lines."""
     report = []
-    cdir = root / ".socom" / "claims"
+    cdir = root / SOCOM_DIR / "claims"
     if cdir.exists():
         for p in sorted(cdir.glob("*.claim")):
             if claim_expired(p):
@@ -668,13 +674,13 @@ def cmd_handoff(args):
                            capture_output=True, text=True).stdout.strip()
     date = datetime.now(timezone.utc).date().isoformat()
     hid = f"H-{date}-{re.sub(r'[^a-z0-9-]', '-', branch.lower())[:40]}"
-    out = root / ".socom" / "handoffs" / f"{hid}.xml"
+    out = root / SOCOM_DIR / "handoffs" / f"{hid}.xml"
     out.parent.mkdir(parents=True, exist_ok=True)
     commits = "\n".join(f"    <commit>{ln}</commit>" for ln in log.splitlines())
     dirty_el = (f"  <uncommitted>\n{dirty}\n  </uncommitted>\n" if dirty else "")
     out.write_text(f"""<?xml version="1.0" encoding="UTF-8"?>
 <handoff socom="{SOCOM_VERSION}" id="{hid}" branch="{branch}"
-         date="{datetime.now(timezone.utc).isoformat(timespec='seconds')}">
+         date="{_now_iso()}">
   <summary embed="true">{summary}</summary>
   <done embed="true">FILL: what was completed, with evidence refs</done>
   <undone embed="true">FILL: what remains, and why</undone>
@@ -709,7 +715,7 @@ def verify_claims(root: Path, text: str) -> list[str]:
 def cmd_prompt(args):
     root = repo_root()
     cfg = load_cfg(root)
-    handoffs = sorted((root / ".socom" / "handoffs").glob("*.xml"))
+    handoffs = sorted((root / SOCOM_DIR / "handoffs").glob("*.xml"))
     if not handoffs:
         sys.exit("socom prompt: no handoffs — run `socom handoff <summary>` first")
     latest = handoffs[-1]
@@ -721,10 +727,10 @@ def cmd_prompt(args):
     # authority — H-<date>-<branch>), plus an in-file generation timestamp so the
     # session-start drift scan has a write-time it can read without git mtime.
     pid = "P" + latest.stem[1:]
-    gen_ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    gen_ts = _now_iso()
     src_date_m = re.search(r'date="([^"]+)"', body)
     src_date = src_date_m.group(1) if src_date_m else "unknown"
-    out = root / ".socom" / "prompts" / "next-session.md"
+    out = root / SOCOM_DIR / "prompts" / "next-session.md"
     out.parent.mkdir(parents=True, exist_ok=True)
     notes = "\n".join(f"- {c}" for c in claims) or "- (no probe-able claims)"
     out.write_text(f"""<!-- socom:prompt id={pid} generated={gen_ts} source-handoff={latest.name} — regenerated each closeout, do not commit by hand -->
@@ -757,8 +763,8 @@ Anything marked HYPOTHESIS must be re-checked before you rely on it.
 
 def cmd_breach(args):
     root = repo_root()
-    log = root / ".socom" / "gates" / "breaches.log"
-    resolved = root / ".socom" / "gates" / "breaches.resolved.log"
+    log = root / SOCOM_DIR / "gates" / "breaches.log"
+    resolved = root / SOCOM_DIR / "gates" / "breaches.resolved.log"
     lines = [ln for ln in log.read_text().splitlines() if ln.strip()] \
         if log.exists() else []
     if not args or args[0] == "list":
@@ -777,7 +783,7 @@ def cmd_breach(args):
                 keep.append(ln)
         if not done:
             sys.exit(f"socom breach: nothing matched '{which}'")
-        ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        ts = _now_iso()
         with resolved.open("a") as f:
             for ln in done:
                 f.write(f"{ln}\tresolved={ts}\tnote={note}\n")
@@ -795,9 +801,9 @@ def run_check(cmd: str, root: Path) -> int:
 
 
 def log_breach(root: Path, gate: str, detail: str):
-    log = root / ".socom" / "gates" / "breaches.log"
+    log = root / SOCOM_DIR / "gates" / "breaches.log"
     log.parent.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    ts = _now_iso()
     with log.open("a") as f:
         f.write(f"{ts}\t{gate}\t{detail}\n")
 
@@ -857,7 +863,7 @@ def cmd_gate(args):
         # HR3: amber closes a loop — every session opens by seeing its debt.
         # Entries carry gate + detail, never author identity (telemetry about
         # the system, not surveillance of people).
-        blog = root / ".socom" / "gates" / "breaches.log"
+        blog = root / SOCOM_DIR / "gates" / "breaches.log"
         if blog.exists():
             lines = [ln for ln in blog.read_text().splitlines() if ln.strip()]
             if lines:
@@ -870,7 +876,7 @@ def cmd_gate(args):
         return
 
     if name == "session-end":
-        handoffs = sorted((root / ".socom" / "handoffs").glob("*.xml"))
+        handoffs = sorted((root / SOCOM_DIR / "handoffs").glob("*.xml"))
         today = datetime.now(timezone.utc).date().isoformat()
         fresh = [f for f in handoffs if today in f.name]
         if not fresh:
@@ -880,14 +886,14 @@ def cmd_gate(args):
             sys.exit(f"socom gate session-end: RED — {fresh[-1].name} still has "
                      "unfilled FILL fields. A handoff of placeholders is a "
                      "vanishing session with paperwork.")
-        prompt = root / ".socom" / "prompts" / "next-session.md"
+        prompt = root / SOCOM_DIR / "prompts" / "next-session.md"
         if not prompt.exists() or \
                 prompt.stat().st_mtime < fresh[-1].stat().st_mtime:
             sys.exit("socom gate session-end: RED — next-session prompt missing "
                      "or older than the handoff. Run `socom prompt`.")
-        open_claims = [p.stem for p in (root / ".socom" / "claims").glob("*.claim")
+        open_claims = [p.stem for p in (root / SOCOM_DIR / "claims").glob("*.claim")
                        if not claim_expired(p)] \
-            if (root / ".socom" / "claims").exists() else []
+            if (root / SOCOM_DIR / "claims").exists() else []
         if open_claims:
             print(f"socom session-end: AMBER — live claims not released: "
                   f"{open_claims} (TTL will expire them, but release is the intent)")
@@ -928,7 +934,7 @@ def cmd_hydrate(args):
     slug = str(root).replace("/", "-").replace(".", "-")
     dest = Path.home() / ".claude" / "projects" / slug / "memory"
     dest.mkdir(parents=True, exist_ok=True)
-    src = root / ".socom" / "memory"
+    src = root / SOCOM_DIR / "memory"
     n = 0
     for f in (src / "memories").glob("*.md"):
         text = f.read_text()
@@ -966,10 +972,10 @@ def cmd_hydrate(args):
 def cmd_index(args):
     import json
     root = repo_root(Path(args[0]) if args else None)
-    out = root / ".socom" / "index" / "chunks.jsonl"
+    out = root / SOCOM_DIR / "index" / "chunks.jsonl"
     out.parent.mkdir(parents=True, exist_ok=True)
     chunks = []
-    for f in sorted((root / ".socom").rglob("*.xml")):
+    for f in sorted((root / SOCOM_DIR).rglob("*.xml")):
         try:
             tree = ET.parse(f)
         except ET.ParseError as e:
@@ -1011,7 +1017,7 @@ def cmd_index(args):
     # (mwingz): un-indexed memories made the bank invisible to query. Each
     # memory contributes its description and body as chunks; frontmatter
     # becomes filter metadata (state drives the lifecycle filter).
-    for f in sorted((root / ".socom" / "memory" / "memories").glob("*.md")):
+    for f in sorted((root / SOCOM_DIR / "memory" / "memories").glob("*.md")):
         text = f.read_text()
         fm, body = {}, text
         m = re.match(r"\A---\n(.*?)\n---\n(.*)\Z", text, re.DOTALL)
@@ -1066,7 +1072,7 @@ def tokenize(text: str) -> list:
 
 def load_chunks(root: Path) -> list:
     import json
-    f = root / ".socom" / "index" / "chunks.jsonl"
+    f = root / SOCOM_DIR / "index" / "chunks.jsonl"
     if not f.exists():
         sys.exit("socom: no chunk index — run `socom index` first")
     return [json.loads(ln) for ln in f.read_text().splitlines() if ln.strip()]
@@ -1087,7 +1093,7 @@ def cmd_embed(args):
     avgdl = sum(len(t) for t in docs.values()) / max(n, 1)
     index = {
         "socom": SOCOM_VERSION, "ranker": f"bm25(k1={BM25_K1},b={BM25_B})",
-        "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "built_at": _now_iso(),
         "n_docs": n, "avgdl": round(avgdl, 2),
         "idf": {t: round(math.log((n - d + 0.5) / (d + 0.5) + 1), 6)
                 for t, d in df.items()},
@@ -1095,7 +1101,7 @@ def cmd_embed(args):
                        "tf": {t: toks.count(t) for t in set(toks)}}
                  for cid, toks in docs.items()},
     }
-    out = root / ".socom" / "index" / "vectors.json"
+    out = root / SOCOM_DIR / "index" / "vectors.json"
     out.write_text(json.dumps(index) + "\n")
     print(f"socom embed: BM25 index over {n} chunks, {len(df)} terms, "
           f"{time.monotonic() - t0:.3f}s -> {out}")
@@ -1141,7 +1147,7 @@ def cmd_query(args):
     chunks = load_chunks(root)
     by_id = {c["id"]: c for c in chunks}
     allowed = live_chunk_ids(chunks)
-    vf = root / ".socom" / "index" / "vectors.json"
+    vf = root / SOCOM_DIR / "index" / "vectors.json"
     if vf.exists():
         level, top = "L1/bm25", l1_score(q, json.loads(vf.read_text()), k, allowed)
     else:  # R6: the floor is mandatory and the degrade is loud
@@ -1168,12 +1174,12 @@ def cmd_eval(args):
     root = repo_root(Path(args[0]) if args else None)
     chunks = load_chunks(root)
     allowed = live_chunk_ids(chunks)
-    vf = root / ".socom" / "index" / "vectors.json"
+    vf = root / SOCOM_DIR / "index" / "vectors.json"
     if not vf.exists():
         sys.exit("socom eval: no L1 index — run `socom embed` first")
     index = json.loads(vf.read_text())
     probes = yaml.safe_load(
-        (root / ".socom" / "index" / "probes.yaml").read_text()).get("probes", [])
+        (root / SOCOM_DIR / "index" / "probes.yaml").read_text()).get("probes", [])
     if len(probes) < 12:
         sys.exit(f"socom eval: RED — contract requires >=12 probes, found "
                  f"{len(probes)}; a saturated floor proves nothing")
@@ -1205,10 +1211,10 @@ def cmd_eval(args):
         "zero_redaction_violations": violations == 0,
     }
     passed = all(verdict.values())
-    out = root / ".socom" / "index" / "eval.json"
+    out = root / SOCOM_DIR / "index" / "eval.json"
     out.write_text(json.dumps({
         "socom": SOCOM_VERSION,
-        "evaluated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "evaluated_at": _now_iso(),
         "contract": "hit@5 >= L0 AND MRR@5 > L0, >=12 probes, latency <= "
                     f"{budget}s, zero redaction violations (amended per R10, "
                     "see probes.yaml)",
@@ -1255,7 +1261,7 @@ def cmd_cycle(args):
     gate = "--gate" in args
     print_only = "--cycle" in args or gate
 
-    ledger = root / ".socom" / "ledger" / "runs.jsonl"
+    ledger = root / SOCOM_DIR / "ledger" / "runs.jsonl"
     if not ledger.exists():
         sys.exit("socom cycle: no ledger — .socom/ledger/runs.jsonl absent. "
                  "Nothing measured yet; append runs before rolling a cycle "
@@ -1338,7 +1344,7 @@ def cmd_cycle(args):
     with_contract = sum(1 for p in all_promises if p[0].get("contract"))
     cycle = {
         "socom": SOCOM_VERSION,
-        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "generated_at": _now_iso(),
         "ledger": str(ledger.relative_to(root)),
         "filters": {"since": since, "seat": seat_filter},
         "summary": {
@@ -1371,7 +1377,7 @@ def cmd_cycle(args):
 
     written = None
     if not print_only:
-        cdir = root / ".socom" / "cycles"
+        cdir = root / SOCOM_DIR / "cycles"
         cdir.mkdir(parents=True, exist_ok=True)
         stamp = cycle["generated_at"].replace(":", "").replace("-", "")
         out = cdir / f"cycle-{stamp}.json"
@@ -1400,7 +1406,7 @@ def cmd_cycle(args):
 # RETIRED (never deleted) when falsified. Lives at .socom/lessons/<id>.xml so
 # `socom index` retrieves it for free; the lifecycle filter hides retired.
 def _lesson_files(root):
-    d = root / ".socom" / "lessons"
+    d = root / SOCOM_DIR / "lessons"
     return sorted(d.glob("L-*.xml")) if d.exists() else []
 
 
@@ -1456,7 +1462,7 @@ def _regen_lessons_index(root):
         act = sum(1 for _, s in ls if s == "active")
         prov = sum(1 for _, s in ls if s == "provisional")
         lines.append(f"| {dom} | {', '.join(i for i, _ in ls)} | {act} | {prov} |")
-    (root / ".socom" / "lessons" / "index.md").write_text("\n".join(lines) + "\n")
+    (root / SOCOM_DIR / "lessons" / "index.md").write_text("\n".join(lines) + "\n")
 
 
 def cmd_lesson(args):
@@ -1470,13 +1476,13 @@ def cmd_lesson(args):
         return rest[rest.index(name) + 1] if name in rest \
             and rest.index(name) + 1 < len(rest) else default
 
-    ldir = root / ".socom" / "lessons"
+    ldir = root / SOCOM_DIR / "lessons"
     ldir.mkdir(parents=True, exist_ok=True)
 
     if sub == "candidates":
         domain = flag_val("--domain", "general")
         min_broken = int(flag_val("--min-broken", "2"))
-        cdir = root / ".socom" / "cycles"
+        cdir = root / SOCOM_DIR / "cycles"
         cycles = sorted(cdir.glob("cycle-*.json")) if cdir.exists() else []
         if not cycles:
             sys.exit("socom lesson candidates: no cycle artifact — run "
@@ -1600,7 +1606,7 @@ def cmd_introspect(args):
         and args.index("--domain") + 1 < len(args) else "general"
 
     # Resolve the handoff: explicit path/name, else the latest H-*.xml.
-    hdir = root / ".socom" / "handoffs"
+    hdir = root / SOCOM_DIR / "handoffs"
     if pos:
         cand = Path(pos[0])
         handoff = cand if cand.exists() else hdir / pos[0]
@@ -1634,7 +1640,7 @@ def cmd_introspect(args):
         return
 
     # Idempotency: load existing assertion ids; one row per (handoff, index).
-    adir = root / ".socom" / "assertions"
+    adir = root / SOCOM_DIR / "assertions"
     adir.mkdir(parents=True, exist_ok=True)
     log = adir / "log.jsonl"
     seen = set()
@@ -1647,7 +1653,7 @@ def cmd_introspect(args):
                 except (ValueError, KeyError):
                     continue
 
-    ldir = root / ".socom" / "lessons"
+    ldir = root / SOCOM_DIR / "lessons"
     existing_lessons = {_lesson_attr(f.read_text(), "id") for f in _lesson_files(root)}
 
     rows, born = [], 0
@@ -1716,10 +1722,10 @@ def cmd_baseline(args):
 
     t0 = time.monotonic()
     subprocess.run(["grep", "-ri", "verify", "--include=*.xml", "--include=*.md",
-                    str(root / ".socom")], capture_output=True)
+                    str(root / SOCOM_DIR)], capture_output=True)
     grep_s = time.monotonic() - t0
 
-    probes_f = root / ".socom" / "index" / "probes.yaml"
+    probes_f = root / SOCOM_DIR / "index" / "probes.yaml"
     if not probes_f.exists():
         probes_f.write_text(
             "# query -> expected chunk id substring; scored hit@5 under L0.\n"
@@ -1745,7 +1751,7 @@ def cmd_baseline(args):
         by_type[c["artifact"]] = by_type.get(c["artifact"], 0) + 1
     baseline = {
         "socom": SOCOM_VERSION,
-        "measured_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "measured_at": _now_iso(),
         "corpus": {"chunks": len(chunks), "artifacts_by_type": by_type,
                    "total_chars": sum(len(c["text"]) for c in chunks)},
         "latency_s": {"index_walk": round(index_s, 4), "grep_cold": round(grep_s, 4)},
@@ -1756,7 +1762,7 @@ def cmd_baseline(args):
                          "greater, latency within budget, zero redaction "
                          "violations (amended per R10, recorded in probes.yaml)",
     }
-    out = root / ".socom" / "index" / "baseline.json"
+    out = root / SOCOM_DIR / "index" / "baseline.json"
     out.write_text(json.dumps(baseline, indent=2) + "\n")
     print(f"socom baseline: {len(chunks)} chunks, probes {hits}/{len(probes)} "
           f"hit@5 under L0 -> {out}\n  Naive RAG (L1) may start; it must beat "
@@ -1834,10 +1840,10 @@ def adoption_rung(root: Path) -> tuple[str, str]:
     if hp != ".githooks":
         return ("T3 — bound, gates not wired",
                 "run `git config core.hooksPath .githooks`")
-    if not (root / ".socom" / "index" / "baseline.json").exists():
+    if not (root / SOCOM_DIR / "index" / "baseline.json").exists():
         return ("T4 — wired, no retrieval floor",
                 "run `socom baseline` so L1 retrieval has a floor to beat")
-    if not (root / ".socom" / "index" / "vectors.json").exists():
+    if not (root / SOCOM_DIR / "index" / "vectors.json").exists():
         return ("T5 — floored, retrieval at L0",
                 "run `socom embed && socom eval` — L1 must beat the recorded "
                 "floor before it serves")
@@ -1853,12 +1859,12 @@ def cmd_greet(args):
     print(f"   repo: {root.name}")
     print(f"   rung: {state}")
     print(f"   next: {nxt}")
-    blog = root / ".socom" / "gates" / "breaches.log"
+    blog = root / SOCOM_DIR / "gates" / "breaches.log"
     if blog.exists():
         n = len([ln for ln in blog.read_text().splitlines() if ln.strip()])
         if n:
             print(f"   debt: {n} open amber breach(es) — `socom breach list`")
-    mem = root / ".socom" / "memory" / "memories"
+    mem = root / SOCOM_DIR / "memory" / "memories"
     if mem.exists():
         n = len(list(mem.glob("*.md")))
         if n:
