@@ -22,6 +22,8 @@ Commands:
            hotspots; --gate --threshold N for the pass-rate gate (R: evals)
   lesson   experience -> durable retrievable rules: candidates (from cycle
            hotspots) | list | promote | retire (preserved, never deleted)
+  precond  is THIS work ready? fast pre-flight [seat]; auto-heals safe gaps,
+           warns by default, blocks only the unrecoverable; --no-heal for CI
   greet    adoption-ladder greeting — where you are, what's next
   install  symlink this checkout onto PATH (~/.local/bin) so `socom` just works
   uninstall remove the socom symlink (only if it points at this checkout)
@@ -49,6 +51,10 @@ except ImportError:
 SOCOM_VERSION = "0.1"
 CANON_FILES = ["constitution.xml", "roles.xml", "gates.xml", "session.xml",
                "doctrine.xml", "forge.xml"]
+# The substrate dirs every repo needs under .socom/ — single source of truth,
+# shared by init (plants them) and precond (heals them).
+SUBSTRATE_DIRS = ["memory/memories", "lessons", "handoffs", "prompts",
+                  "promises", "gates"]
 TOOL_ROOT = Path(__file__).resolve().parent.parent  # the socom checkout
 
 
@@ -123,7 +129,7 @@ def cmd_init(args):
     root = repo_root(Path(args[0]) if args else None)
     socom_dir = root / ".socom"
     (socom_dir / "canon").mkdir(parents=True, exist_ok=True)
-    for sub in ["memory/memories", "lessons", "handoffs", "prompts", "promises", "gates"]:
+    for sub in SUBSTRATE_DIRS:
         (socom_dir / sub).mkdir(parents=True, exist_ok=True)
 
     for name in CANON_FILES:
@@ -439,6 +445,106 @@ def cmd_doctor(args):
         print(f"socom doctor — INFO: local canon diverges from shipped canon "
               f"({', '.join(deltas)}) — fine if chosen; upstream what generalizes")
     print(f"socom doctor — clean (canonical source={h})")
+
+
+# ── precond — the published gate: is THIS work ready to start? ────────────
+# Ported from Akili's precondition-audit (backlog #3): a fast pre-flight that
+# the repo is work-ready BEFORE a seat starts — the "before" bookend to gates.
+# Velocity-first (operator constraint): auto-heals safe gaps, WARNS by default,
+# blocks ONLY on the unrecoverable. It accelerates flow by fixing/surfacing the
+# exact gap at the altitude where it's met, never by stopping for trivia.
+# Sibling to doctor: doctor = substrate health (static); precond = work
+# readiness (seat-aware, healing). Run before dispatch; --no-heal is the CI
+# posture (assert, don't fix).
+def cmd_precond(args):
+    import time, shutil
+    t0 = time.monotonic()
+    root = repo_root()
+    seat = next((a for a in args if not a.startswith("-")), None)
+    heal = "--no-heal" not in args
+    cfg = load_cfg(root)
+    rows = []  # (mark, text) ; mark in ✓ ~ ! ✗
+    blocks = warns = healed = 0
+
+    # 1. Substrate dirs — heal-on: mkdir; heal-off: block (work writes will fail).
+    missing = [d for d in SUBSTRATE_DIRS
+               if not (root / ".socom" / d).is_dir()]
+    if not missing:
+        rows.append(("✓", "substrate dirs present"))
+    elif heal:
+        for d in missing:
+            (root / ".socom" / d).mkdir(parents=True, exist_ok=True)
+        healed += 1
+        rows.append(("~", f"healed: mkdir .socom/{{{','.join(missing)}}}"))
+    else:
+        blocks += 1
+        rows.append(("✗", f"BLOCKS: missing .socom/{{{','.join(missing)}}} "
+                          "(run without --no-heal to auto-create)"))
+
+    # 2. Tools — unrecoverable if absent.
+    for tool in ("git", "python3"):
+        if shutil.which(tool):
+            rows.append(("✓", f"{tool} on PATH"))
+        else:
+            blocks += 1
+            rows.append(("✗", f"BLOCKS: {tool} not on PATH"))
+
+    # 3. Git hooks wired — heal-on: set config (safe, reversible); else warn.
+    hp = subprocess.run(["git", "config", "core.hooksPath"], cwd=root,
+                        capture_output=True, text=True).stdout.strip()
+    if hp == ".githooks":
+        rows.append(("✓", "git hooks wired (core.hooksPath)"))
+    elif heal:
+        subprocess.run(["git", "config", "core.hooksPath", ".githooks"],
+                       cwd=root, capture_output=True)
+        healed += 1
+        rows.append(("~", "healed: git config core.hooksPath .githooks"))
+    else:
+        warns += 1
+        rows.append(("!", "WARN: hooks not wired — local gates skip (CI re-asserts)"))
+
+    # 4. Checks bound — warn (work proceeds; gates assert vacuously if unbound).
+    unbound = [k for k in ("fast", "medium", "full")
+               if cfg.get("checks", {}).get(k) in (None, "", "true")]
+    if unbound:
+        warns += 1
+        rows.append(("!", f"WARN: checks {unbound} unbound — gates can't assert"))
+    else:
+        rows.append(("✓", "checks.fast/medium/full bound"))
+
+    # 5. Drift — warn with the exact fix (working stale is a risk, not a hard stop here).
+    claude = root / "CLAUDE.md"
+    if claude.exists():
+        m = re.search(r"source=(\w+)", claude.read_text())
+        if m and m.group(1) != canonical_hash(root):
+            warns += 1
+            rows.append(("!", "WARN: compiled views stale — run `socom compile`"))
+        else:
+            rows.append(("✓", "compiled views in sync"))
+
+    # 6. Claim — only meaningful for production seats; warn if none held by you (R2).
+    if seat in ("builder", "reviewer", "validator", "analyst"):
+        cdir = root / ".socom" / "claims"
+        mine = [p.stem for p in cdir.glob("*.claim")
+                if not claim_expired(p) and claim_holder() in p.read_text()] \
+            if cdir.exists() else []
+        if mine:
+            rows.append(("✓", f"domain claimed by you: {mine}"))
+        else:
+            warns += 1
+            rows.append(("!", f"WARN: no domain claimed by you ({claim_holder()}) "
+                              "— parallel seats need a claim (R2)"))
+
+    ms = round((time.monotonic() - t0) * 1000)
+    label = f"precond (seat={seat})" if seat else "precond"
+    print(f"{label}:")
+    for mark, text in rows:
+        print(f"  {mark} {text}")
+    verdict = "RED" if blocks else "PASS"
+    extra = f", {healed} healed" if healed else ""
+    print(f"-> {verdict} ({ms}ms): {blocks} blocker(s), {warns} warning(s){extra}")
+    if blocks:
+        sys.exit(1)
 
 
 # ── claims (R2) ──────────────────────────────────────────────────────────
@@ -1664,7 +1770,7 @@ COMMANDS = {"init": cmd_init, "compile": cmd_compile, "doctor": cmd_doctor,
             "prompt": cmd_prompt, "breach": cmd_breach,
             "baseline": cmd_baseline, "greet": cmd_greet,
             "embed": cmd_embed, "query": cmd_query, "eval": cmd_eval,
-            "cycle": cmd_cycle, "lesson": cmd_lesson,
+            "cycle": cmd_cycle, "lesson": cmd_lesson, "precond": cmd_precond,
             "forge": cmd_forge, "install": cmd_install,
             "uninstall": cmd_uninstall}
 

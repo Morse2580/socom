@@ -242,6 +242,17 @@ else
 fi
 rm -rf .socom/ledger .socom/cycles .socom/lessons
 
+# 10e. precond — velocity-first work-readiness pre-flight (the published gate)
+"$SOCOM" precond >/dev/null 2>&1; check "precond passes on a healthy repo" 0 $?
+rm -rf .socom/promises
+"$SOCOM" precond --no-heal >/dev/null 2>&1; check "precond --no-heal BLOCKS missing dir" 1 $?
+[ -d .socom/promises ] && bad "precond --no-heal healed (must not)" \
+                       || ok "precond --no-heal asserts without fixing"
+"$SOCOM" precond | grep -q "healed" && ok "precond auto-heals missing substrate dir" \
+                                    || bad "precond did not heal"
+[ -d .socom/promises ] && ok "precond heal recreated the dir" || bad "dir not recreated"
+"$SOCOM" precond builder >/dev/null 2>&1; check "precond warns (no claim) but never blocks" 0 $?
+
 # 11. forge verbs
 "$SOCOM" forge list | grep -q "ci-status" && ok "forge lists canon verbs" \
                                           || bad "forge verbs missing"
