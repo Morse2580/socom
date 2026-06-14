@@ -1,4 +1,4 @@
-# socom:generated v=0.1 source=6e5595b1343e — do not edit; edit .socom/ + socom.yaml, then `socom compile` 
+# socom:generated v=0.1 source=e3a534b497b7 — do not edit; edit .socom/ + socom.yaml, then `socom compile` 
 name: socom-gates
 on: [push, pull_request, workflow_dispatch]
 jobs:
@@ -10,4 +10,4 @@ jobs:
         with: { python-version: '3.12' }
       - run: pip install pyyaml
       - name: re-assert checks.full (socom gate, R1)
-        run: tests/smoke.sh && ./bin/socom index . >/dev/null && echo full-ok
+        run: tests/smoke.sh && python3 tests/xmlcheck.py && ./bin/socom index . >/dev/null && echo full-ok

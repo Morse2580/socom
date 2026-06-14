@@ -7,7 +7,7 @@
 
     **Backlog #6 — Contract machinery** (commit 1b33918): `socom contract
     verify|show`. The validation contract was doctrine + inert XML; verify now
-    EXECUTES each `<check><run>` command a promise embeds (schemas/promise.xml),
+    EXECUTES each `&lt;check&gt;&lt;run&gt;` command a promise embeds (schemas/promise.xml),
     PASS/FAIL on exit code, and flags no-run checks MANUAL (fail-closed — never
     auto-passed; the mechanical assessor never claims the human verdict). New
     schemas/contract.xml (schema-by-example). Pure helpers _contract_el /
@@ -57,7 +57,7 @@ M .socom/index/chunks.jsonl
   </uncommitted>
   <blockers embed="true">None.</blockers>
   <warnings embed="true">
-    - `socom contract verify` EXECUTES the contract's `<run>` commands via the
+    - `socom contract verify` EXECUTES the contract's `&lt;run&gt;` commands via the
       shell in the repo context — by design (it is the verification runner), and
       the author of a ratified contract owns those commands, like any test. Do
       not point verify at an untrusted contract.

@@ -1,4 +1,4 @@
-<!-- socom:generated v=0.1 source=6e5595b1343e — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
+<!-- socom:generated v=0.1 source=e3a534b497b7 — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
 ---
 name: adversary
 description: Competing-hypothesis investigation: multiple heads each champion a different theory and actively try to disprove the others. For debugging with unclear root cause.

@@ -1,4 +1,4 @@
-<!-- socom:generated v=0.1 source=6e5595b1343e — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
+<!-- socom:generated v=0.1 source=e3a534b497b7 — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
 # socom — SOCOM substrate
 
 Protocol over participants: the rules below bind every participant — agent or human. Canonical source: `.socom/` + `socom.yaml`.
@@ -220,8 +220,8 @@ Falsifiable checklist — Saltzer & Schroeder (1975) principles, each a test a d
 | Check | Command |
 |---|---|
 | fast | `tests/smoke.sh` |
-| medium | `tests/smoke.sh && python3 -c "import xml.etree.ElementTree as ET,glob; [ET.parse(f) for f in glob.glob('canon/*.xml')+glob.glob('schemas/*.xml')+glob.glob('.socom/canon/*.xml')]; print('xml well-formed')"` |
-| full | `tests/smoke.sh && ./bin/socom index . >/dev/null && echo full-ok` |
+| medium | `tests/smoke.sh && python3 tests/xmlcheck.py` |
+| full | `tests/smoke.sh && python3 tests/xmlcheck.py && ./bin/socom index . >/dev/null && echo full-ok` |
 | ci.status | `echo 'bind me: cache-free pipeline state query'` |
 
 Domains: protocol, cli, canon
