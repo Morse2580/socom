@@ -56,7 +56,7 @@ Residuality-ordered increment ladder (tests FIRST, then refactor under the net):
 |---|---|---|
 | SM-1 | Unit-test the pure core (`tests/unit.py`, 28 assertions, chained into smoke + CI) | **DONE** (commit cd01bfe) |
 | SM-2 | Utility layer: `SOCOM_DIR` constant (52 path-builds) + `_now_iso()` (9 stamps). **`die()` residuality-REJECTED** — 45 sys.exit calls have inconsistent prefixes + all-different messages; a wrapper relocates style and risks changing smoke-grepped error text (lateral, not stress-removing). | **DONE** (commit eb7f490) |
-| SM-3 — **NEXT** | Decompose the 3 hotspots (`cmd_cycle` CC 61 first), guarded by SM-1 + smoke | pending |
+| SM-3 | Decompose hotspots. **`cmd_cycle` (CC 61, the 4× outlier) DONE** (commit b9400bf): extracted pure `_cycle_rollup`, cmd_cycle 152→80 lines, +14 white-box rollup unit tests. `cmd_gate` (CC 39) + `render_body` (CC 23) are far below the outlier — optional follow-up, decompose only if they bite. | **cmd_cycle DONE**; gate/render_body optional |
 | SM-4 | Internal package **+ bundler emitting the single file** — ONLY if SM-2/3 don't resolve navigation; a gated one-way door, defer until proven necessary | deferred |
 
 ---
