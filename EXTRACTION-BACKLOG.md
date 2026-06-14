@@ -16,8 +16,8 @@ Method per extraction (constitution §contracts-before-code, §research-first):
 | # | Capability | Akili source | SOCOM today | Why |
 |---|---|---|---|---|
 | ~~1~~ **DONE** | ~~Evals (measurement backbone)~~ → shipped as `socom cycle` (commit c405560): `schemas/ledger.xml` + ledger→cycle rollup (pass@1/pass@k by seat, hotspots) + `eval` gate. | `evals/cycle-*.json`, `eval*.py`, `ledger.csv` | **`socom cycle`** | done — `verify-never-claim` now has a scored, replayable spine |
-| **2 — NEXT** | **Lessons system** | `LESSON-SYSTEM-ENGINEERING.md` | `.socom/lessons/` stub | the engine behind a feature SOCOM only gestures at; the cycle's hotspots are the natural input (repeated failures → lesson candidates) |
-| 3 | Assessments + precondition audits | `assessments/` (50 files), `precondition-audit.md` | only the `reviewer` role | structured adversarial assessment > one role |
+| ~~2~~ **DONE** | ~~Lessons system~~ → shipped as `socom lesson` (commit 116f5c1): `schemas/lesson.xml` + candidates/list/promote/retire; born from cycle hotspots (eval→lesson bridge), retrievable via existing index, retired-preserved via lifecycle filter. | `LESSON-SYSTEM-ENGINEERING.md` | **`socom lesson`** | done — the eval→lesson bridge is real |
+| **3 — NEXT** | **Assessments + precondition audits** | `assessments/` (50 files), `precondition-audit.md` | only the `reviewer` role | structured adversarial assessment > one role |
 | 4 | Agent introspection | `agent/extract-{assertions,beliefs,plan,reflections,skills}.sh` | none | structured self-capture → feeds memory/lessons |
 | 5 | Protocol docs → canon | `docs/{SUCCESS-FAILURE-CONTRACT,INCIDENT-RESPONSE-PROTOCOL,RESIDUALITY-CONTRACTS,COMMIT-PROTOCOL,AGENT-PROTOCOL}.md` | partial (constitution/doctrine) | promote battle-tested protocols into canon |
 | 6 | Contract machinery | `contracts/` (schema + examples + tests) | "contracts before code" doctrine only | make the contract a real, testable artifact |
