@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  socom lesson — a durable, retrievable rule earned from experience. The
+  engine SOCOM only gestured at (the .socom/lessons/ stub). Ported from
+  Akili's lesson system (LESSON-SYSTEM-ENGINEERING.md): a lesson is BORN
+  provisional, EARNS active by re-confirmation, and is RETIRED (never
+  deleted) when falsified — status indicates disposition, history is kept.
+
+  The dominant birth path is the eval->lesson bridge: `socom cycle` surfaces
+  hotspots (promises with repeated `broken` verdicts); `socom lesson
+  candidates` turns each into a provisional lesson citing the cycle it came
+  from. A lesson consumes the cycle's PUBLISHED hotspots (published-language),
+  never the ledger internals.
+
+  RETRIEVAL is free: this artifact lives at .socom/lessons/<id>.xml, so
+  `socom index` (which rglobs .socom/**.xml) emits its embed="true" elements
+  as chunks, filterable by the `domain` attribute. The lifecycle filter
+  excludes state="retired" from retrieval — a retired lesson stays on disk
+  and queryable for audit, but never surfaces as live guidance.
+
+  LIFECYCLE attribute drives the deterministic retrieval map; state drives
+  the live/retired filter; source records provenance (cycle|human|council).
+-->
+<lesson id="L-P-2026-0612-002"
+        domain="data-pipeline"
+        state="provisional"
+        source="cycle"
+        lifecycle="mid-session">
+
+  <!-- WHAT — the rule/guard, the embedded chunk that earns retrieval. -->
+  <statement embed="true">
+    A failed product run must record status='failure' in dbo.run BEFORE the
+    notebook re-raises — assert the insert is in the except path on every
+    change to a run-recording promise.
+  </statement>
+
+  <!-- WHY — the reasoning, so the rule is applied with judgment not by rote. -->
+  <why embed="true">
+    The promise P-2026-0612-002 broke twice on the same contract: the failure
+    path skipped run-recording, so the orchestrator saw an exception with no
+    durable trace. The class is "side effects that must outlive the raise."
+  </why>
+
+  <!-- WHERE IT CAME FROM — provenance: the hotspot + cycle that birthed it.
+       `derived-from` is the idempotency key: one lesson per source promise. -->
+  <derived-from promise="P-2026-0612-002"
+                cycle="cycle-20260613T215912+0000.json"
+                broken="2" total="3"/>
+
+  <evidence embed="true">
+    cycle hotspot: P-2026-0612-002 broken 2/3; first-attempt verdict broken.
+  </evidence>
+
+  <!-- HOW SETTLED — re-confirmation counter; promote suggestion at >= 5
+       (Akili threshold). active is earned, not assigned at birth. -->
+  <validated count="0"/>
+
+  <!-- On retirement: state="retired", this element set, body NEVER deleted.
+       <retire reason="superseded by idempotent insert" date="2026-..."/> -->
+
+</lesson>

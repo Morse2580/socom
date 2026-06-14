@@ -208,6 +208,40 @@ PYEOF
 "$SOCOM" gate eval >/dev/null 2>&1; check "gate eval PASS above threshold (10)" 0 $?
 rm -rf .socom/ledger .socom/cycles
 
+# 10d. lesson — experience earned from cycle hotspots (the eval->lesson bridge)
+"$SOCOM" lesson candidates >/dev/null 2>&1; check "lesson candidates degrades without cycle" 1 $?
+mkdir -p .socom/ledger
+cat > .socom/ledger/runs.jsonl <<EOF
+{"ts":"2026-06-10T01:00:00Z","seat":"builder","promise":"P-HOT","gate_band":"fast","exit_code":1,"duration_s":50,"attempt":1,"verdict":"broken"}
+{"ts":"2026-06-10T02:00:00Z","seat":"builder","promise":"P-HOT","gate_band":"fast","exit_code":1,"duration_s":60,"attempt":2,"verdict":"broken"}
+{"ts":"2026-06-10T03:00:00Z","seat":"builder","promise":"P-HOT","gate_band":"fast","exit_code":0,"duration_s":70,"attempt":3,"verdict":"kept"}
+{"ts":"2026-06-10T04:00:00Z","seat":"reviewer","promise":"P-COLD","gate_band":"fast","exit_code":1,"duration_s":30,"attempt":1,"verdict":"broken"}
+{"ts":"2026-06-10T05:00:00Z","seat":"reviewer","promise":"P-COLD","gate_band":"fast","exit_code":1,"duration_s":30,"attempt":2,"verdict":"broken"}
+EOF
+"$SOCOM" cycle >/dev/null
+"$SOCOM" lesson candidates --domain data-pipeline | grep -q "2 candidate(s) born" \
+  && ok "lesson candidates born from cycle hotspots (P-HOT, P-COLD)" || bad "candidates not born from hotspots"
+[ -f .socom/lessons/L-P-HOT.xml ] && [ -f .socom/lessons/L-P-COLD.xml ] \
+  && ok "lesson artifacts written + parse" || bad "lesson files missing"
+python3 -c "import xml.etree.ElementTree as ET; ET.parse('.socom/lessons/L-P-HOT.xml')" \
+  && ok "born lesson is well-formed XML" || bad "born lesson malformed"
+"$SOCOM" lesson candidates | grep -q "0 candidate(s) born" \
+  && ok "lesson candidates idempotent (re-run births none)" || bad "candidates not idempotent"
+"$SOCOM" lesson promote L-P-HOT >/dev/null
+"$SOCOM" lesson list --state active | grep -q "L-P-HOT" \
+  && ok "lesson promote provisional->active + list --state filters" || bad "promote/list-filter failed"
+"$SOCOM" lesson retire L-P-COLD --reason "fixed" >/dev/null
+grep -q 'state="retired"' .socom/lessons/L-P-COLD.xml && [ -f .socom/lessons/L-P-COLD.xml ] \
+  && ok "lesson retire -> retired, preserved on disk (never deleted)" || bad "retire/preserve failed"
+"$SOCOM" index . >/dev/null 2>&1; "$SOCOM" embed >/dev/null 2>&1
+LQ="$("$SOCOM" query "promise keeps failing assessment encode the guard" 2>&1)"
+if echo "$LQ" | grep -q "L-P-HOT" && ! echo "$LQ" | grep -q "L-P-COLD"; then
+  ok "active lesson retrieved, retired filtered (lifecycle)"
+else
+  bad "retrieval/lifecycle wrong"
+fi
+rm -rf .socom/ledger .socom/cycles .socom/lessons
+
 # 11. forge verbs
 "$SOCOM" forge list | grep -q "ci-status" && ok "forge lists canon verbs" \
                                           || bad "forge verbs missing"
