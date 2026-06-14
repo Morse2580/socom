@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  socom promise — backlog #4 (agent introspection), increment 1: the
+  deterministic assertion port. Ratified Option A: parse machine-verifiable
+  assertions from a closing handoff's <evidence> commands, record them as a
+  replayable append-only log, and birth provisional lesson candidates from
+  captured failures. No LLM (preserves the L0 floor). The belief/reflection/
+  plan/skill halves (Akili's four LLM-backed extractors) are DEFERRED.
+-->
+<promise id="P-2026-0614-001"
+         state="open"
+         domain="cli"
+         session="S-2026-0614">
+
+  <promiser seat="builder" participant="claude-code:opus"/>
+  <promisee seat="orchestrator" participant="human:moses"/>
+  <assessors>
+    <assessor seat="gate" ref="gate:task-completion"/>
+    <assessor seat="human" participant="human:moses" scope="final"/>
+  </assessors>
+
+  <intent>
+    <verbatim from="human:moses" date="2026-06-14" embed="true">
+      lock Option A and start building
+    </verbatim>
+    <decoded embed="true">
+      Build `socom introspect` per the ratified Option A: deterministic
+      assertion extraction from the handoff, recorded as replayable
+      assertions AND fed into the existing lesson-candidate pipeline. No
+      model dependency. One atomic increment; defer the LLM-backed halves.
+    </decoded>
+  </intent>
+
+  <contract ref="C-2026-0614-001" state="ratified">
+    <goal embed="true">
+      `socom introspect [handoff]` turns a closing handoff's machine-verifiable
+      evidence commands into a replayable assertion log, idempotently, and
+      births provisional lesson candidates from captured failures — never
+      blocking closeout, never invoking a model.
+    </goal>
+    <check id="1" assessor="gate:task-completion">
+      <run>socom introspect   # in a repo with no handoffs</run>
+      <expect>exit 1, loud degrade (sibling convention: cycle/lesson on missing input)</expect>
+    </check>
+    <check id="2" assessor="gate:task-completion">
+      <run>socom introspect &lt;handoff-with-evidence&gt;</run>
+      <expect>appends one well-formed JSON row per &lt;command&gt; to .socom/assertions/log.jsonl; exit 0; prints a summary</expect>
+    </check>
+    <check id="3" assessor="gate:task-completion">
+      <run>socom introspect &lt;same-handoff&gt;   # second run</run>
+      <expect>0 new rows (idempotent on the assertion id = source-handoff + index)</expect>
+    </check>
+    <check id="4" assessor="gate:task-completion">
+      <run>introspect a handoff with an unexpected failure (exit!=0, no note) and an expected-fail (exit!=0, note=...)</run>
+      <expect>the un-noted failure births a provisional lesson candidate (source="introspect"); the noted expected-fail does NOT</expect>
+    </check>
+    <check id="5" assessor="gate:task-completion">
+      <run>socom introspect &lt;handoff-with-no-evidence&gt;</run>
+      <expect>exit 0, "no assertions to capture" — capture never blocks closeout</expect>
+    </check>
+    <check id="6" assessor="gate:task-completion">
+      <run>tests/smoke.sh ; python3 -c "ET.parse('schemas/assertion.xml')"</run>
+      <expect>smoke all green (new introspect assertions incl. heal+block+idempotent dirs); assertion.xml well-formed (medium gate)</expect>
+    </check>
+    <out-of-scope embed="true">
+      The four LLM-backed extractors (beliefs, reflections, plan, skills) —
+      they need a model and would couple the substrate to one. Deferred to a
+      later increment behind an explicit opt-in flag if ever wanted.
+    </out-of-scope>
+    <regression-surface embed="true">
+      Must not perturb existing lesson births (cycle hotspots) — introspect is
+      a SECOND, independent birth path (source="introspect" vs "cycle").
+      doctor must stay clean (no canon hash change unless docstring is a view).
+    </regression-surface>
+  </contract>
+
+  <assessments>
+    <!-- gate + human verdicts append at closeout -->
+  </assessments>
+</promise>

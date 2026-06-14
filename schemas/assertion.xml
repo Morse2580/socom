@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  socom assertion — a machine-verifiable, replayable claim captured from a
+  closed session. One row per <command> in a handoff's <evidence> block:
+  a VERIFY command plus its EXPECTed exit code. This is the SOCOM-native form
+  of Akili's extract-assertions.sh (ASSERT | VERIFY | EXPECT | CATEGORY) — but
+  the source is the handoff we already write, not a separate markdown journal,
+  and there is NO model in the loop (the only one of Akili's five extractors
+  that is purely deterministic; the rest are deferred to preserve the L0 floor).
+
+  WHY — verify-never-claim made durable: "Evidence is replayable, not quotable:
+  record the command and exit code." A handoff's evidence is prose-adjacent and
+  dies with the session; an assertion row is a re-runnable check that outlives it.
+  `socom introspect` harvests them at closeout; a future seat can replay the log
+  to confirm the inherited state still holds (the next-session drift scan, made
+  executable rather than asserted).
+
+  STORAGE — append-only JSONL at .socom/assertions/log.jsonl (one JSON object
+  per line, keys exactly the <field> names below), for the same reason as the
+  ledger (schemas/ledger.xml): high-volume, automation-written, a flat `>>`
+  append is race-light where rewriting an XML close-tag is not. Append-only and
+  in-repo (§git-is-source-of-truth): a row, once written, is never edited.
+  IDEMPOTENT — the `id` (source_handoff + index) is the dedup key: re-running
+  introspect on the same handoff appends nothing.
+
+  BRIDGE — an assertion whose command failed UNEXPECTEDLY (expect_exit != 0 with
+  no explanatory note) is a captured one-off failure; introspect births a
+  PROVISIONAL lesson candidate from it (source="introspect"), a second birth path
+  alongside the cycle->lesson hotspot bridge. Provisional, not active: a one-off
+  earns active only by re-confirmation (schemas/lesson.xml lifecycle). A noted
+  expected-fail (a forced-fail test) is recorded but births nothing.
+
+  Example JSONL line (the wire format; the real verify carries a forced-fail
+  flag, elided here because an XML comment may not contain a double hyphen):
+  {"id":"A-H-2026-0612-001-2","ts":"2026-06-12T21:02:00Z","source_handoff":"H-2026-0612-001","verify":"python nb_run_product.py","expect_exit":1,"category":"general","note":"expected forced-fail test"}
+-->
+<assertion socom="0.1">
+
+  <!-- Field contract — these key names ARE the JSONL keys. -->
+  <fields>
+    <field name="id"             type="id"        required="true">A-&lt;source_handoff&gt;-&lt;index&gt;. The idempotency key — one row per evidence command, stable across re-runs.</field>
+    <field name="ts"             type="iso-8601"  required="true">The source handoff's date (UTC). NOT generation time — the assertion is dated to the session it came from, so re-runs are stable.</field>
+    <field name="source_handoff" type="id"        required="true">The handoff id this was harvested from (provenance; the replay context).</field>
+    <field name="verify"         type="string"    required="true">The command to replay — verbatim from the handoff &lt;command&gt; text.</field>
+    <field name="expect_exit"    type="int"       required="true">The expected exit code — the handoff &lt;command exit="N"&gt; attribute. Replay passes iff the live exit matches.</field>
+    <field name="category"       type="enum"      required="false" values="infra|code|data|config|behavioral|general">Optional &lt;command category="..."&gt; attribute; default "general". No heuristic guessing (no hidden assumption to relocate).</field>
+    <field name="note"           type="string"    required="false">Optional &lt;command note="..."&gt; annotation. A note on a non-zero expect_exit marks a DELIBERATE failure (e.g. a forced-fail test) — recorded, but births no lesson.</field>
+  </fields>
+
+  <!-- Worked example: the canonical view of the rows harvested from the
+       schemas/handoff.xml example's <evidence> block. The live form is the
+       JSONL above, one object per line; this XML is the readable contract. -->
+  <example>
+    <row id="A-H-S193-0" ts="2026-06-12T21:02:00Z" source_handoff="H-S193" verify="dbt build --select group:network_kpi"                              expect_exit="0" category="general"/>
+    <row id="A-H-S193-1" ts="2026-06-12T21:02:00Z" source_handoff="H-S193" verify="sqlcmd -Q &quot;SELECT status, COUNT(*) FROM dbo.run GROUP BY status&quot;" expect_exit="0" category="general"/>
+    <row id="A-H-S193-2" ts="2026-06-12T21:02:00Z" source_handoff="H-S193" verify="python nb_run_product.py --force-fail" expect_exit="1" category="general" note="expected — forced-fail test"/>
+  </example>
+
+</assertion>

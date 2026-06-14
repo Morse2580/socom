@@ -253,6 +253,44 @@ rm -rf .socom/promises
 [ -d .socom/promises ] && ok "precond heal recreated the dir" || bad "dir not recreated"
 "$SOCOM" precond builder >/dev/null 2>&1; check "precond warns (no claim) but never blocks" 0 $?
 
+# 10f. introspect — handoff evidence -> replayable assertions + lesson candidates
+rm -f .socom/handoffs/H-*.xml
+"$SOCOM" introspect >/dev/null 2>&1; check "introspect degrades loudly without a handoff" 1 $?
+cat > .socom/handoffs/H-T1.xml <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<handoff id="H-T1" date="2026-06-14T00:00:00Z">
+  <evidence>
+    <command exit="0">echo ok</command>
+    <command exit="1" note="expected — forced-fail test">false</command>
+    <command exit="1">boom</command>
+  </evidence>
+</handoff>
+EOF
+"$SOCOM" introspect H-T1.xml | grep -q "3 new assertion(s)" \
+  && ok "introspect captures one assertion per evidence command" \
+  || bad "introspect did not capture 3 assertions"
+[ "$(wc -l < .socom/assertions/log.jsonl)" -eq 3 ] \
+  && ok "assertion log has 3 JSONL rows" || bad "assertion log row count wrong"
+python3 -c "import json; [json.loads(l) for l in open('.socom/assertions/log.jsonl')]" \
+  && ok "assertion rows are well-formed JSON" || bad "assertion rows malformed"
+[ -f .socom/lessons/L-A-H-T1-2.xml ] \
+  && grep -q 'source="introspect"' .socom/lessons/L-A-H-T1-2.xml \
+  && ok "captured failure births provisional lesson (source=introspect)" \
+  || bad "unexpected-fail assertion did not birth a lesson"
+[ -f .socom/lessons/L-A-H-T1-1.xml ] \
+  && bad "noted expected-fail wrongly birthed a lesson" \
+  || ok "noted expected-fail records but births no lesson"
+"$SOCOM" introspect H-T1.xml | grep -q "0 new assertion(s)" \
+  && ok "introspect idempotent (re-run captures none)" || bad "introspect not idempotent"
+cat > .socom/handoffs/H-T2.xml <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<handoff id="H-T2" date="2026-06-14T00:00:00Z"><done/></handoff>
+EOF
+"$SOCOM" introspect H-T2.xml >/dev/null 2>&1; check "introspect never blocks on a no-evidence handoff" 0 $?
+"$SOCOM" introspect H-T2.xml | grep -q "no assertions to capture" \
+  && ok "no-evidence handoff -> no assertions (non-blocking)" || bad "no-evidence path wrong"
+rm -rf .socom/assertions .socom/lessons .socom/handoffs/H-T1.xml .socom/handoffs/H-T2.xml
+
 # 11. forge verbs
 "$SOCOM" forge list | grep -q "ci-status" && ok "forge lists canon verbs" \
                                           || bad "forge verbs missing"
