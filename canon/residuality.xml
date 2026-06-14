@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- socom residuality — the constitution §residuality-gate (rank 5) made falsifiable.
+     This is DECISION residuality (does a change relocate stress rather than remove it?),
+     NOT infrastructure residuality (per-dependency fallback scoring) — a different bounded
+     context that happens to share the word. The principle lives in the constitution and is
+     non-negotiable; this file is the mechanical layer beneath it: a named checklist an agent
+     RUNS before any fix, plus the evidence it records. Backbone: Saltzer & Schroeder, "The
+     Protection of Information in Computer Systems" (1975) — SOCOM is that protection system
+     applied to verification integrity, so the eight principles are its falsifiable grammar. -->
+<residuality socom="0.1" see="residuality-gate">
+
+  <!-- The gate: four questions, run in 60 seconds before any fix or hard-to-reverse
+       decision. A "yes" to any is a STOP — the change must be reworked or leashed. -->
+  <gate>
+    <rule id="relocate-not-remove" embed="true">
+      Does this relocate stress rather than remove it? A fix that moves load,
+      contention, or failure pressure to another component, layer, or future
+      session has not removed the stress — it has hidden it where the next
+      person meets it cold. Remove the stress at its source or name where it now lives.
+    </rule>
+    <rule id="hidden-assumption" embed="true">
+      Does this hide a quantitative assumption? "Raise the limit", "add a
+      buffer", "bigger node" all encode a number nobody wrote down. Surface the
+      assumption (what value, why, when it breaks) or the fix is a silent time bomb.
+    </rule>
+    <rule id="symptom-not-class" embed="true">
+      Does this patch the visible symptom instead of the class? If the same bug
+      can recur one field, tenant, or path over, the class is still open
+      (constitution §fix-the-class). Patch the instance to mitigate now; the
+      objective remains the class-level fix, same session.
+    </rule>
+    <rule id="one-way-door" embed="true">
+      Does this open a one-way door? A hard-to-reverse decision (schema, public
+      contract, deletion, migration) must fail safe, not into disaster — Saltzer's
+      core distinction. If reversing it is expensive or impossible, it earns a
+      design-review and an explicit rollback story before it lands.
+    </rule>
+    <rule id="trigger-words" embed="true">
+      These words demand the gate, every time: pin, bump, raise the limit, add a
+      retry, add a buffer, bigger node, works for now, temporarily, good enough.
+      Reaching for one is the signal that stress is being relocated, not removed.
+    </rule>
+  </gate>
+
+  <!-- The falsifiable checklist: Saltzer & Schroeder's eight design principles
+       (+ their two imperfect ones). Each is a question a design can be FAILED
+       against, with SOCOM's existing embodiment named so the test is concrete. -->
+  <principles>
+    <principle id="economy-of-mechanism" embed="true">
+      Keep the mechanism as small and simple as possible — what cannot be
+      inspected cannot be trusted. SOCOM: lean canon, "port the pattern, not the
+      code", §context-economy. Fail it when a change adds mechanism it cannot justify.
+    </principle>
+    <principle id="fail-safe-defaults" embed="true">
+      Base decisions on permission, not exclusion: a design error should deny, not
+      grant. SOCOM resolves the velocity tension by altitude — gates fail OPEN
+      locally (warn, exit 0) but fail CLOSED in CI where the fixer meets them (the
+      published-gate doctrine). Fail it when an error path grants instead of refusing.
+    </principle>
+    <principle id="complete-mediation" embed="true">
+      Check every access to every object, including at init, recovery, shutdown,
+      maintenance. SOCOM: gates at every band — session-start, task-completion,
+      pre-commit, pre-push, ci, session-end. Fail it when a path skips the check.
+    </principle>
+    <principle id="open-design" embed="true">
+      Security must not depend on secrecy of the mechanism. SOCOM: §git-is-source-of-truth,
+      the open seat registry, the L0 grep floor — the whole substrate is inspectable.
+      Fail it when correctness relies on something hidden or unwritten.
+    </principle>
+    <principle id="separation-of-privilege" embed="true">
+      Require two keys, not one. SOCOM: builder and reviewer never share context; a
+      worker cannot amend its own contract; assessment is never delegated to the
+      promiser. Fail it when one actor can both act and bless the action.
+    </principle>
+    <principle id="least-privilege" embed="true">
+      Every actor operates with the minimum privilege its function needs. SOCOM:
+      domain-scoped claims with TTL auto-expiry, isolated worktrees, bounded seat
+      promises. Fail it when a change grants more reach than the task requires.
+    </principle>
+    <principle id="least-common-mechanism" embed="true">
+      Minimize mechanism shared across actors — shared state is a coupling and an
+      information path. SOCOM: an isolated worktree per session, never the shared
+      checkout. Fail it when a change forces unrelated work through one shared point.
+    </principle>
+    <principle id="psychological-acceptability" embed="true">
+      Make the protected path the easy path, or people route around it. SOCOM:
+      velocity-first — gates warn-not-block locally precisely so they are never
+      disabled. Fail it when the safe path is so painful it invites bypass.
+    </principle>
+    <principle id="work-factor" embed="true">
+      Weigh the cost of doing it right against the cost of going around. SOCOM
+      inverts it: renegotiating a contract is deliberately CHEAPER than bypassing it.
+      Fail it when the wrong path is the cheap path.
+    </principle>
+    <principle id="compromise-recording" embed="true">
+      When you cannot prevent, record — a detectable breach beats a silent one.
+      SOCOM: the breach ledger (`socom breach`), amber gates that warn-and-log and
+      feed trust scoring. Fail it when a fail-open path leaves no trace.
+    </principle>
+  </principles>
+
+  <!-- The evidence shape — what running the gate must record. Without this the
+       gate is "I thought about it"; with it the gate is replayable (§verify-never-claim). -->
+  <evidence embed="true">
+    Running the residuality gate records, in the commit [test]/[why] or the design
+    note: (1) the trigger that fired (a trigger-word, a fix, a hard-to-reverse
+    decision); (2) which gate questions and Saltzer principles the change was tested
+    against; (3) the verdict — passes / relocates-stress / hides-an-assumption /
+    symptom-only / opens-a-one-way-door; (4) the resolution, or — if a shortcut was
+    knowingly accepted — the documented why and the follow-up task id that leashes it
+    (constitution §no-quick-fixes-without-a-leash). A gate run with no recorded verdict
+    did not happen.
+  </evidence>
+
+</residuality>

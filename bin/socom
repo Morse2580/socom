@@ -52,7 +52,7 @@ except ImportError:
 
 SOCOM_VERSION = "0.1"
 CANON_FILES = ["constitution.xml", "roles.xml", "gates.xml", "session.xml",
-               "doctrine.xml", "forge.xml"]
+               "doctrine.xml", "forge.xml", "residuality.xml"]
 # The substrate dirs every repo needs under .socom/ — single source of truth,
 # shared by init (plants them) and precond (heals them).
 SUBSTRATE_DIRS = ["memory/memories", "lessons", "handoffs", "prompts",
@@ -251,6 +251,23 @@ def render_body(root: Path, cfg: dict) -> str:
             b = fb.get(vid)
             out.append(f"| `{vid}` | {intent} | "
                        + (f"`{b}`" if b else "*unbound*") + " |")
+        out.append("")
+
+    resid_f = root / ".socom" / "canon" / "residuality.xml"
+    if resid_f.exists():
+        resid = ET.parse(resid_f).getroot()
+        out.append("## Residuality — the falsifiable gate (constitution "
+                   "§residuality-gate)\n")
+        out.append("Run before any fix or hard-to-reverse decision. A \"yes\" to "
+                   "any gate question is a STOP — rework or leash it.\n")
+        for r in resid.findall("gate/rule"):
+            out.append(f"- **{r.get('id')}** — " +
+                       " ".join((r.text or "").split()))
+        out.append("\nFalsifiable checklist — Saltzer & Schroeder (1975) principles, "
+                   "each a test a design can be failed against:\n")
+        for p in resid.findall("principles/principle"):
+            out.append(f"- **{p.get('id')}** — " +
+                       " ".join((p.text or "").split()))
         out.append("")
 
     out.append("## Repo bindings (socom.yaml)\n")

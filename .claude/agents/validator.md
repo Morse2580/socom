@@ -1,4 +1,4 @@
-<!-- socom:generated v=0.1 source=fce8a0829b46 — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
+<!-- socom:generated v=0.1 source=6e5595b1343e — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
 ---
 name: validator
 description: Verifies the live effect against the contract on the deployed/running system — not the diff. Drives the real thing and records observed behavior as evidence.

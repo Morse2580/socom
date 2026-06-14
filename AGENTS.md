@@ -1,4 +1,4 @@
-<!-- socom:generated v=0.1 source=fce8a0829b46 — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
+<!-- socom:generated v=0.1 source=6e5595b1343e — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
 # socom — SOCOM substrate
 
 Protocol over participants: the rules below bind every participant — agent or human. Canonical source: `.socom/` + `socom.yaml`.
@@ -191,6 +191,29 @@ Run `socom forge <verb>` — NEVER improvise provider mechanics (auth, polling, 
 | `mr-open` | Open a merge/pull request from the current branch to the default branch (title from args). | *unbound* |
 | `mr-status` | State of open MRs/PRs for this repo — id, title, vote/check state. Cache-free. | *unbound* |
 | `repo-web` | Print the repo's web URL (for handoffs and humans). | *unbound* |
+
+## Residuality — the falsifiable gate (constitution §residuality-gate)
+
+Run before any fix or hard-to-reverse decision. A "yes" to any gate question is a STOP — rework or leash it.
+
+- **relocate-not-remove** — Does this relocate stress rather than remove it? A fix that moves load, contention, or failure pressure to another component, layer, or future session has not removed the stress — it has hidden it where the next person meets it cold. Remove the stress at its source or name where it now lives.
+- **hidden-assumption** — Does this hide a quantitative assumption? "Raise the limit", "add a buffer", "bigger node" all encode a number nobody wrote down. Surface the assumption (what value, why, when it breaks) or the fix is a silent time bomb.
+- **symptom-not-class** — Does this patch the visible symptom instead of the class? If the same bug can recur one field, tenant, or path over, the class is still open (constitution §fix-the-class). Patch the instance to mitigate now; the objective remains the class-level fix, same session.
+- **one-way-door** — Does this open a one-way door? A hard-to-reverse decision (schema, public contract, deletion, migration) must fail safe, not into disaster — Saltzer's core distinction. If reversing it is expensive or impossible, it earns a design-review and an explicit rollback story before it lands.
+- **trigger-words** — These words demand the gate, every time: pin, bump, raise the limit, add a retry, add a buffer, bigger node, works for now, temporarily, good enough. Reaching for one is the signal that stress is being relocated, not removed.
+
+Falsifiable checklist — Saltzer & Schroeder (1975) principles, each a test a design can be failed against:
+
+- **economy-of-mechanism** — Keep the mechanism as small and simple as possible — what cannot be inspected cannot be trusted. SOCOM: lean canon, "port the pattern, not the code", §context-economy. Fail it when a change adds mechanism it cannot justify.
+- **fail-safe-defaults** — Base decisions on permission, not exclusion: a design error should deny, not grant. SOCOM resolves the velocity tension by altitude — gates fail OPEN locally (warn, exit 0) but fail CLOSED in CI where the fixer meets them (the published-gate doctrine). Fail it when an error path grants instead of refusing.
+- **complete-mediation** — Check every access to every object, including at init, recovery, shutdown, maintenance. SOCOM: gates at every band — session-start, task-completion, pre-commit, pre-push, ci, session-end. Fail it when a path skips the check.
+- **open-design** — Security must not depend on secrecy of the mechanism. SOCOM: §git-is-source-of-truth, the open seat registry, the L0 grep floor — the whole substrate is inspectable. Fail it when correctness relies on something hidden or unwritten.
+- **separation-of-privilege** — Require two keys, not one. SOCOM: builder and reviewer never share context; a worker cannot amend its own contract; assessment is never delegated to the promiser. Fail it when one actor can both act and bless the action.
+- **least-privilege** — Every actor operates with the minimum privilege its function needs. SOCOM: domain-scoped claims with TTL auto-expiry, isolated worktrees, bounded seat promises. Fail it when a change grants more reach than the task requires.
+- **least-common-mechanism** — Minimize mechanism shared across actors — shared state is a coupling and an information path. SOCOM: an isolated worktree per session, never the shared checkout. Fail it when a change forces unrelated work through one shared point.
+- **psychological-acceptability** — Make the protected path the easy path, or people route around it. SOCOM: velocity-first — gates warn-not-block locally precisely so they are never disabled. Fail it when the safe path is so painful it invites bypass.
+- **work-factor** — Weigh the cost of doing it right against the cost of going around. SOCOM inverts it: renegotiating a contract is deliberately CHEAPER than bypassing it. Fail it when the wrong path is the cheap path.
+- **compromise-recording** — When you cannot prevent, record — a detectable breach beats a silent one. SOCOM: the breach ledger (`socom breach`), amber gates that warn-and-log and feed trust scoring. Fail it when a fail-open path leaves no trace.
 
 ## Repo bindings (socom.yaml)
 
