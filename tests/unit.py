@@ -155,6 +155,38 @@ try:
 finally:
     _os.environ["PATH"] = _saved
 
+# ── _cycle_rollup (SM-3: the pure eval rollup, extracted from cmd_cycle) ──────
+# Same fixture smoke.sh seeds; expectations hand-counted there. White-box now.
+_rows = [
+    {"ts": "t1", "seat": "builder", "promise": "P-A", "contract": "C-A", "exit_code": 0, "duration_s": 100, "attempt": 1, "verdict": "kept"},
+    {"ts": "t2", "seat": "builder", "promise": "P-B", "contract": "C-B", "exit_code": 1, "duration_s": 50, "attempt": 1, "verdict": "broken"},
+    {"ts": "t3", "seat": "builder", "promise": "P-B", "contract": "C-B", "exit_code": 0, "duration_s": 80, "attempt": 2, "verdict": "kept"},
+    {"ts": "t4", "seat": "reviewer", "promise": "P-C", "exit_code": 1, "duration_s": 30, "attempt": 1, "verdict": "broken"},
+]
+_m = socom._cycle_rollup(_rows)
+_s = _m["summary"]
+eq("rollup total_runs", _s["total_runs"], 4)
+eq("rollup unique_promises", _s["unique_promises"], 3)
+eq("rollup pass@1 (first-attempt kept)", _s["pass_at_1"], 1)
+eq("rollup pass@k (any attempt kept)", _s["pass_at_k"], 2)
+eq("rollup pass_rate (kept rows / rows)", _s["pass_rate"], 50.0)
+eq("rollup contract_coverage", _s["contract_coverage"], 66.7)
+_bs = {s["seat"]: s for s in _m["seats"]}
+check("rollup builder seat 1/2 pass@1, 2/2 pass@k, 100%",
+      _bs["builder"]["pass_at_1"] == 1 and _bs["builder"]["pass_at_k"] == 2
+      and _bs["builder"]["pass_rate"] == 100.0)
+check("rollup reviewer seat 0/1, 0/1, 0%",
+      _bs["reviewer"]["pass_at_1"] == 0 and _bs["reviewer"]["pass_at_k"] == 0)
+eq("rollup seats sorted by name", [s["seat"] for s in _m["seats"]], ["builder", "reviewer"])
+eq("rollup hotspots worst-first by (broken, name)",
+   [(h["promise"], h["broken"], h["total"]) for h in _m["hotspots"]],
+   [("P-B", 1, 2), ("P-C", 1, 1)])
+eq("rollup exit_code distribution", _m["exit_codes"], {"0": 2, "1": 2})
+eq("rollup avg attempts-to-success", _m["attempts"]["avg_to_success"], 1.5)
+eq("rollup worst (most-attempted) promise", _m["attempts"]["worst_promise"], "P-B")
+eq("rollup empty rows -> 0 promises",
+   socom._cycle_rollup([])["summary"]["unique_promises"], 0)
+
 # ── summary ──────────────────────────────────────────────────────────────────
 print(f"unit: {_PASS} passed, {_FAIL} failed")
 raise SystemExit(1 if _FAIL else 0)

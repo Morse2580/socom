@@ -1246,42 +1246,12 @@ def cmd_eval(args):
 # rolls it into pass@1 / pass@k by seat + hotspots — giving verify-never-claim
 # a scored, replayable spine. Distils the *essential* rollup; the full query
 # suite (health/trends/reliability) is deliberately deferred.
-def cmd_cycle(args):
-    import json
+def _cycle_rollup(rows: list) -> dict:
+    """Pure: filtered ledger rows -> scored metrics (summary/seats/hotspots/
+    exit_codes/attempts). Provenance (generated_at, ledger, filters) is added by
+    the caller. pass@1 = first attempt kept; pass@k = any attempt kept; a promise
+    is attributed to the seat of its first attempt."""
     from collections import defaultdict
-
-    def flag_val(name):
-        return args[args.index(name) + 1] if name in args \
-            and args.index(name) + 1 < len(args) else None
-
-    root = repo_root()
-    since = flag_val("--since")
-    seat_filter = flag_val("--seat")
-    threshold = flag_val("--threshold")
-    gate = "--gate" in args
-    print_only = "--cycle" in args or gate
-
-    ledger = root / SOCOM_DIR / "ledger" / "runs.jsonl"
-    if not ledger.exists():
-        sys.exit("socom cycle: no ledger — .socom/ledger/runs.jsonl absent. "
-                 "Nothing measured yet; append runs before rolling a cycle "
-                 "(R6: degrade loudly, never a silent empty cycle).")
-    rows = []
-    for ln in ledger.read_text().splitlines():
-        ln = ln.strip()
-        if not ln:
-            continue
-        try:
-            r = json.loads(ln)
-        except json.JSONDecodeError:
-            sys.exit(f"socom cycle: RED — malformed ledger row: {ln[:80]!r}")
-        if since and r.get("ts", "") < since:
-            continue
-        if seat_filter and r.get("seat") != seat_filter:
-            continue
-        rows.append(r)
-    if not rows:
-        sys.exit("socom cycle: no rows after filters — nothing to roll up.")
 
     # Group attempts by promise, ordered by (attempt, ts). pass@1 reads the
     # first attempt's verdict; pass@k reads whether ANY attempt kept.
@@ -1342,11 +1312,7 @@ def cmd_cycle(args):
             succ_attempts.append(kept_at)
 
     with_contract = sum(1 for p in all_promises if p[0].get("contract"))
-    cycle = {
-        "socom": SOCOM_VERSION,
-        "generated_at": _now_iso(),
-        "ledger": str(ledger.relative_to(root)),
-        "filters": {"since": since, "seat": seat_filter},
+    return {
         "summary": {
             "total_runs": len(rows), "unique_promises": uniq,
             "pass_rate": pass_rate,
@@ -1363,6 +1329,54 @@ def cmd_cycle(args):
                               if succ_attempts else None,
             "worst_promise": worst[0], "worst_promise_attempts": worst[1],
         },
+    }
+
+
+def cmd_cycle(args):
+    import json
+
+    def flag_val(name):
+        return args[args.index(name) + 1] if name in args \
+            and args.index(name) + 1 < len(args) else None
+
+    root = repo_root()
+    since = flag_val("--since")
+    seat_filter = flag_val("--seat")
+    threshold = flag_val("--threshold")
+    gate = "--gate" in args
+    print_only = "--cycle" in args or gate
+
+    ledger = root / SOCOM_DIR / "ledger" / "runs.jsonl"
+    if not ledger.exists():
+        sys.exit("socom cycle: no ledger — .socom/ledger/runs.jsonl absent. "
+                 "Nothing measured yet; append runs before rolling a cycle "
+                 "(R6: degrade loudly, never a silent empty cycle).")
+    rows = []
+    for ln in ledger.read_text().splitlines():
+        ln = ln.strip()
+        if not ln:
+            continue
+        try:
+            r = json.loads(ln)
+        except json.JSONDecodeError:
+            sys.exit(f"socom cycle: RED — malformed ledger row: {ln[:80]!r}")
+        if since and r.get("ts", "") < since:
+            continue
+        if seat_filter and r.get("seat") != seat_filter:
+            continue
+        rows.append(r)
+    if not rows:
+        sys.exit("socom cycle: no rows after filters — nothing to roll up.")
+
+    metrics = _cycle_rollup(rows)
+    pass_rate = metrics["summary"]["pass_rate"]
+    hotspots = metrics["hotspots"]
+    cycle = {
+        "socom": SOCOM_VERSION,
+        "generated_at": _now_iso(),
+        "ledger": str(ledger.relative_to(root)),
+        "filters": {"since": since, "seat": seat_filter},
+        **metrics,
     }
 
     # --gate: pass-rate threshold — the testable both-directions unit.
