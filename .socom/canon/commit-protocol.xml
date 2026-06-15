@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- socom commit-protocol — the constitution §structured-commits (rank 11) made teachable.
+     The format `type(scope): desc` + the six blocks is already CHOSEN, and the commit-msg
+     gate (bin/socom cmd_gate) already ENFORCES it: subject regex RED, presence of [what]+[test]
+     amber, a [test] evidence-shape heuristic amber. What lived nowhere was the MEANING of each
+     block and the discipline that makes the blocks worth writing. This file is that teaching
+     layer: per-block semantics plus the discipline ported from Akili docs/COMMIT-PROTOCOL.md
+     (the pattern, not the block names — SOCOM keeps its own six). Every commit is institutional
+     memory: the next session reads the log alone and recovers the journey, not just the result.
+     Retrievable via socom query, compiled into CLAUDE.md. The gate stays advisory on the soft
+     blocks (velocity-first, §psychological-acceptability): document the meaning, do not block. -->
+<commit-protocol socom="0.1" see="structured-commits">
+
+  <!-- The six blocks SOCOM chose. The gate enforces subject + [what]/[test] presence; these
+       rules define what each block CARRIES, so the blocks are filled with signal, not ritual.
+       A commit is a handoff: write it so a cold session needs nothing but the log. -->
+  <blocks>
+    <block id="what" embed="true">
+      [what] — the change, in the imperative and concrete: which artifact, which
+      behaviour now differs. Not "improved things" — "extract _cycle_rollup, cmd_cycle
+      152 to 80 lines". The subject line is the headline; [what] is the precise diff in
+      one or two sentences. The gate requires [what] present (amber if missing).
+    </block>
+    <block id="why" embed="true">
+      [why] — the trigger and the decision. What task or breakage forced this, and —
+      when a fork was taken — which option was chosen and why the others were not. This
+      is where a design decision (canon vs template, fix vs leash, the residuality
+      verdict) is recorded so the next session inherits the reasoning, not just the
+      outcome. A [why] that only restates [what] wasted the block.
+    </block>
+    <block id="how" embed="true">
+      [how] — the mechanism and the key insight: the approach that worked and WHY it
+      worked when the obvious one did not. The one line that saves the next session
+      thirty minutes of re-discovery lives here ("sensor cursors are STRINGS, not
+      dicts"). Mechanism, not narration of every edit.
+    </block>
+    <block id="test" embed="true">
+      [test] — the verification evidence, replayable not quotable: the command run and
+      its result/exit code, re-run AFTER the last edit (§verify-never-claim). "smoke
+      green; unit 51 passed; doctor clean; index emits 1 commit-protocol chunk". An
+      EMPTY [test] block is a verify-never-claim violation in writing — the gate warns
+      on a [test] that reads like a claim ("should work") rather than evidence.
+    </block>
+    <block id="broke" embed="true">
+      [broke] — the journey: what was tried and FAILED, and the real error text
+      verbatim (never paraphrased — the exact string grep would find). Dead ends are
+      the most valuable lines in the message: "Approach 1 failed because X" stops the
+      next session repeating it. Empty only when nothing failed — and be honest,
+      something usually does.
+    </block>
+    <block id="next" embed="true">
+      [next] — the baton: the single most important thing the next session should do,
+      and any state still broken or deferred. A deferred shortcut names its follow-up
+      task id here (§no-quick-fixes-without-a-leash). This is what the next session
+      reads first.
+    </block>
+  </blocks>
+
+  <!-- The discipline — Akili docs/COMMIT-PROTOCOL.md ported as the teaching layer. Each rule
+       is why the blocks above are worth the keystrokes: git log IS institutional memory, and
+       these are the habits that keep it mineable. -->
+  <discipline>
+    <rule id="journey-not-just-result" embed="true">
+      Never commit without the journey. "fix: resolved error" is worthless — what
+      error, what caused it, what was tried first. Every session starts from zero;
+      re-discovery is the number-one time killer. The commit that records the dead end
+      is the one that saves the next session from walking into it.
+    </rule>
+    <rule id="verbatim-errors" embed="true">
+      Paste real error messages, verbatim — the exact string grep would find, the
+      signal line not the full stack trace, never a paraphrase. A paraphrased error is
+      ungreppable and therefore lost. This is the same rule as §verbatim-protocol
+      applied to the log: the exact text carries signal a summary destroys.
+    </rule>
+    <rule id="record-dead-ends" embed="true">
+      Record what failed and why. "Approach 1: used RunRequest with partition_key
+      directly to ERROR: requires asset_selection" prevents the next agent from trying
+      it. Honesty over tidiness: a clean message that hides two failed approaches has
+      thrown away the most useful thing the session learned.
+    </rule>
+    <rule id="one-logical-change" embed="true">
+      One logical change per commit — atomic. Do not mix a doc edit, a bug fix, and an
+      infra change in one commit. Each commit is a single reversible unit; mixing them
+      makes [broke]/[next] ambiguous and makes a clean revert impossible.
+    </rule>
+    <rule id="verification-non-negotiable" embed="true">
+      Verification is non-negotiable: every commit records what was checked and whether
+      it passed, in [test], re-run after the final edit. Evidence from a different
+      session or from before the last change does not count (§verify-never-claim). The
+      [test] block is the contract the commit-msg gate checks for evidence shape.
+    </rule>
+    <rule id="grep-the-journey" embed="true">
+      The log is queryable institutional memory. `git log --grep` mines it: by error
+      string to find who hit it before, by scope to see a subsystem's whole journey, by
+      "[broke]" to find every commit where something failed first. Writing the blocks
+      well is what makes these queries return signal years later.
+    </rule>
+  </discipline>
+
+  <!-- Where the line is drawn (constitution §structured-commits + the gate). The format and
+       the two hard checks are settled; this file does not move them, it explains them. -->
+  <enforcement embed="true">
+    The commit-msg gate (`socom gate commit-msg`) is the mechanical floor: subject
+    `type(scope): description` is RED (blocks), and missing [what] or [test] is amber
+    (warns + logs a breach, never blocks) — velocity-first, the safe path stays the
+    easy path (§psychological-acceptability). The four soft blocks ([why] [how] [broke]
+    [next]) are deliberately NOT hard-checked: their value is judgement, not presence,
+    and a gate that blocked on them would be routed around. This protocol documents
+    their meaning so they are written well; the gate guarantees only the floor.
+  </enforcement>
+
+</commit-protocol>

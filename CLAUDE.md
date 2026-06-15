@@ -1,4 +1,4 @@
-<!-- socom:generated v=0.1 source=e3a534b497b7 — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
+<!-- socom:generated v=0.1 source=022e67cc361f — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
 # socom — SOCOM substrate
 
 Protocol over participants: the rules below bind every participant — agent or human. Canonical source: `.socom/` + `socom.yaml`.
@@ -214,6 +214,28 @@ Falsifiable checklist — Saltzer & Schroeder (1975) principles, each a test a d
 - **psychological-acceptability** — Make the protected path the easy path, or people route around it. SOCOM: velocity-first — gates warn-not-block locally precisely so they are never disabled. Fail it when the safe path is so painful it invites bypass.
 - **work-factor** — Weigh the cost of doing it right against the cost of going around. SOCOM inverts it: renegotiating a contract is deliberately CHEAPER than bypassing it. Fail it when the wrong path is the cheap path.
 - **compromise-recording** — When you cannot prevent, record — a detectable breach beats a silent one. SOCOM: the breach ledger (`socom breach`), amber gates that warn-and-log and feed trust scoring. Fail it when a fail-open path leaves no trace.
+
+## Commit protocol (constitution §structured-commits)
+
+Every commit is institutional memory — the next session reads the log alone and recovers the journey. The six blocks and what each carries; full text in `.socom/canon/commit-protocol.xml`.
+
+| Block | Carries |
+|---|---|
+| `[what]` | the change, in the imperative and concrete: which artifact, which behaviour now differs. |
+| `[why]` | the trigger and the decision. |
+| `[how]` | the mechanism and the key insight: the approach that worked and WHY it worked when the obvious one did not. |
+| `[test]` | the verification evidence, replayable not quotable: the command run and its result/exit code, re-run AFTER the last edit (§verify-never-claim). |
+| `[broke]` | the journey: what was tried and FAILED, and the real error text verbatim (never paraphrased — the exact string grep would find). |
+| `[next]` | the baton: the single most important thing the next session should do, and any state still broken or deferred. |
+
+The discipline (Akili-ported teaching layer):
+
+- **journey-not-just-result** — Never commit without the journey. "fix: resolved error" is worthless — what error, what caused it, what was tried first. Every session starts from zero; re-discovery is the number-one time killer. The commit that records the dead end is the one that saves the next session from walking into it.
+- **verbatim-errors** — Paste real error messages, verbatim — the exact string grep would find, the signal line not the full stack trace, never a paraphrase. A paraphrased error is ungreppable and therefore lost. This is the same rule as §verbatim-protocol applied to the log: the exact text carries signal a summary destroys.
+- **record-dead-ends** — Record what failed and why. "Approach 1: used RunRequest with partition_key directly to ERROR: requires asset_selection" prevents the next agent from trying it. Honesty over tidiness: a clean message that hides two failed approaches has thrown away the most useful thing the session learned.
+- **one-logical-change** — One logical change per commit — atomic. Do not mix a doc edit, a bug fix, and an infra change in one commit. Each commit is a single reversible unit; mixing them makes [broke]/[next] ambiguous and makes a clean revert impossible.
+- **verification-non-negotiable** — Verification is non-negotiable: every commit records what was checked and whether it passed, in [test], re-run after the final edit. Evidence from a different session or from before the last change does not count (§verify-never-claim). The [test] block is the contract the commit-msg gate checks for evidence shape.
+- **grep-the-journey** — The log is queryable institutional memory. `git log --grep` mines it: by error string to find who hit it before, by scope to see a subsystem's whole journey, by "[broke]" to find every commit where something failed first. Writing the blocks well is what makes these queries return signal years later.
 
 ## Repo bindings (socom.yaml)
 

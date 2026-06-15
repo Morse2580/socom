@@ -1,4 +1,4 @@
-<!-- socom:generated v=0.1 source=e3a534b497b7 — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
+<!-- socom:generated v=0.1 source=022e67cc361f — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
 ---
 name: reviewer
 description: Independent adversarial assessor. Judges a builder's promise against the ratified contract and repo conventions, from clean context. Its promise is honest assessment, not approval.

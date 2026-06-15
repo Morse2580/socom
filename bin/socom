@@ -55,7 +55,8 @@ except ImportError:
 SOCOM_VERSION = "0.1"
 SOCOM_DIR = ".socom"  # the substrate root under any repo — single source of truth
 CANON_FILES = ["constitution.xml", "roles.xml", "gates.xml", "session.xml",
-               "doctrine.xml", "forge.xml", "residuality.xml"]
+               "doctrine.xml", "forge.xml", "residuality.xml",
+               "commit-protocol.xml"]
 # The substrate dirs every repo needs under .socom/ — single source of truth,
 # shared by init (plants them) and precond (heals them).
 SUBSTRATE_DIRS = ["memory/memories", "lessons", "handoffs", "prompts",
@@ -276,6 +277,26 @@ def render_body(root: Path, cfg: dict) -> str:
         for p in resid.findall("principles/principle"):
             out.append(f"- **{p.get('id')}** — " +
                        " ".join((p.text or "").split()))
+        out.append("")
+
+    cp_f = root / SOCOM_DIR / "canon" / "commit-protocol.xml"
+    if cp_f.exists():
+        cp = ET.parse(cp_f).getroot()
+        out.append("## Commit protocol (constitution §structured-commits)\n")
+        out.append("Every commit is institutional memory — the next session reads "
+                   "the log alone and recovers the journey. The six blocks and what "
+                   "each carries; full text in `.socom/canon/commit-protocol.xml`.\n")
+        out.append("| Block | Carries |\n|---|---|")
+        for b in cp.findall("blocks/block"):
+            essence = " ".join((b.text or "").split()).split(". ")[0] + "."
+            # strip the leading "[id] — " label the rule text repeats; the
+            # Block column already carries it (reviewer nit, #7).
+            essence = re.sub(r"^\[%s\]\s*—\s*" % b.get("id"), "", essence)
+            out.append(f"| `[{b.get('id')}]` | {essence} |")
+        out.append("\nThe discipline (Akili-ported teaching layer):\n")
+        for r in cp.findall("discipline/rule"):
+            out.append(f"- **{r.get('id')}** — " +
+                       " ".join((r.text or "").split()))
         out.append("")
 
     out.append("## Repo bindings (socom.yaml)\n")
