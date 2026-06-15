@@ -272,6 +272,58 @@ EOF
 check "contract verify PASSes when no auto check fails (manual pending)" 0 $?
 "$SOCOM" contract show .socom/promises/contract-ok.xml | grep -q "only an auto-passing check" \
   && ok "contract show prints the goal + checks" || bad "contract show wrong"
+
+# --record (#6f): a verify outcome becomes a real ledger row — the first
+# automatic producer for the run ledger (cycle/lesson otherwise see synthetic).
+rm -rf .socom/ledger
+cat > .socom/promises/contract-rec.xml <<'EOF'
+<promise id="P-REC" state="open"><promiser seat="builder" participant="x"/>
+  <contract ref="C-REC" state="ratified">
+  <goal>a recordable, fully-auto verify</goal>
+  <check id="1" assessor="gate:task-completion"><run>true</run><expect>passes</expect></check>
+</contract></promise>
+EOF
+"$SOCOM" contract verify .socom/promises/contract-rec.xml >/dev/null 2>&1
+[ ! -f .socom/ledger/runs.jsonl ] \
+  && ok "contract verify without --record writes no ledger row" \
+  || bad "verify wrote a ledger row without --record"
+"$SOCOM" contract verify .socom/promises/contract-rec.xml --record >/dev/null 2>&1
+[ -f .socom/ledger/runs.jsonl ] && [ "$(wc -l < .socom/ledger/runs.jsonl)" -eq 1 ] \
+  && grep -q '"verdict": "kept"' .socom/ledger/runs.jsonl \
+  && grep -q '"seat": "builder"' .socom/ledger/runs.jsonl \
+  && ok "contract verify --record appends a kept ledger row" \
+  || bad "record row wrong: $(cat .socom/ledger/runs.jsonl 2>&1)"
+"$SOCOM" contract verify .socom/promises/contract-rec.xml --record >/dev/null 2>&1
+[ "$(wc -l < .socom/ledger/runs.jsonl)" -eq 2 ] \
+  && grep -q '"attempt": 2' .socom/ledger/runs.jsonl \
+  && ok "contract verify --record increments attempt per promise" \
+  || bad "attempt not incremented"
+cat > .socom/promises/contract-rec-m.xml <<'EOF'
+<promise id="P-RECM" state="open"><promiser seat="builder" participant="x"/>
+  <contract ref="C-RECM" state="ratified">
+  <goal>auto-pass plus a manual check pending</goal>
+  <check id="1" assessor="gate:task-completion"><run>true</run><expect>passes</expect></check>
+  <check id="2" assessor="reviewer"><expect>human reads the diff</expect></check>
+</contract></promise>
+EOF
+REC_BEFORE=$(wc -l < .socom/ledger/runs.jsonl)
+RECM="$("$SOCOM" contract verify .socom/promises/contract-rec-m.xml --record 2>&1)"
+REC_AFTER=$(wc -l < .socom/ledger/runs.jsonl)
+echo "$RECM" | grep -qi "withheld" && [ "$REC_BEFORE" = "$REC_AFTER" ] \
+  && ok "contract verify --record withholds the row while a manual check is pending" \
+  || bad "manual-pending record not withheld (before=$REC_BEFORE after=$REC_AFTER)"
+cat > .socom/promises/contract-rec-empty.xml <<'EOF'
+<promise id="P-RECE" state="open"><promiser seat="builder" participant="x"/>
+  <contract ref="C-RECE" state="ratified"><goal>no checks at all</goal></contract></promise>
+EOF
+REC_BEFORE=$(wc -l < .socom/ledger/runs.jsonl)
+RECE="$("$SOCOM" contract verify .socom/promises/contract-rec-empty.xml --record 2>&1)"
+REC_AFTER=$(wc -l < .socom/ledger/runs.jsonl)
+echo "$RECE" | grep -qi "no auto check ran" && [ "$REC_BEFORE" = "$REC_AFTER" ] \
+  && ok "contract verify --record withholds a vacuous 'kept' when no auto check ran" \
+  || bad "zero-check record not withheld (before=$REC_BEFORE after=$REC_AFTER)"
+"$SOCOM" cycle >/dev/null 2>&1; check "cycle consumes the verify-recorded rows (round-trip)" 0 $?
+rm -rf .socom/ledger .socom/cycles
 rm -rf .socom/promises
 
 # 10e. precond — velocity-first work-readiness pre-flight (the published gate)

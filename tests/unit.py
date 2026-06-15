@@ -217,6 +217,41 @@ eq("_verify_summary FAILS when an auto check fails",
 check("_verify_summary: a manual check is never counted passed",
       socom._verify_summary([{"auto": False, "passed": False}])["passed"] == 0)
 
+# ── ledger recording (#6f: _next_attempt / _ledger_row) ───────────────────────
+_rows = [
+    {"promise": "P-A", "contract": "C-A", "attempt": 1},
+    {"promise": "P-A", "contract": "C-A", "attempt": 2},
+    {"promise": "P-B", "contract": "C-B", "attempt": 1},
+]
+eq("_next_attempt: first run of an unseen pair is 1",
+   socom._next_attempt(_rows, "P-NEW", "C-NEW"), 1)
+eq("_next_attempt: one past the highest attempt for the pair",
+   socom._next_attempt(_rows, "P-A", "C-A"), 3)
+eq("_next_attempt: per-(promise,contract), not global",
+   socom._next_attempt(_rows, "P-B", "C-B"), 2)
+eq("_next_attempt: empty ledger is attempt 1",
+   socom._next_attempt([], "P-A", "C-A"), 1)
+
+_ok = {"passed": 1, "failed": 0, "manual": 0, "ok": True}
+_bad = {"passed": 0, "failed": 1, "manual": 0, "ok": False}
+_row = socom._ledger_row("P-A", "builder", "C-A", _ok, 1,
+                         "2026-06-15T00:00:00+00:00", 7)
+eq("_ledger_row: keys are exactly the ledger wire contract",
+   sorted(_row.keys()),
+   ["attempt", "contract", "duration_s", "exit_code", "gate_band",
+    "promise", "seat", "ts", "verdict"])
+check("_ledger_row: ok summary -> verdict kept, exit_code 0",
+      _row["verdict"] == "kept" and _row["exit_code"] == 0)
+check("_ledger_row: carries seat/promise/contract/attempt/duration verbatim",
+      _row["seat"] == "builder" and _row["promise"] == "P-A"
+      and _row["contract"] == "C-A" and _row["attempt"] == 1
+      and _row["duration_s"] == 7)
+check("_ledger_row: gate_band is red (the task-completion assessment band)",
+      _row["gate_band"] == "red")
+_brow = socom._ledger_row("P-A", "builder", "C-A", _bad, 2, "t", 0)
+check("_ledger_row: failed summary -> verdict broken, exit_code 1",
+      _brow["verdict"] == "broken" and _brow["exit_code"] == 1)
+
 # ── summary ──────────────────────────────────────────────────────────────────
 print(f"unit: {_PASS} passed, {_FAIL} failed")
 raise SystemExit(1 if _FAIL else 0)

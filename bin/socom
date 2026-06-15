@@ -27,7 +27,8 @@ Commands:
   introspect post-session self-capture: handoff evidence -> replayable
            assertion log (+ lesson candidates from captured failures), no model
   contract make the contract testable: verify runs a contract's <check> <run>
-           commands (PASS/FAIL on exit), flags no-run checks MANUAL | show
+           commands (PASS/FAIL on exit), flags no-run checks MANUAL; --record
+           appends the outcome to the run ledger (cycle data) | show
   greet    adoption-ladder greeting — where you are, what's next
   install  symlink this checkout onto PATH (~/.local/bin) so `socom` just works
   uninstall remove the socom symlink (only if it points at this checkout)
@@ -1477,9 +1478,43 @@ def _verify_summary(results: list) -> dict:
             "ok": failed == 0}
 
 
+def _next_attempt(rows: list, promise: str, contract: str) -> int:
+    """Pure: the 1-based attempt number for the next (promise, contract)
+    execution — one past the highest attempt already recorded for that pair.
+    cycle groups pass@1/pass@k by promise, so the attempt sequence is
+    per-promise; attempt 1's verdict decides pass@1 (schemas/ledger.xml)."""
+    prior = [int(r.get("attempt", 0)) for r in rows
+             if r.get("promise") == promise and r.get("contract") == contract]
+    return (max(prior) + 1) if prior else 1
+
+
+def _ledger_row(promise, seat, contract, summary, attempt, ts, duration_s) -> dict:
+    """Pure: a verify outcome -> one ledger JSONL row (the schemas/ledger.xml
+    field contract — these keys ARE the wire keys). verdict 'kept' iff no auto
+    check failed; gate_band 'red' because a contract verify is the
+    task-completion-band assessment that decides done. Only ever called for a
+    fully-mechanical verify (manual==0) — the manual-pending guard lives in the
+    caller so the mechanical assessor never records a verdict it cannot make
+    (constitution §context-economy / §separation-of-privilege)."""
+    return {
+        "ts": ts,
+        "seat": seat,
+        "promise": promise,
+        "contract": contract,
+        "gate_band": "red",
+        "exit_code": 0 if summary["ok"] else 1,
+        "duration_s": duration_s,
+        "attempt": attempt,
+        "verdict": "kept" if summary["ok"] else "broken",
+    }
+
+
 def cmd_contract(args):
+    record = "--record" in args
+    args = [a for a in args if a != "--record"]
     if not args or args[0] not in ("verify", "show"):
-        sys.exit("usage: socom contract <verify|show> <promise-or-contract.xml>")
+        sys.exit("usage: socom contract <verify|show> <promise-or-contract.xml> "
+                 "[--record]")
     sub = args[0]
     if len(args) < 2:
         sys.exit(f"usage: socom contract {sub} <promise-or-contract.xml>")
@@ -1514,6 +1549,8 @@ def cmd_contract(args):
     if state != "ratified":
         print(f"socom contract: WARN — {contract.get('ref', '?')} state is "
               f"'{state}', not 'ratified' (work runs against ratified contracts).")
+    import json, time
+    _t0 = time.monotonic()
     results = []
     for c in checks:
         if c["auto"]:
@@ -1534,12 +1571,58 @@ def cmd_contract(args):
             print(f"    expect: {c['expect']}")
             results.append({**c, "passed": False})
 
+    duration_s = int(time.monotonic() - _t0)
     s = _verify_summary(results)
     print(f"socom contract verify: {s['passed']} passed, {s['failed']} failed, "
           f"{s['manual']} manual -> {'OK' if s['ok'] else 'FAILED'}")
     if s["manual"]:
         print(f"  {s['manual']} manual check(s) still need an assessor — "
               "verify confirms the auto checks only (fail-closed on the rest).")
+
+    # --record: append this verify outcome to the run ledger so `socom cycle`
+    # rolls REAL data (the first automatic producer; cycle/lesson otherwise
+    # measure synthetic rows). Guarded: a row is the assessment of record, not
+    # every exploratory run, so it is opt-in. A promise (id + promiser seat) is
+    # required — a standalone contract has no executing seat to attribute. And
+    # a row is WITHHELD while any check is MANUAL: the verdict then belongs to
+    # the human assessor, and the mechanical assessor must not claim it
+    # (constitution §separation-of-privilege — assessment is never delegated to
+    # the promiser). The row is the same fail-closed posture #6 gave verify.
+    if record:
+        promiser = root_el.find("promiser") if root_el.tag == "promise" else None
+        promise_id = root_el.get("id") if root_el.tag == "promise" else None
+        seat = promiser.get("seat") if promiser is not None else None
+        if not promise_id or not seat:
+            print("socom contract verify: --record needs a promise with a "
+                  "promiser seat (a standalone contract has no executing seat "
+                  "to attribute) — no ledger row written.", file=sys.stderr)
+        elif s["manual"]:
+            print("socom contract verify: --record withheld — "
+                  f"{s['manual']} manual check(s) pending; the verdict is the "
+                  "human assessor's to record, not the mechanical runner's "
+                  "(§separation-of-privilege).", file=sys.stderr)
+        elif s["passed"] + s["failed"] == 0:
+            print("socom contract verify: --record withheld — no auto check "
+                  "ran, so there is no evidence to record. A vacuous 'kept' in "
+                  "the ledger is exactly what verify-never-claim forbids.",
+                  file=sys.stderr)
+        else:
+            ledger = root / SOCOM_DIR / "ledger" / "runs.jsonl"
+            ledger.parent.mkdir(parents=True, exist_ok=True)
+            rows = []
+            if ledger.exists():
+                for ln in ledger.read_text().splitlines():
+                    if ln.strip():
+                        rows.append(json.loads(ln))
+            attempt = _next_attempt(rows, promise_id, contract.get("ref"))
+            row = _ledger_row(promise_id, seat, contract.get("ref"), s,
+                              attempt, _now_iso(), duration_s)
+            with ledger.open("a") as fh:
+                fh.write(json.dumps(row) + "\n")
+            print(f"socom contract verify: recorded ledger row — {seat} "
+                  f"{promise_id} attempt {attempt} verdict {row['verdict']} "
+                  f"(.socom/ledger/runs.jsonl).")
+
     if not s["ok"]:
         sys.exit(1)
 
