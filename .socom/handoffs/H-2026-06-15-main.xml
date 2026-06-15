@@ -1,8 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <handoff socom="0.1" id="H-2026-06-15-main" branch="main"
          date="2026-06-15T20:36:47+00:00">
-  <summary embed="true">commit-protocol (#7) extracted to canon — the six blocks' semantics documented</summary>
+  <summary embed="true">two increments: commit-protocol to canon (#7) + contract verify --record, the first real ledger producer (#6f-1)</summary>
   <done embed="true">
+    **Backlog #6f-1 — contract verify --record** (commit 927905d, pushed +
+    CI-verified green run 27575828642 conclusion=success). The FIRST automatic
+    run-ledger producer: `socom contract verify &lt;promise&gt; --record` appends one
+    row to .socom/ledger/runs.jsonl (schemas/ledger.xml 9-key wire contract) on
+    a fully-mechanical verify, so `socom cycle`/`lesson` begin measuring REAL
+    pass@1/pass@k instead of synthetic fixtures — the long-open ledger
+    auto-append gap is now half-closed (verify feed done; gate/builder feeds are
+    follow-ups). Two pure helpers (_next_attempt, _ledger_row) + IO/flag wiring;
+    unit 51->60, +6 smoke checks. Fail-closed (§separation-of-privilege): a
+    standalone contract (no executing seat), any manual-pending check, AND a
+    zero-auto-check verify all WITHHOLD the row — the mechanical runner never
+    records a verdict it cannot claim. Opt-in by design (verify is the runner;
+    auto-recording every run would flood the ledger + inflate attempt counts).
+    Independent reviewer ACCEPT-WITH-NITS, 8/8 contract checks; one real
+    verify-never-claim nit (zero-check promise recorded a vacuous "kept") caught
+    + closed + smoke-covered before commit.
+
     **Backlog #7 — commit-protocol to canon** (commit 11ad743, pushed +
     CI-verified green run 27574744393 conclusion=success). Seventh Akili to
     SOCOM extraction. The commit format `type(scope): desc` + six blocks
@@ -42,15 +59,18 @@
     are prompted at write time. Build only if the operator wants the scaffold;
     the canon docs already close the meaning gap.
 
-    Still open (unchanged from #6 handoff): #6f contract followups (standalone
-    `.socom/contracts/` storage, §R10 renegotiation, record verify to
-    assertion-log/ledger, per-contract cycle metrics) — the "verify to ledger"
-    piece starts closing the long-open ledger auto-append gap (cycle/lesson still
-    measure synthetic data). SM-3 remainder (cmd_gate CC39 / render_body CC23) —
-    far below the eliminated cmd_cycle outlier; decompose only if they bite.
-    precond wired into bootstrap guidance (velocity, not a blocking gate).
+    #6f-2 (verify->ledger DONE this session in 927905d; REST open): standalone
+    `.socom/contracts/` storage + lifecycle, §R10 renegotiation, per-contract
+    pass@1/pass@k in cmd_cycle, and wire `--record` into the task-completion gate
+    / closeout so the ledger fills WITHOUT the manual flag (the next step that
+    makes cycle measure real data by default, not just on demand). SM-3 remainder
+    (cmd_gate CC39 / render_body CC23) — far below the eliminated cmd_cycle
+    outlier; decompose only if they bite. precond wired into bootstrap guidance
+    (velocity, not a blocking gate).
   </undone>
   <recent-commits>
+    <commit>927905d feat(cli): socom contract verify --record — the first real ledger producer</commit>
+    <commit>c90db3a chore(platform): session closeout — #7 DONE, handoff + regenerated prompt</commit>
     <commit>11ad743 feat(canon): commit-protocol.xml — document the six blocks' semantics + Akili discipline</commit>
     <commit>a111cef fix(cli): malformed handoff + the gate gap that let it through (xmlcheck)</commit>
     <commit>d9c6a9a chore(platform): session closeout — handoff (#6 + SM-1/2/3), regenerated prompt</commit>
@@ -59,8 +79,6 @@
     <commit>41a1cce docs(socom): backlog — SM-3 cmd_cycle DONE (CC-61 outlier eliminated)</commit>
     <commit>b9400bf refactor(cli): SM-3 decompose cmd_cycle — extract pure _cycle_rollup, kill the CC-61 outlier</commit>
     <commit>3f0aa5a docs(socom): backlog — SM-2 DONE (utility layer), SM-3 decompose NEXT</commit>
-    <commit>eb7f490 refactor(cli): SM-2 utility layer — SOCOM_DIR + _now_iso(), kill the magic strings</commit>
-    <commit>336ca8e docs(socom): backlog — substrate self-maintenance initiative (SM-1 DONE)</commit>
   </recent-commits>
   <uncommitted>
 M .socom/prompts/next-session.md
@@ -80,12 +98,14 @@ M .socom/prompts/next-session.md
       forced to Node-24 from 2026-06-16. Not a blocker; the maintenance-debt row.
   </warnings>
   <next embed="true">
-    1. Backlog #6f — contract followups: standalone `.socom/contracts/` storage +
-       lifecycle, §R10 renegotiation, record `contract verify` results to the
-       assertion-log (#4 bridge) / a ledger row, per-contract pass@1/pass@k in
-       cmd_cycle. The "verify to ledger" piece starts closing ledger auto-append
-       (cycle/lesson still synthetic) — highest-leverage open thread.
-    2. Backlog #7b — commit-protocol operational scaffold (.gitmessage via
+    1. Backlog #6f-2 — finish the ledger auto-append: wire `contract verify
+       --record` into the task-completion gate / closeout so the ledger fills by
+       default (not just on demand); then per-contract pass@1/pass@k in cmd_cycle.
+       This is what makes cycle measure real data WITHOUT a manual flag — the
+       highest-leverage next step on the thread #6f-1 opened.
+    2. Backlog #6f rest — standalone `.socom/contracts/` storage + lifecycle, §R10
+       renegotiation (new version + originator re-ratification + diff).
+    3. Backlog #7b — commit-protocol operational scaffold (.gitmessage via
        compile + git config commit.template) — only if the operator wants the
        write-time prompt; the canon docs already close the meaning gap.
     3. SM-3 remainder (cmd_gate CC39 / render_body CC23) only if they bite;

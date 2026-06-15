@@ -4,3 +4,4 @@
 2026-06-13T21:19:56+00:00	commit-msg	amber: [test] block has no evidence-shaped content	resolved=2026-06-14T06:58:50+00:00	note=early-session commit-msg [test] blocks carried evidence in prose, not the $cmd/rc= shape the heuristic wants; corrected from c405560 onward (now always paste command + exit code). Lesson captured for backlog #2.
 2026-06-14T08:34:14+00:00	commit-msg	amber: [test] block has no evidence-shaped content	resolved=2026-06-14T08:49:12+00:00	note=resolved
 2026-06-15T20:38:10+00:00	session-end	amber: unreleased claims ['canon', 'cli']	resolved=2026-06-15T20:38:38+00:00	note=resolved
+2026-06-15T20:59:37+00:00	session-end	amber: unreleased claims ['cli']	resolved=2026-06-15T21:00:15+00:00	note=resolved

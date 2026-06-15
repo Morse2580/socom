@@ -1,7 +1,7 @@
-<!-- socom:prompt id=P-2026-06-15-main generated=2026-06-15T20:38:05+00:00 source-handoff=H-2026-06-15-main.xml — regenerated each closeout, do not commit by hand -->
+<!-- socom:prompt id=P-2026-06-15-main generated=2026-06-15T21:00:08+00:00 source-handoff=H-2026-06-15-main.xml — regenerated each closeout, do not commit by hand -->
 # Next session — socom
 
-**Prompt-id:** `P-2026-06-15-main` · **Generated:** 2026-06-15T20:38:05+00:00 · **From handoff:** `H-2026-06-15-main.xml` (as-of 2026-06-15T20:36:47+00:00)
+**Prompt-id:** `P-2026-06-15-main` · **Generated:** 2026-06-15T21:00:08+00:00 · **From handoff:** `H-2026-06-15-main.xml` (as-of 2026-06-15T20:36:47+00:00)
 
 You are resuming work on this repo's SOCOM substrate. Begin by:
 
@@ -15,23 +15,26 @@ You are resuming work on this repo's SOCOM substrate. Begin by:
 ## Inherited state (from H-2026-06-15-main.xml)
 handoff was fully filled at closeout
 
-## Claim verification (13/17 verified at generation time)
+## Claim verification (14/20 verified at generation time)
+- VERIFIED: path schemas/ledger.xml exists
+- HYPOTHESIS: path .socom/ledger/runs.jsonl NOT FOUND in repo
+- VERIFIED: path .socom/prompts/next-session.md exists
 - HYPOTHESIS: path CLAUDE.md/AGENTS.md NOT FOUND in repo
 - VERIFIED: path .socom/index/chunks.jsonl exists
-- VERIFIED: path .socom/prompts/next-session.md exists
-- VERIFIED: commit a111cef
-- VERIFIED: commit d9c6a9a
-- VERIFIED: commit 336ca8e
-- HYPOTHESIS: commit 022e67cc361f
-- VERIFIED: commit b9400bf
-- VERIFIED: commit 11ad743
-- VERIFIED: commit eb7f490
-- VERIFIED: commit 2e47cfb
-- VERIFIED: commit 1b33918
-- VERIFIED: commit 41a1cce
-- HYPOTHESIS: commit e3a534b497b7
-- VERIFIED: commit b28ada4
 - HYPOTHESIS: commit 27574744393
+- VERIFIED: commit c90db3a
+- VERIFIED: commit d9c6a9a
+- VERIFIED: commit 41a1cce
+- VERIFIED: commit 927905d
 - VERIFIED: commit 3f0aa5a
+- HYPOTHESIS: commit e3a534b497b7
+- VERIFIED: commit 1b33918
+- VERIFIED: commit 11ad743
+- VERIFIED: commit a111cef
+- VERIFIED: commit b9400bf
+- VERIFIED: commit b28ada4
+- HYPOTHESIS: commit 022e67cc361f
+- VERIFIED: commit 2e47cfb
+- HYPOTHESIS: commit 27575828642
 
 Anything marked HYPOTHESIS must be re-checked before you rely on it.
