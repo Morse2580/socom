@@ -1,40 +1,35 @@
-<!-- socom:prompt id=P-2026-06-15-main generated=2026-06-15T21:00:08+00:00 source-handoff=H-2026-06-15-main.xml — regenerated each closeout, do not commit by hand -->
+<!-- socom:prompt id=P-2026-06-16-main generated=2026-06-16T21:04:59+00:00 source-handoff=H-2026-06-16-main.xml — regenerated each closeout, do not commit by hand -->
 # Next session — socom
 
-**Prompt-id:** `P-2026-06-15-main` · **Generated:** 2026-06-15T21:00:08+00:00 · **From handoff:** `H-2026-06-15-main.xml` (as-of 2026-06-15T20:36:47+00:00)
+**Prompt-id:** `P-2026-06-16-main` · **Generated:** 2026-06-16T21:04:59+00:00 · **From handoff:** `H-2026-06-16-main.xml` (as-of 2026-06-16T21:04:21+00:00)
 
 You are resuming work on this repo's SOCOM substrate. Begin by:
 
 1. `socom gate session-start` (drift check + orphan reaper + breach debt — NON-NEGOTIABLE)
-2. Read `.socom/handoffs/H-2026-06-15-main.xml` end-to-end — the exit state you inherit.
+2. Read `.socom/handoffs/H-2026-06-16-main.xml` end-to-end — the exit state you inherit.
 3. `socom claim --scan`, then claim your domain before any work.
 4. Load the session-start section of `.socom/memory/INDEX.md` and the lessons
    for your domain.
 5. Non-trivial work: enter plan mode; ratify a contract before code.
 
-## Inherited state (from H-2026-06-15-main.xml)
+## Inherited state (from H-2026-06-16-main.xml)
 handoff was fully filled at closeout
 
-## Claim verification (14/20 verified at generation time)
+## Claim verification (13/15 verified at generation time)
 - VERIFIED: path schemas/ledger.xml exists
-- HYPOTHESIS: path .socom/ledger/runs.jsonl NOT FOUND in repo
-- VERIFIED: path .socom/prompts/next-session.md exists
-- HYPOTHESIS: path CLAUDE.md/AGENTS.md NOT FOUND in repo
 - VERIFIED: path .socom/index/chunks.jsonl exists
-- HYPOTHESIS: commit 27574744393
-- VERIFIED: commit c90db3a
-- VERIFIED: commit d9c6a9a
+- HYPOTHESIS: path .socom/ledger/runs.jsonl NOT FOUND in repo
+- VERIFIED: commit 84e99e4
 - VERIFIED: commit 41a1cce
+- VERIFIED: commit ecb3e9e
 - VERIFIED: commit 927905d
-- VERIFIED: commit 3f0aa5a
-- HYPOTHESIS: commit e3a534b497b7
-- VERIFIED: commit 1b33918
 - VERIFIED: commit 11ad743
-- VERIFIED: commit a111cef
-- VERIFIED: commit b9400bf
 - VERIFIED: commit b28ada4
-- HYPOTHESIS: commit 022e67cc361f
+- VERIFIED: commit a111cef
+- VERIFIED: commit d9c6a9a
+- VERIFIED: commit 1b33918
+- VERIFIED: commit c90db3a
+- HYPOTHESIS: commit 27647982908
 - VERIFIED: commit 2e47cfb
-- HYPOTHESIS: commit 27575828642
 
 Anything marked HYPOTHESIS must be re-checked before you rely on it.

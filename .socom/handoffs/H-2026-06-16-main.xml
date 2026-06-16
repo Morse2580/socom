@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<handoff socom="0.1" id="H-2026-06-16-main" branch="main"
+         date="2026-06-16T21:04:21+00:00">
+  <summary embed="true">#6f ledger auto-append CLOSED — both producers shipped (verify --record + task-completion gate)</summary>
+  <done embed="true">
+    **Backlog #6f-2 — task-completion gate records to the ledger by default**
+    (commit 84e99e4, pushed + CI-verified green run 27647982908
+    conclusion=success). The SECOND automatic run-ledger producer, completing the
+    ledger auto-append gap that has been open since cycle/lesson shipped.
+    `socom gate task-completion &lt;promise.xml&gt;` now records its assessment to
+    .socom/ledger/runs.jsonl — verdict kept iff the bound fast check passed, the
+    canonical "a gate assessed the promise -&gt; kept/broken" event
+    (schemas/ledger.xml). So `socom cycle`/`lesson` fill with REAL done-attempts
+    WITHOUT a manual flag — the done-gate an agent already runs is the producer.
+
+    Built on one SHARED writer `_append_ledger_row` (one wire format + one attempt
+    sequence, §least-common-mechanism) + a pure `_promise_ref`; the #6f-1 verify
+    --record path was refactored onto them (behavior-preserving). No promise arg
+    -&gt; behaviour unchanged. A broken attempt records BEFORE the RED exit (failed
+    done-attempts are the pass@1-vs-pass@k signal). Fail-closed: standalone /
+    manual-pending / zero-auto-check / UNBOUND-gate all record nothing — no real
+    check ran, so a vacuous "kept" is forbidden (§separation-of-privilege +
+    verify-never-claim). unit 60-&gt;66, +5 smoke checks.
+
+    Independent reviewer ACCEPT-WITH-NITS, 8/8 contract checks. Caught a real
+    class defect: `_gate_record` AND `cmd_contract` caught only ET.ParseError, so
+    a DIRECTORY arg raised an uncaught IsADirectoryError, crashing a PASSING gate
+    into a false RED. Fixed the class at BOTH parse sites (catch OSError too) +
+    added a directory-arg smoke case; re-ran full gate green before commit.
+
+    **Context — two-producer arc:** #6f-1 (commit 927905d, prior closeout
+    ecb3e9e) shipped `contract verify --record` (on-demand producer); #6f-2
+    (84e99e4) shipped the gate producer (by-default). Together they CLOSE the
+    long-open "ledger only measures synthetic data" gap from both altitudes.
+    Earlier same arc this session: #7 commit-protocol-&gt;canon (11ad743, closeout
+    c90db3a).
+  </done>
+  <undone embed="true">
+    #6f-3 (NOT built — the measurement-surface remainder): per-contract
+    pass@1/pass@k in cmd_cycle (cycle currently groups by seat + promise, not by
+    contract); standalone `.socom/contracts/&lt;id&gt;.xml` storage + lifecycle;
+    §R10 renegotiation (new version + originator re-ratification + diff).
+    Known acceptable interaction (worth a doctrine line someday, NOT a bug): if a
+    promise is recorded by BOTH `verify --record` and the task-completion gate,
+    two rows accrue (attempt 1, 2) — distinct assessments, cycle treats them as
+    sequential attempts. SM-3 remainder (cmd_gate CC / render_body CC) — decompose
+    only if they bite. #7b commit-protocol .gitmessage scaffold — only if wanted.
+  </undone>
+  <recent-commits>
+    <commit>84e99e4 feat(cli): task-completion gate records to the ledger — fills by default</commit>
+    <commit>ecb3e9e chore(platform): session closeout — #6f-1 verify→ledger DONE, handoff + prompt refreshed</commit>
+    <commit>927905d feat(cli): socom contract verify --record — the first real ledger producer</commit>
+    <commit>c90db3a chore(platform): session closeout — #7 DONE, handoff + regenerated prompt</commit>
+    <commit>11ad743 feat(canon): commit-protocol.xml — document the six blocks' semantics + Akili discipline</commit>
+    <commit>a111cef fix(cli): malformed handoff + the gate gap that let it through (xmlcheck)</commit>
+    <commit>d9c6a9a chore(platform): session closeout — handoff (#6 + SM-1/2/3), regenerated prompt</commit>
+    <commit>2e47cfb docs(socom): backlog — #6 contract verify DONE, #7 commit-protocol NEXT</commit>
+    <commit>1b33918 feat(cli): socom contract verify — make the validation contract testable</commit>
+    <commit>41a1cce docs(socom): backlog — SM-3 cmd_cycle DONE (CC-61 outlier eliminated)</commit>
+  </recent-commits>
+  <uncommitted>
+M .socom/index/chunks.jsonl
+?? .socom/claims/
+  </uncommitted>
+  <blockers embed="true">None.</blockers>
+  <warnings embed="true">
+    - .socom/ledger/runs.jsonl is now a LIVE artifact once any agent runs
+      `verify --record` or `gate task-completion &lt;promise&gt;`. It is append-only
+      and in-repo (§git-is-source-of-truth); a row is never edited, a correction
+      is a new row. cycle reads every row — a malformed row would RED cycle, so
+      only the two writers (one shared `_append_ledger_row`) should write it.
+    - .socom/index/chunks.jsonl churn on pre-push `full` (runs `socom index .`):
+      pre-existing non-stable-output behaviour, left as documented churn.
+    - CI carries the known Node-20 deprecation annotation (maintenance debt, commit
+      b28ada4) — actions forced to Node-24 from 2026-06-16 (today). Not a blocker.
+  </warnings>
+  <next embed="true">
+    1. Backlog #6f-3 — per-contract pass@1/pass@k in cmd_cycle: cycle now has REAL
+       rows flowing in (both producers live); extend the rollup to group by
+       contract, not just seat + promise. The natural next measurement step now
+       that real data feeds it.
+    2. Backlog #6f rest — standalone `.socom/contracts/` storage + lifecycle, §R10
+       renegotiation.
+    3. Backlog #7b — commit-protocol .gitmessage scaffold (compile + git config
+       commit.template), only if the operator wants the write-time prompt.
+    4. SM-3 remainder (cmd_gate / render_body decomposition) only if it bites.
+  </next>
+</handoff>
