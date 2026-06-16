@@ -323,6 +323,41 @@ echo "$RECE" | grep -qi "no auto check ran" && [ "$REC_BEFORE" = "$REC_AFTER" ] 
   && ok "contract verify --record withholds a vacuous 'kept' when no auto check ran" \
   || bad "zero-check record not withheld (before=$REC_BEFORE after=$REC_AFTER)"
 "$SOCOM" cycle >/dev/null 2>&1; check "cycle consumes the verify-recorded rows (round-trip)" 0 $?
+
+# task-completion gate records its assessment BY DEFAULT (#6f-2): the gate an
+# agent already runs to mark done fills the ledger without a manual flag — the
+# canonical "a gate assessed the promise" event. checks.fast is bound (echo
+# fast-ok) so the gate reaches the record path; an unbound gate records nothing.
+rm -rf .socom/ledger
+cat > .socom/promises/contract-gate.xml <<'EOF'
+<promise id="P-GATE" state="open" domain="cli"><promiser seat="builder" participant="x"/>
+  <contract ref="C-GATE" state="ratified"><goal>recorded at the done gate</goal>
+  <check id="1" assessor="gate"><run>true</run><expect>x</expect></check></contract></promise>
+EOF
+"$SOCOM" gate task-completion .socom/promises/contract-gate.xml >/dev/null 2>&1
+[ -f .socom/ledger/runs.jsonl ] && [ "$(wc -l < .socom/ledger/runs.jsonl)" -eq 1 ] \
+  && grep -q '"verdict": "kept"' .socom/ledger/runs.jsonl \
+  && grep -q '"promise": "P-GATE"' .socom/ledger/runs.jsonl \
+  && ok "gate task-completion records a kept ledger row for the promise" \
+  || bad "gate did not record: $(cat .socom/ledger/runs.jsonl 2>&1)"
+"$SOCOM" gate task-completion .socom/promises/contract-gate.xml >/dev/null 2>&1
+[ "$(wc -l < .socom/ledger/runs.jsonl)" -eq 2 ] && grep -q '"attempt": 2' .socom/ledger/runs.jsonl \
+  && ok "gate task-completion increments attempt across done-attempts" \
+  || bad "gate attempt not incremented"
+GB=$(wc -l < .socom/ledger/runs.jsonl); "$SOCOM" gate task-completion >/dev/null 2>&1
+GA=$(wc -l < .socom/ledger/runs.jsonl)
+[ "$GB" = "$GA" ] && ok "gate task-completion without a promise writes no row (unchanged)" \
+                  || bad "gate wrote a row without a promise arg"
+GB=$(wc -l < .socom/ledger/runs.jsonl); "$SOCOM" gate task-completion /no/such.xml >/dev/null 2>&1; GBR=$?
+GA=$(wc -l < .socom/ledger/runs.jsonl)
+[ "$GB" = "$GA" ] && [ "$GBR" = 0 ] \
+  && ok "gate task-completion with a bogus promise warns but still passes" \
+  || bad "gate mishandled a bogus promise arg (rc=$GBR before=$GB after=$GA)"
+# a DIRECTORY arg must not crash the gate into a false RED (OSError, not ParseError)
+"$SOCOM" gate task-completion .socom >/dev/null 2>&1
+[ $? = 0 ] && ok "gate task-completion with a directory arg warns but still passes (no crash)" \
+           || bad "gate crashed/blocked on a directory promise arg"
+"$SOCOM" cycle >/dev/null 2>&1; check "cycle round-trips the gate-recorded rows" 0 $?
 rm -rf .socom/ledger .socom/cycles
 rm -rf .socom/promises
 

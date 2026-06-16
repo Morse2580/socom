@@ -6,7 +6,9 @@ Commands:
   compile  render canonical store -> runtime adapters (CLAUDE.md, AGENTS.md,
            .cursor/rules, .claude/agents/, .githooks/)
   doctor   detect drift between canonical and compiled views; config health
-  gate     run a gate by id with band semantics (amber warns+logs, red blocks)
+  gate     run a gate by id with band semantics (amber warns+logs, red blocks);
+           `gate task-completion <promise.xml>` also records its verdict to the
+           run ledger (cycle data) — no promise arg, no row
   hydrate  copy repo memories into the Claude Code project memory dir
   index    emit (id, text, metadata) chunks from embed="true" elements (L1 RAG)
   claim    acquire a domain claim (TTL auto-expiry); --scan to list (R2)
@@ -835,6 +837,41 @@ def log_breach(root: Path, gate: str, detail: str):
 COMMIT_RX = re.compile(r"^(feat|fix|chore|refactor|test|docs)\([a-z0-9._-]+\): .+")
 
 
+def _gate_record(root, promise_arg, rc, duration_s):
+    """Record a task-completion assessment to the run ledger: the gate just
+    assessed the named promise — verdict kept iff the bound check passed. Best-
+    effort — a missing / malformed / standalone arg WARNS but never blocks the
+    gate (the gate's job is its check; the ledger row is the bonus that lets
+    `socom cycle` measure real done-attempts). Mirrors the fail-closed posture
+    of `contract verify --record` and writes through the one shared writer."""
+    f = Path(promise_arg)
+    if not f.is_absolute():
+        f = root / promise_arg
+    if not f.exists():
+        print(f"socom gate task-completion: no ledger row — '{promise_arg}' "
+              "not found (the gate still ran).", file=sys.stderr)
+        return
+    try:
+        root_el = ET.parse(f).getroot()
+    except (ET.ParseError, OSError) as e:
+        # OSError too (e.g. a directory arg) — a bad arg must WARN, never crash
+        # the gate into a false RED (the gate's check already ran).
+        print(f"socom gate task-completion: no ledger row — {f.name} is not "
+              f"readable well-formed XML ({e}).", file=sys.stderr)
+        return
+    promise_id, seat, cref = _promise_ref(root_el)
+    if not promise_id or not seat:
+        print(f"socom gate task-completion: no ledger row — {f.name} is not a "
+              "promise with a promiser seat (a standalone contract has no "
+              "executing seat to attribute).", file=sys.stderr)
+        return
+    row = _append_ledger_row(root, promise_id, seat, cref, {"ok": rc == 0},
+                             duration_s)
+    print(f"socom gate task-completion: recorded ledger row — {seat} "
+          f"{promise_id} attempt {row['attempt']} verdict {row['verdict']} "
+          "(.socom/ledger/runs.jsonl).")
+
+
 def cmd_gate(args):
     if not args:
         sys.exit("usage: socom gate <session-start|task-completion|pre-commit|"
@@ -940,7 +977,17 @@ def cmd_gate(args):
     if not cmd or cmd == "true":
         print(f"socom gate {name}: checks.{tier} unbound — passing (bind it in socom.yaml)")
         return
+    import time
+    _t0 = time.monotonic()
     rc = run_check(cmd, root)
+    duration_s = int(time.monotonic() - _t0)
+    # task-completion, given a promise, records its assessment to the run ledger
+    # — the canonical "a gate assessed the promise -> kept/broken" event
+    # (schemas/ledger.xml), so `socom cycle` measures real done-attempts WITHOUT
+    # a manual flag. Recorded BEFORE the RED exit: a broken attempt is the
+    # pass@1-vs-pass@k signal, not noise. No promise arg -> behaviour unchanged.
+    if name == "task-completion" and rest:
+        _gate_record(root, rest[0], rc, duration_s)
     if rc != 0:
         if name == "pre-commit":  # amber band
             log_breach(root, name, f"checks.medium failed rc={rc}")
@@ -1488,6 +1535,30 @@ def _next_attempt(rows: list, promise: str, contract: str) -> int:
     return (max(prior) + 1) if prior else 1
 
 
+def _append_ledger_row(root, promise, seat, contract, summary, duration_s) -> dict:
+    """The single writer for .socom/ledger/runs.jsonl: read the ledger, compute
+    the next attempt for (promise, contract), append one row for this
+    assessment, and return it. Both `contract verify --record` and the
+    task-completion gate record through here, so the wire format and the attempt
+    sequence have ONE source of truth (§least-common-mechanism). Callers own the
+    fail-closed guards (standalone / manual-pending / no-evidence) — this writes
+    unconditionally once a row is warranted."""
+    import json
+    ledger = root / SOCOM_DIR / "ledger" / "runs.jsonl"
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    rows = []
+    if ledger.exists():
+        for ln in ledger.read_text().splitlines():
+            if ln.strip():
+                rows.append(json.loads(ln))
+    attempt = _next_attempt(rows, promise, contract)
+    row = _ledger_row(promise, seat, contract, summary, attempt, _now_iso(),
+                      duration_s)
+    with ledger.open("a") as fh:
+        fh.write(json.dumps(row) + "\n")
+    return row
+
+
 def _ledger_row(promise, seat, contract, summary, attempt, ts, duration_s) -> dict:
     """Pure: a verify outcome -> one ledger JSONL row (the schemas/ledger.xml
     field contract — these keys ARE the wire keys). verdict 'kept' iff no auto
@@ -1509,6 +1580,21 @@ def _ledger_row(promise, seat, contract, summary, attempt, ts, duration_s) -> di
     }
 
 
+def _promise_ref(root_el):
+    """Pure: (promise_id, seat, contract_ref) from a <promise> root element, or
+    (None, None, None) when it is not a recordable promise — a standalone
+    contract has no executing seat to attribute a ledger row to. The shared
+    promise->ledger identity used by both `contract verify --record` and the
+    task-completion gate."""
+    if root_el.tag != "promise":
+        return None, None, None
+    promiser = root_el.find("promiser")
+    contract = root_el.find("contract")
+    return (root_el.get("id"),
+            promiser.get("seat") if promiser is not None else None,
+            contract.get("ref") if contract is not None else None)
+
+
 def cmd_contract(args):
     record = "--record" in args
     args = [a for a in args if a != "--record"]
@@ -1526,8 +1612,8 @@ def cmd_contract(args):
         sys.exit(f"socom contract: no such file '{args[1]}' (R6: degrade loudly).")
     try:
         root_el = ET.parse(f).getroot()
-    except ET.ParseError as e:
-        sys.exit(f"socom contract: {f.name} is not well-formed XML — {e}")
+    except (ET.ParseError, OSError) as e:
+        sys.exit(f"socom contract: {f.name} is not readable well-formed XML — {e}")
     contract = _contract_el(root_el)
     if contract is None:
         sys.exit(f"socom contract: no <contract> in {f.name} "
@@ -1589,9 +1675,7 @@ def cmd_contract(args):
     # (constitution §separation-of-privilege — assessment is never delegated to
     # the promiser). The row is the same fail-closed posture #6 gave verify.
     if record:
-        promiser = root_el.find("promiser") if root_el.tag == "promise" else None
-        promise_id = root_el.get("id") if root_el.tag == "promise" else None
-        seat = promiser.get("seat") if promiser is not None else None
+        promise_id, seat, cref = _promise_ref(root_el)
         if not promise_id or not seat:
             print("socom contract verify: --record needs a promise with a "
                   "promiser seat (a standalone contract has no executing seat "
@@ -1607,21 +1691,11 @@ def cmd_contract(args):
                   "the ledger is exactly what verify-never-claim forbids.",
                   file=sys.stderr)
         else:
-            ledger = root / SOCOM_DIR / "ledger" / "runs.jsonl"
-            ledger.parent.mkdir(parents=True, exist_ok=True)
-            rows = []
-            if ledger.exists():
-                for ln in ledger.read_text().splitlines():
-                    if ln.strip():
-                        rows.append(json.loads(ln))
-            attempt = _next_attempt(rows, promise_id, contract.get("ref"))
-            row = _ledger_row(promise_id, seat, contract.get("ref"), s,
-                              attempt, _now_iso(), duration_s)
-            with ledger.open("a") as fh:
-                fh.write(json.dumps(row) + "\n")
+            row = _append_ledger_row(root, promise_id, seat, cref, s,
+                                     duration_s)
             print(f"socom contract verify: recorded ledger row — {seat} "
-                  f"{promise_id} attempt {attempt} verdict {row['verdict']} "
-                  f"(.socom/ledger/runs.jsonl).")
+                  f"{promise_id} attempt {row['attempt']} verdict "
+                  f"{row['verdict']} (.socom/ledger/runs.jsonl).")
 
     if not s["ok"]:
         sys.exit(1)

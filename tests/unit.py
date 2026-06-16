@@ -252,6 +252,29 @@ _brow = socom._ledger_row("P-A", "builder", "C-A", _bad, 2, "t", 0)
 check("_ledger_row: failed summary -> verdict broken, exit_code 1",
       _brow["verdict"] == "broken" and _brow["exit_code"] == 1)
 
+eq("_promise_ref: (id, seat, contract) from a promise",
+   socom._promise_ref(ET.fromstring(
+       '<promise id="P-z"><promiser seat="builder"/><contract ref="C-z"/></promise>')),
+   ("P-z", "builder", "C-z"))
+eq("_promise_ref: a standalone contract is not recordable (no seat)",
+   socom._promise_ref(ET.fromstring('<contract ref="C-z"/>')),
+   (None, None, None))
+check("_promise_ref: a promise missing its promiser has no seat",
+      socom._promise_ref(ET.fromstring(
+          '<promise id="P-z"><contract ref="C-z"/></promise>'))[1] is None)
+
+# _append_ledger_row — the one writer both verify --record and the gate use
+with tempfile.TemporaryDirectory() as _d:
+    _r = Path(_d)
+    _a = socom._append_ledger_row(_r, "P-w", "builder", "C-w", {"ok": True}, 3)
+    eq("_append_ledger_row: first row is attempt 1, kept",
+       (_a["attempt"], _a["verdict"]), (1, "kept"))
+    _b = socom._append_ledger_row(_r, "P-w", "builder", "C-w", {"ok": False}, 0)
+    eq("_append_ledger_row: second row increments attempt, broken",
+       (_b["attempt"], _b["verdict"]), (2, "broken"))
+    _lines = (_r / ".socom" / "ledger" / "runs.jsonl").read_text().splitlines()
+    eq("_append_ledger_row: one JSONL line appended per call", len(_lines), 2)
+
 # ── summary ──────────────────────────────────────────────────────────────────
 print(f"unit: {_PASS} passed, {_FAIL} failed")
 raise SystemExit(1 if _FAIL else 0)
