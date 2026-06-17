@@ -32,6 +32,7 @@ Commands:
            commands (PASS/FAIL on exit), flags no-run checks MANUAL; --record
            appends the outcome to the run ledger (cycle data) | show
   greet    adoption-ladder greeting — where you are, what's next
+  adopt    one-shot: plant + compile + wire git hooks (fresh clone -> live gates)
   install  symlink this checkout onto PATH (~/.local/bin) so `socom` just works
   uninstall remove the socom symlink (only if it points at this checkout)
 
@@ -57,6 +58,7 @@ except ImportError:
 
 SOCOM_VERSION = "0.1"
 SOCOM_DIR = ".socom"  # the substrate root under any repo — single source of truth
+HOOKS_DIR = ".githooks"  # core.hooksPath target — single source for every wire/read site
 CANON_FILES = ["constitution.xml", "roles.xml", "gates.xml", "session.xml",
                "doctrine.xml", "forge.xml", "residuality.xml",
                "commit-protocol.xml"]
@@ -377,7 +379,7 @@ def cmd_compile(args):
             write_generated(root / ".claude" / "agents" / f"{r.get('id')}.md",
                             render_agent(r), h, force=force)
 
-    hooks_dir = root / ".githooks"
+    hooks_dir = root / HOOKS_DIR
     for name, cmd in HOOK_TEMPLATES.items():
         script = (f"#!/bin/sh\n# socom:generated source={h}\n"
                   f"{HOOK_RESOLVER}{cmd}\n")
@@ -451,7 +453,28 @@ def cmd_compile(args):
         print(f"  SKIP {settings} exists — wire `socom gate session-start` into SessionStart yourself")
 
     print(f"socom: compiled (source={h}). Activate git hooks: "
-          f"git config core.hooksPath .githooks")
+          f"git config core.hooksPath {HOOKS_DIR}  (or `socom adopt` does it for you)")
+
+
+# ── git-hooks wiring (single source: doctor-heal and adopt route through here) ──
+
+def _git_hooks_path(root: Path) -> str:
+    """Current core.hooksPath for the repo ('' if unset or not a git repo)."""
+    return subprocess.run(["git", "config", "core.hooksPath"], cwd=root,
+                          capture_output=True, text=True).stdout.strip()
+
+
+def _wire_hooks(root: Path) -> bool:
+    """Set core.hooksPath to HOOKS_DIR (idempotent). Returns True if the repo is
+    now wired, False if it could not be (not a git repo). The single WRITER for
+    the hooks-wiring truth — both doctor-heal and `adopt` route through here, so
+    'where the hooks live' lives in exactly one place (§least-common-mechanism).
+    Fails soft: a non-git dir returns False rather than raising (CI re-asserts)."""
+    if _git_hooks_path(root) == HOOKS_DIR:
+        return True
+    subprocess.run(["git", "config", "core.hooksPath", HOOKS_DIR],
+                   cwd=root, capture_output=True)
+    return _git_hooks_path(root) == HOOKS_DIR
 
 
 # ── doctor ───────────────────────────────────────────────────────────────
@@ -478,10 +501,8 @@ def cmd_doctor(args):
             problems.append(f"socom.yaml checks.{k} is unbound (placeholder)")
 
     try:
-        hp = subprocess.run(["git", "config", "core.hooksPath"], cwd=root,
-                            capture_output=True, text=True).stdout.strip()
-        if hp != ".githooks":
-            problems.append("git core.hooksPath not set to .githooks — gates not wired")
+        if _git_hooks_path(root) != HOOKS_DIR:
+            problems.append(f"git core.hooksPath not set to {HOOKS_DIR} — gates not wired")
     except FileNotFoundError:
         problems.append("git not available")
 
@@ -549,15 +570,12 @@ def cmd_precond(args):
             rows.append(("✗", f"BLOCKS: {tool} not on PATH"))
 
     # 3. Git hooks wired — heal-on: set config (safe, reversible); else warn.
-    hp = subprocess.run(["git", "config", "core.hooksPath"], cwd=root,
-                        capture_output=True, text=True).stdout.strip()
-    if hp == ".githooks":
+    if _git_hooks_path(root) == HOOKS_DIR:
         rows.append(("✓", "git hooks wired (core.hooksPath)"))
     elif heal:
-        subprocess.run(["git", "config", "core.hooksPath", ".githooks"],
-                       cwd=root, capture_output=True)
+        _wire_hooks(root)
         healed += 1
-        rows.append(("~", "healed: git config core.hooksPath .githooks"))
+        rows.append(("~", f"healed: git config core.hooksPath {HOOKS_DIR}"))
     else:
         warns += 1
         rows.append(("!", "WARN: hooks not wired — local gates skip (CI re-asserts)"))
@@ -2144,11 +2162,9 @@ def adoption_rung(root: Path) -> tuple[str, str]:
         return ("T2 — compiled, checks unbound",
                 "bind checks.fast/medium/full in socom.yaml to commands that "
                 "really run here, then `socom compile`")
-    hp = subprocess.run(["git", "config", "core.hooksPath"], cwd=root,
-                        capture_output=True, text=True).stdout.strip()
-    if hp != ".githooks":
+    if _git_hooks_path(root) != HOOKS_DIR:
         return ("T3 — bound, gates not wired",
-                "run `git config core.hooksPath .githooks`")
+                f"run `socom adopt` (or `git config core.hooksPath {HOOKS_DIR}`)")
     if not (root / SOCOM_DIR / "index" / "baseline.json").exists():
         return ("T4 — wired, no retrieval floor",
                 "run `socom baseline` so L1 retrieval has a floor to beat")
@@ -2179,6 +2195,29 @@ def cmd_greet(args):
         if n:
             print(f"   bank: {n} memories on file — the substrate remembers")
     print()
+
+
+# ── adopt (one command: fresh clone -> wired gates) ────────────────────────
+
+def cmd_adopt(args):
+    """One command from a fresh clone to live gates: plant the substrate (init)
+    -> compile the runtime adapters -> wire git hooks -> report the rung. Closes
+    the dormant-gates class: core.hooksPath was only ever PRINTED as a manual
+    step (and auto-healed only inside `precond`), so a fresh clone's LOCAL gates
+    slept until someone happened to heal them. Idempotent: init is exists-guarded,
+    compile is no-clobber, the hook wiring is a config set. Composes the existing
+    steps — no new substrate logic, so adopt can never drift from init/compile."""
+    root = repo_root(Path(args[0]) if args else None)
+    cmd_init([str(root)])       # plant + greet with the post-plant rung
+    cmd_compile([str(root)])    # render adapters (no-clobber on hand-edited views)
+    if _wire_hooks(root):
+        print(f"  ✓ git hooks wired (core.hooksPath={HOOKS_DIR}) — local gates live")
+    else:
+        print(f"  ! hooks NOT wired: not a git repo. Run `git init`, then "
+              f"`socom adopt` again. CI re-asserts every gate regardless.",
+              file=sys.stderr)
+    state, nxt = adoption_rung(root)
+    print(f"  rung: {state}\n  next: {nxt}")
 
 
 # ── install (self-bootstrap onto PATH) ─────────────────────────────────
@@ -2245,7 +2284,7 @@ COMMANDS = {"init": cmd_init, "compile": cmd_compile, "doctor": cmd_doctor,
             "embed": cmd_embed, "query": cmd_query, "eval": cmd_eval,
             "cycle": cmd_cycle, "lesson": cmd_lesson, "precond": cmd_precond,
             "introspect": cmd_introspect, "contract": cmd_contract,
-            "forge": cmd_forge, "install": cmd_install,
+            "forge": cmd_forge, "adopt": cmd_adopt, "install": cmd_install,
             "uninstall": cmd_uninstall}
 
 if __name__ == "__main__":

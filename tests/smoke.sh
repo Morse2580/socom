@@ -154,6 +154,32 @@ grep -q "capability-ladder" .socom/canon/doctrine.xml \
   && ok "doctrine planted at init" || bad "doctrine.xml not planted"
 "$SOCOM" greet . | grep -q "rung:" && ok "greeting shows adoption rung" \
                                    || bad "greeting lacks rung"
+
+# 9b. adopt — one-shot: fresh clone -> live gates (IH-3). The dormant-gates
+# class: core.hooksPath was only PRINTED/healed-in-precond, so a fresh clone's
+# LOCAL gates slept until something healed them. `socom adopt` composes
+# init+compile+wire (routing the wire through the same _wire_hooks helper as
+# doctor/precond — single source) and reports the rung; idempotent; a non-git
+# dir warns (CI re-asserts) but never crashes. Uses its own throwaway repos so
+# the main test repo's wiring is untouched.
+AR="$T/adopt-repo"; mkdir -p "$AR"; ( cd "$AR" && git init -q -b main . )
+( cd "$AR" && "$SOCOM" adopt . >/dev/null 2>&1 ); check "adopt bootstraps a fresh git repo" 0 $?
+[ "$(git -C "$AR" config core.hooksPath)" = ".githooks" ] \
+  && ok "adopt wires core.hooksPath — local gates live" \
+  || bad "adopt did not wire hooks: [$(git -C "$AR" config core.hooksPath)]"
+[ -f "$AR/CLAUDE.md" ] && [ -f "$AR/socom.yaml" ] \
+  && ok "adopt planted + compiled (CLAUDE.md + socom.yaml present)" \
+  || bad "adopt left the repo uncompiled"
+( cd "$AR" && "$SOCOM" adopt . >/dev/null 2>&1 ); check "adopt is idempotent (safe re-run)" 0 $?
+[ "$(git -C "$AR" config core.hooksPath)" = ".githooks" ] \
+  && ok "adopt idempotent: hooks still wired after re-run" \
+  || bad "adopt re-run lost the hooks wiring"
+( cd "$AR" && "$SOCOM" adopt . 2>&1 | grep -q "rung:" ) \
+  && ok "adopt reports the adoption rung (reuses adoption_rung)" \
+  || bad "adopt did not report a rung"
+ANG="$T/adopt-nongit"; mkdir -p "$ANG"
+( cd "$ANG" && "$SOCOM" adopt . >/dev/null 2>&1 ); check "adopt in a non-git dir warns but never crashes" 0 $?
+
 "$SOCOM" baseline . >/dev/null;            check "baseline" 0 $?
 python3 - <<'EOF' && ok "chunk ids unique + full-path (STORAGE identity)" || bad "chunk identity violated"
 import json, sys

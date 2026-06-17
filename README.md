@@ -55,6 +55,43 @@ lifecycle, role agents, completion gates, generated next-session prompts) and
 the architecture argued in
 [Protocol over Participants](https://medium.com/data-unlocked/protocol-over-participants-c639e2be0f64).
 
+## From a clone
+
+The whole substrate is in git — any clone on any machine has the full state. To
+go from a fresh clone to live gates is **one command**:
+
+```sh
+socom adopt
+```
+
+`adopt` plants the substrate (`.socom/` + `socom.yaml` if absent), compiles the
+runtime adapters (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules`, git hooks, CI), wires
+`git config core.hooksPath .githooks` so your **local** gates fire, and prints
+the adoption rung you've reached. It is idempotent — safe to re-run any time
+(planting is exists-guarded, compilation never clobbers hand-edited views, the
+hook wiring is just a config set).
+
+**Adding socom to your own repo** (socom installed separately, on `PATH`):
+
+```sh
+# 1. put the socom tool on PATH (from a clone of this repo)
+git clone https://github.com/Morse2580/socom.git && socom/bin/socom install
+# 2. in YOUR project, one-shot the adoption
+cd ~/my-project && socom adopt        # edit socom.yaml bindings, then: socom compile
+```
+
+**Working on socom itself** (no install needed — run the in-repo binary):
+
+```sh
+git clone https://github.com/Morse2580/socom.git && cd socom
+./bin/socom adopt                     # wires this clone's hooks; gates now live
+```
+
+Without `adopt`, a fresh clone's local hooks stay dormant until something heals
+`core.hooksPath` — CI still re-asserts every gate, but you lose the fast local
+feedback. `adopt` is the published, one-command path so the protected path is the
+easy path.
+
 ## Read next
 
 - [`PROTOCOL.md`](PROTOCOL.md) — the full substrate specification

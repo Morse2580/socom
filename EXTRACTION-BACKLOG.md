@@ -64,11 +64,18 @@ be cleanly adopted from a clone." Each row leashed with an ID (§no-quick-fixes-
   the unguarded-spine residuality violation at the root.
   NOTE: CI is single-sourced from `socom.yaml` via `compile` (the feared
   full-check duplication across adapters does not exist) — no new backlog item needed.
-- **IH-3 — adopt one-shot + auto-wire hooks + README (OPEN)**: `git config
-  core.hooksPath .githooks` is only PRINTED (auto-healed only inside `doctor`), so a
-  fresh clone's git gates are dormant; there is no `socom adopt` (adoption is a 5-rung
-  manual ladder via `greet`); README has no install section. Ship `socom adopt`
-  (init→compile→hooksPath, report rung) + a README "from a clone" block.
+- **IH-3 — adopt one-shot + auto-wire hooks + README ✓ DONE** (this session):
+  `git config core.hooksPath .githooks` was only PRINTED (auto-healed only inside
+  `precond`), so a fresh clone's LOCAL git gates were dormant until something healed
+  them; there was no one-command adoption and README had no install section. Shipped
+  `socom adopt` (init → compile → wire hooks → report rung), idempotent, composing the
+  existing steps so it can never drift from init/compile. The `.githooks` wiring truth
+  was a bare literal in 5+ places — factored into a `HOOKS_DIR` constant + a single
+  `_wire_hooks` writer; doctor/precond/adoption_rung now route through it (only ONE
+  `core.hooksPath` write site remains). Non-git dir warns (CI re-asserts), never
+  crashes. README "From a clone" with BOTH paths (socom installed separately + in-repo
+  `./bin/socom`). +7 smoke checks; independent reviewer ACCEPT (8/8 + probes clean).
+  Closes the dormant-gates class at the root.
 - **IH-4 — ledger concurrency (OPEN, latent)**: `_append_ledger_row` does
   read-all-then-append with no `flock`/lockfile; two seats recording at once → lost/
   interleaved row + `_next_attempt` race. Multi-agent is the stated goal — add a lock
