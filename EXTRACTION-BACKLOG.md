@@ -37,6 +37,46 @@ Method per extraction (constitution §contracts-before-code, §research-first):
   `.github/workflows/socom-gates.yml` generator), then `socom compile`. Low urgency,
   hard deadline 2026-06-16.
 
+## Initiative: install hardening + residuality self-violations (scout audit 2026-06-17)
+
+Triggered by operator: "hwo cna thi sbe nstall'e by any dev from git" + "are there
+things we have completely missed" + "have all resiudality gates been croseed off". A
+scout audit found the substrate failing its OWN residuality gate on two shipped
+surfaces, and the any-dev-from-git story real-in-CLI but undocumented/not-one-command.
+Objective: close the class "the substrate ships surfaces that fail its own gate / can't
+be cleanly adopted from a clone." Each row leashed with an ID (§no-quick-fixes-without-a-leash).
+
+- **IH-1 — SessionStart hook portability ✓ DONE** (commit 1970622): the generated
+  `.claude/settings.json` baked a machine-specific absolute path, so a fresh clone's
+  session-start gate silently never fired. Routed it through the SAME `HOOK_RESOLVER`
+  the git hooks use (command -v socom → $SOCOM_HOME → fallback → degrade exit 0); +3
+  smoke checks. The substrate stops failing its own open-design / fix-the-class gate.
+- **IH-2 — ledgercheck schema gate (OPEN, highest leverage)**: the JSONL run ledger
+  (`.socom/ledger/runs.jsonl`) — the #1/#6f measurement spine — is validated by
+  NOTHING (`xmlcheck` is XML-only). One malformed row REDs `cmd_cycle` → REDs the
+  `eval` gate. Add a `ledgercheck` (each line parses + has the 9 schema keys + enum
+  values) wired into medium+full+CI exactly like xmlcheck. Closes the unguarded-spine
+  residuality violation.
+- **IH-3 — adopt one-shot + auto-wire hooks + README (OPEN)**: `git config
+  core.hooksPath .githooks` is only PRINTED (auto-healed only inside `doctor`), so a
+  fresh clone's git gates are dormant; there is no `socom adopt` (adoption is a 5-rung
+  manual ladder via `greet`); README has no install section. Ship `socom adopt`
+  (init→compile→hooksPath, report rung) + a README "from a clone" block.
+- **IH-4 — ledger concurrency (OPEN, latent)**: `_append_ledger_row` does
+  read-all-then-append with no `flock`/lockfile; two seats recording at once → lost/
+  interleaved row + `_next_attempt` race. Multi-agent is the stated goal — add a lock
+  before two seats ever write. Pairs with the `chunks.jsonl` committed-churn decision
+  (gitignore + rebuild, or deterministic ordering).
+- **IH-5 — version/upgrade path, borrowed from GSD (OPEN)**: a vendored `.socom/` is
+  frozen at adoption; no `socom update` to re-pull tool canon + reconcile local canon
+  edits. `doctor` already has the hash-divergence detector (the seed) — promote it into
+  `socom update`. Borrow GSD's version-and-reconcile half; keep compile-from-source (do
+  NOT adopt copy-everywhere).
+- **IH-6 — secrets/PII redaction mechanism (OPEN, lower)**: §verbatim-protocol says
+  "redact before any substrate write" but no command scans handoffs/promises/ledger for
+  credentials. `index`/`hydrate` already have `SECRET_RX` (HR6) — extend it to a write-
+  time gate on handoffs.
+
 ## Initiative: substrate self-maintenance — `bin/socom` quality
 
 Distinct from the Akili-extraction track. Triggered by operator: "the bin for socom py is
