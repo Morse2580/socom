@@ -433,11 +433,19 @@ def cmd_compile(args):
 
     settings = root / ".claude" / "settings.json"
     if not settings.exists():
+        import json
         settings.parent.mkdir(parents=True, exist_ok=True)
-        settings.write_text(
-            '{\n  "hooks": {\n    "SessionStart": [{"matcher": "*", "hooks": [\n'
-            f'      {{"type": "command", "command": "\\"{SOCOM_BIN}\\" gate session-start", "timeout": 30}}\n'
-            "    ]}]\n  }\n}\n")
+        # The SessionStart hook resolves socom through the SAME resolver the git
+        # hooks use (HOOK_RESOLVER) — never a bare machine-specific absolute path
+        # baked into the JSON, so a fresh clone's session-start gate actually
+        # fires (and degrades to exit 0 when the tool is absent). One source of
+        # truth for "find socom" across every generated hook surface — the git
+        # hooks already did this; emitting a hardcoded path here was the same
+        # class left un-fixed (constitution §fix-the-class / open-design).
+        cmd = f'{HOOK_RESOLVER}exec "$SOCOM" gate session-start'
+        doc = {"hooks": {"SessionStart": [{"matcher": "*", "hooks": [
+            {"type": "command", "command": cmd, "timeout": 30}]}]}}
+        settings.write_text(json.dumps(doc, indent=2) + "\n")
         print(f"  wrote {settings}")
     else:
         print(f"  SKIP {settings} exists — wire `socom gate session-start` into SessionStart yourself")

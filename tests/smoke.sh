@@ -28,6 +28,22 @@ grep -q "socom:generated" CLAUDE.md && ok "CLAUDE.md has generated header" \
 grep -q "exit 0" .githooks/pre-commit && ok "hooks degrade gracefully (HR1)" \
                                       || bad "hooks lack graceful-absence path (HR1)"
 
+# 1b. the SessionStart hook must be PORTABLE — resolve socom the SAME way the
+# git hooks do (command -v / $SOCOM_HOME / fallback / degrade), never a bare
+# machine-specific absolute path. A fresh clone on any machine must fire the
+# session-start gate; a hardcoded path is the substrate failing its own
+# open-design / fix-the-class gate (the git hooks already solved this class).
+python3 -c "import json; json.load(open('.claude/settings.json'))" 2>/dev/null \
+  && ok "generated .claude/settings.json is valid JSON" \
+  || bad "settings.json is not valid JSON"
+SSCMD="$(python3 -c "import json;print(json.load(open('.claude/settings.json'))['hooks']['SessionStart'][0]['hooks'][0]['command'])" 2>/dev/null)"
+printf '%s' "$SSCMD" | grep -q 'command -v socom' \
+  && ok "SessionStart hook resolves socom portably (command -v, not a bare abs path)" \
+  || bad "SessionStart hook is not portable (no resolver): $SSCMD"
+printf '%s' "$SSCMD" | grep -q 'exit 0' \
+  && ok "SessionStart hook degrades gracefully when socom is absent (HR1)" \
+  || bad "SessionStart hook lacks the graceful-absence path"
+
 # 2. doctor: unbound checks must be findings
 "$SOCOM" doctor . >/dev/null 2>&1;     check "doctor flags unbound checks" 1 $?
 python3 - <<EOF
