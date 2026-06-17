@@ -1,57 +1,58 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <handoff socom="0.1" id="H-2026-06-17-main" branch="main"
-         date="2026-06-17T21:16:50+00:00">
-  <summary embed="true">IH-2 DONE: ledgercheck schema gate closes the unguarded measurement-spine residuality violation — pushed, CI green (run 27720305663).</summary>
+         date="2026-06-17T21:50:11+00:00">
+  <summary embed="true">Install-hardening initiative: IH-2 (ledgercheck schema gate) and IH-3 (socom adopt one-shot) both DONE, pushed, CI green. IH-4..IH-6 remain.</summary>
   <done embed="true">
-    **IH-2 — ledgercheck run-ledger schema gate** (commit 0fb5298, pushed,
-    CI-verified green: run 27720305663 conclusion=success on sha 0fb5298).
+    Two install-hardening items closed this session, each reviewer-ACCEPTed from
+    clean context and CI-verified green.
 
-    The class closed: the run ledger (.socom/ledger/runs.jsonl) — the #6f
-    measurement spine `socom cycle` rolls into pass@1/pass@k — was validated by
-    NOTHING. xmlcheck is XML-only; `socom cycle` only caught JSON-decode errors.
-    A row that was valid JSON yet schema-invalid (missing `verdict`,
-    `gate_band:"purple"`) sailed through every gate and silently mis-scored the
-    eval gate. The substrate was failing its own residuality gate on its own
-    measurement surface.
+    **IH-2 — ledgercheck run-ledger schema gate** (commit 0fb5298; CI run
+    27720305663 success). The run ledger (.socom/ledger/runs.jsonl), the #6f
+    measurement spine, was validated by NOTHING — a valid-JSON-but-schema-invalid
+    row (missing verdict, gate_band:"purple") silently mis-scored the eval gate.
+    New tests/ledgercheck.py validates every row against schemas/ledger.xml (8
+    required keys + 2 enums + 3 int-typed, bool excluded), parsing the field
+    contract FROM the schema (single source). Absent ledger PASSES (fail-open),
+    bad row FAILS (fail-closed). Wired into medium+full+CI (all 3 adapters, via
+    compile). Reviewer ACCEPT 8/8.
 
-    The fix: new tests/ledgercheck.py validates every ledger row against
-    schemas/ledger.xml (8 required keys + 2 enums gate_band/verdict + 3 int-typed
-    fields, bool excluded). The field contract is PARSED FROM schemas/ledger.xml —
-    single source, no hardcoded list (a hardcoded copy would relocate the drift
-    stress, not remove it; §least-common-mechanism / open-design). Posture split
-    by concern: absent ledger PASSES (fail-open on absence — created lazily, zero
-    rows = zero bad rows), malformed/invalid row FAILS (fail-closed on
-    corruption). SCHEMA resolves script-relative (found from any CWD); LEDGER
-    resolves CWD-relative like xmlcheck (medium/full from repo root hit the real
-    ledger) with an optional path arg the smoke harness uses for fixtures.
+    **IH-3 — socom adopt one-shot** (commit 87e0351; CI run 27721993533 success).
+    A fresh clone's LOCAL git gates were dormant: core.hooksPath was only PRINTED
+    as a manual step (auto-healed only inside precond), so pre-commit/pre-push
+    slept until something healed them. New `socom adopt` composes
+    init -> compile -> wire hooks -> report rung in one idempotent command. The
+    .githooks wiring truth was a bare literal in 5+ sites; collapsed to one
+    HOOKS_DIR constant + one _wire_hooks writer, with doctor/precond/adoption_rung
+    reading via _git_hooks_path (only ONE core.hooksPath write site remains).
+    Non-git dir warns to stderr (CI re-asserts), never crashes. README "From a
+    clone" documents BOTH paths (socom installed separately + in-repo ./bin/socom).
+    +7 smoke checks. Reviewer ACCEPT 8/8 (precond heal vs --no-heal preserved;
+    repo_root no walk-up in non-git dir).
 
-    Wired into checks.medium + checks.full + all 3 CI adapters (github / gitlab /
-    azure) via `socom compile` — NOT by hand. +5 smoke checks (10d-bis block).
-    Independent reviewer from clean context (builder != reviewer): VERDICT ACCEPT,
-    8/8 contract checks + adversarial probes clean (real _ledger_row kept/broken
-    rows PASS; blank lines, non-object JSON, omitted optional `contract`, foreign
-    CWD all handled). Reviewer advisory (bool-is-int) closed in-session.
-    Evidence: full chain green — smoke.sh then xmlcheck.py then ledgercheck.py
-    then `socom index` then echo full-ok -> exit 0 (the checks.full binding);
-    pre-commit + pre-push gates PASS; 130+ smoke checks green; CI run 27720305663
-    conclusion=success.
+    Evidence (both, re-run after final edits): the checks.full chain — smoke.sh
+    then xmlcheck.py then ledgercheck.py then `socom index` then echo full-ok ->
+    exit 0; socom doctor . -> rc 0; pre-commit + pre-push gates PASS; 130+ smoke
+    checks green including 5 ledgercheck + 7 adopt.
   </done>
   <undone embed="true">
-    Rest of the install-hardening initiative (OPEN, leashed in EXTRACTION-BACKLOG.md):
-    - IH-3 (NEXT) — `socom adopt` one-shot (init -> compile -> auto-wire
-      core.hooksPath; only doctor heals it now, so a fresh clone's git gates are
-      dormant) + README "from a clone" section. The rest of the any-dev-from-git
-      story.
-    - IH-4 — ledger flock (_append_ledger_row has no lock; two seats racing) +
-      the .socom/index/chunks.jsonl committed-churn posture decision.
+    Install-hardening initiative remainder (OPEN, leashed in EXTRACTION-BACKLOG.md):
+    - IH-4 (NEXT) — ledger concurrency + chunks.jsonl churn posture. Two parts:
+      (a) _append_ledger_row does read-all-then-append with no flock/lockfile, so
+      two seats recording at once lose/interleave a row and race _next_attempt —
+      multi-agent is the stated goal, so this is the gating item before fan-out;
+      (b) .socom/index/chunks.jsonl churns on every `socom index` (committed as
+      documented churn) — decide its posture (gitignore vs deterministic emit vs
+      commit-on-closeout).
     - IH-5 — `socom update` (version + reconcile local canon edits, GSD manifest
       model; promote doctor's hash-divergence detector into it).
     - IH-6 — secrets/PII redaction write-time gate for handoffs (SECRET_RX exists
       in index/hydrate; extend it).
     Plus deferred Akili halves: #4 LLM introspection, #6f-3 per-contract cycle
-    metrics, #7b .gitmessage template.
+    metrics, #7b .gitmessage template. And the CI Node-24 action-version bump.
   </undone>
   <recent-commits>
+    <commit>87e0351 feat(cli): socom adopt — one command from a fresh clone to live gates (IH-3)</commit>
+    <commit>142de6f chore(platform): session closeout — IH-2 ledgercheck DONE, handoff + prompt</commit>
     <commit>0fb5298 feat(cli): ledgercheck schema gate — close the unguarded measurement spine (IH-2)</commit>
     <commit>6fc154d chore(platform): session closeout — IH-1 portability fix + install-hardening backlog</commit>
     <commit>1970622 fix(cli): SessionStart hook resolves socom portably — stop failing our own gate</commit>
@@ -60,38 +61,35 @@
     <commit>ecb3e9e chore(platform): session closeout — #6f-1 verify→ledger DONE, handoff + prompt refreshed</commit>
     <commit>927905d feat(cli): socom contract verify --record — the first real ledger producer</commit>
     <commit>c90db3a chore(platform): session closeout — #7 DONE, handoff + regenerated prompt</commit>
-    <commit>11ad743 feat(canon): commit-protocol.xml — document the six blocks' semantics + Akili discipline</commit>
-    <commit>a111cef fix(cli): malformed handoff + the gate gap that let it through (xmlcheck)</commit>
   </recent-commits>
   <uncommitted>
 ?? .socom/claims/
   </uncommitted>
   <blockers embed="true">None.</blockers>
   <warnings embed="true">
-    - The feared full-check duplication across CI adapters does NOT exist: all
-      three (github/gitlab/azure) are generated from socom.yaml's checks.full via
-      `socom compile` — single-sourced. Edit socom.yaml + recompile; never the
-      adapters by hand.
-    - .socom/index/chunks.jsonl churns on any `socom index` (pre-push full + the
-      compile step). It did NOT churn on this push, but the posture is still
-      undecided — IH-4 owns it. Do not hand-edit it.
-    - .socom/ledger/runs.jsonl still does not exist (created lazily on first
-      `verify --record` or `gate task-completion`). ledgercheck PASSES on absence
-      by design — but the moment any agent records a row, ledgercheck is live and
-      a malformed row will RED medium/full/CI. That is the intended behaviour.
+    - IH-4 is now the gating item before any multi-agent fan-out: the ledger is
+      guarded (IH-2) but NOT concurrency-safe — _append_ledger_row has no lock.
+      Do not run two seats recording to the ledger concurrently until IH-4 lands.
+    - .socom/ledger/runs.jsonl still does not exist (created lazily). ledgercheck
+      PASSES on absence by design; the moment any agent records a row it is live,
+      and a malformed row will RED medium/full/CI (intended).
+    - .socom/index/chunks.jsonl churns on every `socom index` (pre-push full +
+      compile). Committed as documented churn; IH-4 owns the posture decision.
+      Do not hand-edit it.
     - CI carries the known Node-20 -> Node-24 forced-runtime deprecation annotation
-      (maintenance debt, commit b28ada4). Still green; bump actions/checkout +
-      actions/setup-python versions at the canon root soon.
+      (commit b28ada4). Still green; bump actions/checkout + actions/setup-python
+      at the canon root soon.
+    - Hand-filled handoffs must NOT paste raw shell operators into prose: the
+      ampersand and angle-bracket characters are illegal in XML text and xmlcheck
+      (which gates closeout) REDs on them. Describe commands in words, not symbols.
+      (Bit the IH-2 closeout, and the first draft of THIS one — describe, never paste.)
   </warnings>
   <next embed="true">
-    1. IH-3 — `socom adopt` one-shot (init -> compile -> auto-wire
-       core.hooksPath) + README "from a clone" section. Highest remaining leverage
-       on the any-dev-from-git story; auto-wiring hooksPath stops a fresh clone's
-       git gates being dormant.
-    2. IH-4 — ledger flock in _append_ledger_row + the chunks.jsonl committed-churn
-       decision (do both before multi-agent, since the ledger is now guarded but
-       not concurrency-safe).
-    3. IH-5 — `socom update`; IH-6 — secrets redaction write-time gate for handoffs.
+    1. IH-4 — ledger flock in _append_ledger_row (the read-all-then-append needs a
+       lockfile/flock so concurrent seats cannot lose or interleave a row) + the
+       chunks.jsonl committed-churn posture decision. Both before multi-agent.
+    2. IH-5 — `socom update` (version + reconcile, GSD manifest model).
+    3. IH-6 — secrets redaction write-time gate for handoffs.
     4. CI action-version bump (Node-24 deprecation debt).
   </next>
 </handoff>
