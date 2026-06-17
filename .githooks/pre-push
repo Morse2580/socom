@@ -1,5 +1,5 @@
 #!/bin/sh
-# socom:generated source=022e67cc361f
+# socom:generated source=c92d7a9015ae
 SOCOM="$(command -v socom 2>/dev/null)"
 [ -z "$SOCOM" ] && [ -n "$SOCOM_HOME" ] && [ -x "$SOCOM_HOME/bin/socom" ] && SOCOM="$SOCOM_HOME/bin/socom"
 [ -z "$SOCOM" ] && [ -x "/Users/arinti-work/Documents/projs/socom/bin/socom" ] && SOCOM="/Users/arinti-work/Documents/projs/socom/bin/socom"

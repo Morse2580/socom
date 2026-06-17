@@ -51,12 +51,19 @@ be cleanly adopted from a clone." Each row leashed with an ID (§no-quick-fixes-
   session-start gate silently never fired. Routed it through the SAME `HOOK_RESOLVER`
   the git hooks use (command -v socom → $SOCOM_HOME → fallback → degrade exit 0); +3
   smoke checks. The substrate stops failing its own open-design / fix-the-class gate.
-- **IH-2 — ledgercheck schema gate (OPEN, highest leverage)**: the JSONL run ledger
-  (`.socom/ledger/runs.jsonl`) — the #1/#6f measurement spine — is validated by
-  NOTHING (`xmlcheck` is XML-only). One malformed row REDs `cmd_cycle` → REDs the
-  `eval` gate. Add a `ledgercheck` (each line parses + has the 9 schema keys + enum
-  values) wired into medium+full+CI exactly like xmlcheck. Closes the unguarded-spine
-  residuality violation.
+- **IH-2 — ledgercheck schema gate ✓ DONE** (this session): the JSONL run ledger
+  (`.socom/ledger/runs.jsonl`) — the #1/#6f measurement spine — was validated by
+  NOTHING (`xmlcheck` is XML-only; `cycle` only caught JSON-decode errors). A row that
+  was valid JSON but schema-invalid (missing `verdict`, `gate_band:"purple"`) silently
+  mis-scored the `eval` gate. Added `tests/ledgercheck.py`: parses the field contract
+  (8 required keys + 2 enums + 3 int-typed, bool excluded) straight FROM
+  `schemas/ledger.xml` — single source, no hardcoded list — and fails any bad row;
+  absent ledger PASSES (fail-open on absence, fail-closed on corruption). Wired into
+  medium+full+CI (all 3 adapters, via `socom compile`, not by hand). +5 smoke checks;
+  independent reviewer ACCEPT (8/8 contract checks + adversarial probes clean). Closes
+  the unguarded-spine residuality violation at the root.
+  NOTE: CI is single-sourced from `socom.yaml` via `compile` (the feared
+  full-check duplication across adapters does not exist) — no new backlog item needed.
 - **IH-3 — adopt one-shot + auto-wire hooks + README (OPEN)**: `git config
   core.hooksPath .githooks` is only PRINTED (auto-healed only inside `doctor`), so a
   fresh clone's git gates are dormant; there is no `socom adopt` (adoption is a 5-rung

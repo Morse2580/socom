@@ -1,4 +1,4 @@
-<!-- socom:generated v=0.1 source=022e67cc361f — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
+<!-- socom:generated v=0.1 source=c92d7a9015ae — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
 # socom — SOCOM substrate
 
 Protocol over participants: the rules below bind every participant — agent or human. Canonical source: `.socom/` + `socom.yaml`.
@@ -242,8 +242,8 @@ The discipline (Akili-ported teaching layer):
 | Check | Command |
 |---|---|
 | fast | `tests/smoke.sh` |
-| medium | `tests/smoke.sh && python3 tests/xmlcheck.py` |
-| full | `tests/smoke.sh && python3 tests/xmlcheck.py && ./bin/socom index . >/dev/null && echo full-ok` |
+| medium | `tests/smoke.sh && python3 tests/xmlcheck.py && python3 tests/ledgercheck.py` |
+| full | `tests/smoke.sh && python3 tests/xmlcheck.py && python3 tests/ledgercheck.py && ./bin/socom index . >/dev/null && echo full-ok` |
 | ci.status | `echo 'bind me: cache-free pipeline state query'` |
 
 Domains: protocol, cli, canon

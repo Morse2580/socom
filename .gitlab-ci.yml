@@ -1,8 +1,8 @@
-# socom:generated v=0.1 source=022e67cc361f — do not edit; edit .socom/ + socom.yaml, then `socom compile` 
+# socom:generated v=0.1 source=c92d7a9015ae — do not edit; edit .socom/ + socom.yaml, then `socom compile` 
 socom-gates:
   image: python:3.12
   rules:
     - if: $CI_PIPELINE_SOURCE == 'push' || $CI_PIPELINE_SOURCE == 'merge_request_event'
   script:
     - pip install pyyaml
-    - tests/smoke.sh && python3 tests/xmlcheck.py && ./bin/socom index . >/dev/null && echo full-ok
+    - tests/smoke.sh && python3 tests/xmlcheck.py && python3 tests/ledgercheck.py && ./bin/socom index . >/dev/null && echo full-ok

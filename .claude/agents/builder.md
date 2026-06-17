@@ -1,4 +1,4 @@
-<!-- socom:generated v=0.1 source=022e67cc361f — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
+<!-- socom:generated v=0.1 source=c92d7a9015ae — do not edit; edit .socom/ + socom.yaml, then `socom compile` -->
 ---
 name: builder
 description: Implements one contracted unit of work in an isolated worktree, self-checks against the contract, and submits evidence. The default production seat.

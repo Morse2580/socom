@@ -375,6 +375,31 @@ GA=$(wc -l < .socom/ledger/runs.jsonl)
            || bad "gate crashed/blocked on a directory promise arg"
 "$SOCOM" cycle >/dev/null 2>&1; check "cycle round-trips the gate-recorded rows" 0 $?
 rm -rf .socom/ledger .socom/cycles
+
+# 10d-bis. ledgercheck — the run-ledger schema gate (IH-2). The measurement
+# spine (.socom/ledger/runs.jsonl) was guarded by NOTHING: xmlcheck is XML-only,
+# and `cycle` only catches JSON-decode errors — a row that is valid JSON but
+# missing `verdict` or carrying gate_band:"purple" sailed through and silently
+# REDs the eval cycle. ledgercheck parses the field contract FROM
+# schemas/ledger.xml (single source) and fails any bad row; absent ledger PASSES
+# (fail-open on absence, fail-closed on corruption). Wired into medium+full+CI.
+LC="python3 $ROOT/tests/ledgercheck.py"
+LCGOOD='{"ts":"2026-06-13T20:14:00Z","seat":"builder","promise":"P-1","contract":"C-1","gate_band":"red","exit_code":0,"duration_s":357,"attempt":1,"verdict":"kept"}'
+$LC "$T/lc-absent.jsonl" >/dev/null 2>&1
+check "ledgercheck: absent ledger PASSES (fail-open on absence)" 0 $?
+printf '%s\n%s\n' "$LCGOOD" "$LCGOOD" > "$T/lc-good.jsonl"
+$LC "$T/lc-good.jsonl" >/dev/null 2>&1
+check "ledgercheck: valid rows PASS" 0 $?
+printf '%s\n' '{"ts":"x","seat":"builder","promise":"P-1","contract":"C-1","gate_band":"red","exit_code":0,"duration_s":1,"attempt":1}' > "$T/lc-key.jsonl"
+$LC "$T/lc-key.jsonl" >/dev/null 2>&1
+check "ledgercheck: missing required key (verdict) FAILS" 1 $?
+printf '%s\n' '{"ts":"x","seat":"builder","promise":"P-1","contract":"C-1","gate_band":"purple","exit_code":0,"duration_s":1,"attempt":1,"verdict":"maybe"}' > "$T/lc-enum.jsonl"
+$LC "$T/lc-enum.jsonl" >/dev/null 2>&1
+check "ledgercheck: bad enum value FAILS" 1 $?
+printf '%s\nnot json{\n' "$LCGOOD" > "$T/lc-json.jsonl"
+$LC "$T/lc-json.jsonl" >/dev/null 2>&1
+check "ledgercheck: malformed JSON line FAILS" 1 $?
+
 rm -rf .socom/promises
 
 # 10e. precond — velocity-first work-readiness pre-flight (the published gate)
