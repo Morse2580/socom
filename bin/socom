@@ -340,16 +340,18 @@ def render_agent(role) -> str:
     return "\n".join(lines) + "\n"
 
 
-# HR1: hooks resolve the tool (PATH -> $SOCOM_HOME -> builder-machine
-# fallback) and degrade gracefully when absent — the substrate must never be
-# why a fresh clone can't commit. CI re-asserts every gate (R1), so graceful
-# local absence loses nothing.
-SOCOM_BIN = str(TOOL_ROOT / "bin" / "socom")
-HOOK_RESOLVER = f'''SOCOM="$(command -v socom 2>/dev/null)"
-[ -z "$SOCOM" ] && [ -n "$SOCOM_HOME" ] && [ -x "$SOCOM_HOME/bin/socom" ] && SOCOM="$SOCOM_HOME/bin/socom"
-[ -z "$SOCOM" ] && [ -x "{SOCOM_BIN}" ] && SOCOM="{SOCOM_BIN}"
-if [ -z "$SOCOM" ]; then
-  echo "socom: tool not found — gate skipped locally, CI re-asserts. (export SOCOM_HOME=<socom checkout>)" >&2
+# HR1: hooks resolve the tool (PATH -> local git config -> $SOCOM_HOME) and
+# degrade gracefully when absent — the substrate must never be why a fresh
+# clone can't commit. CI re-asserts every gate (R1), so graceful local absence
+# loses nothing. The committed hook carries NO machine-specific absolute path:
+# the builder-machine fallback lives in local git config (socom.binpath, set by
+# `adopt`/_wire_hooks, never committed), so a teammate's clone never inherits
+# this machine's filesystem (constitution §open-design, §least-common-mechanism).
+HOOK_RESOLVER = '''SOCOM="$(command -v socom 2>/dev/null)"
+[ -x "$SOCOM" ] || SOCOM="$(git config socom.binpath 2>/dev/null)"
+[ -x "$SOCOM" ] || { [ -n "$SOCOM_HOME" ] && SOCOM="$SOCOM_HOME/bin/socom"; }
+if [ -z "$SOCOM" ] || [ ! -x "$SOCOM" ]; then
+  echo "socom: tool not found — gate skipped locally, CI re-asserts. (run \\`socom adopt\\` here, or export SOCOM_HOME=<socom checkout>)" >&2
   exit 0
 fi
 '''
@@ -473,6 +475,12 @@ def _wire_hooks(root: Path) -> bool:
     if _git_hooks_path(root) == HOOKS_DIR:
         return True
     subprocess.run(["git", "config", "core.hooksPath", HOOKS_DIR],
+                   cwd=root, capture_output=True)
+    # Record THIS machine's socom location in LOCAL git config (never committed)
+    # so the portable committed hook can resolve the tool without a PATH install
+    # — replaces the old absolute path baked into the shared hook (HR1).
+    subprocess.run(["git", "config", "socom.binpath",
+                    str(TOOL_ROOT / "bin" / "socom")],
                    cwd=root, capture_output=True)
     return _git_hooks_path(root) == HOOKS_DIR
 
