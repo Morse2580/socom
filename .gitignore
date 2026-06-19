@@ -1,2 +1,7 @@
 __pycache__/
 *.pyc
+
+# Foreign local-only state — never part of the tracked substrate. Keeps a
+# legacy SOCOM Claude Code plugin (PreToolUse session-name gate) from
+# polluting an adopted repo's history when both share the .socom/ marker.
+.socom/state/
