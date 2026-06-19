@@ -437,24 +437,38 @@ def cmd_compile(args):
     write_generated(root / SOCOM_DIR / "ci" / "azure-socom-gates.yml",
                     "\n".join(ado) + "\n", h, comment=("#", ""), force=force)
 
+    # .claude/settings.json — NON-CLOBBERING MERGE: socom only ADDS keys that are
+    # absent (the SessionStart gate hook and the statusLine), and never overwrites
+    # a hand-set statusLine or existing hooks. So `adopt` offers its statusline +
+    # gate without ever stomping a user's own config (e.g. another tool's
+    # statusLine). Invalid JSON is left untouched (don't corrupt; §fail-safe).
     settings = root / ".claude" / "settings.json"
-    if not settings.exists():
-        import json
+    import json
+    # The SessionStart hook resolves socom through the SAME resolver the git hooks
+    # use (HOOK_RESOLVER) — never a machine-specific absolute path (§open-design).
+    sess_cmd = f'{HOOK_RESOLVER}exec "$SOCOM" gate session-start'
+    existing = {}
+    if settings.exists():
+        try:
+            existing = json.loads(settings.read_text())
+        except Exception:
+            print(f"  SKIP {settings} — not valid JSON, left untouched")
+            existing = None
+    if existing is not None:
+        notes = []
+        if "statusLine" not in existing:
+            existing["statusLine"] = {"type": "command", "command": "socom statusline"}
+            notes.append("statusLine -> `socom statusline`")
+        else:
+            notes.append("kept your statusLine")
+        hooks = existing.setdefault("hooks", {})
+        if "SessionStart" not in hooks:
+            hooks["SessionStart"] = [{"matcher": "*", "hooks": [
+                {"type": "command", "command": sess_cmd, "timeout": 30}]}]
+            notes.append("SessionStart gate")
         settings.parent.mkdir(parents=True, exist_ok=True)
-        # The SessionStart hook resolves socom through the SAME resolver the git
-        # hooks use (HOOK_RESOLVER) — never a bare machine-specific absolute path
-        # baked into the JSON, so a fresh clone's session-start gate actually
-        # fires (and degrades to exit 0 when the tool is absent). One source of
-        # truth for "find socom" across every generated hook surface — the git
-        # hooks already did this; emitting a hardcoded path here was the same
-        # class left un-fixed (constitution §fix-the-class / open-design).
-        cmd = f'{HOOK_RESOLVER}exec "$SOCOM" gate session-start'
-        doc = {"hooks": {"SessionStart": [{"matcher": "*", "hooks": [
-            {"type": "command", "command": cmd, "timeout": 30}]}]}}
-        settings.write_text(json.dumps(doc, indent=2) + "\n")
-        print(f"  wrote {settings}")
-    else:
-        print(f"  SKIP {settings} exists — wire `socom gate session-start` into SessionStart yourself")
+        settings.write_text(json.dumps(existing, indent=2) + "\n")
+        print(f"  .claude/settings.json: {', '.join(notes)}")
 
     print(f"socom: compiled (source={h}). Activate git hooks: "
           f"git config core.hooksPath {HOOKS_DIR}  (or `socom adopt` does it for you)")
