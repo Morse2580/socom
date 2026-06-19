@@ -32,6 +32,8 @@ Commands:
            commands (PASS/FAIL on exit), flags no-run checks MANUAL; --record
            appends the outcome to the run ledger (cycle data) | show
   greet    adoption-ladder greeting — where you are, what's next
+  statusline Claude Code statusLine: adoption bar + context-consumption meter
+           (reads the host's statusline JSON on stdin; GSD-style ctx meter)
   adopt    one-shot: plant + compile + wire git hooks (fresh clone -> live gates)
   install  symlink this checkout onto PATH (~/.local/bin) so `socom` just works
   uninstall remove the socom symlink (only if it points at this checkout)
@@ -2196,6 +2198,47 @@ def adoption_bar(state: str, width: int = 10) -> str:
     return f"socom {'█' * filled}{'░' * (width - filled)} {pct}%"
 
 
+def _context_meter(data: dict, width: int = 10) -> str:
+    """Context-window USED meter from the host's statusline JSON — same math as
+    GSD's statusline: subtract the autocompact buffer (~16.5%, or computed from
+    CLAUDE_CODE_AUTO_COMPACT_WINDOW), scale to the usable range, color by load.
+    Returns '' when no context_window is present (run outside a statusline)."""
+    cw = (data.get("context_window") or {}) if isinstance(data, dict) else {}
+    remaining = cw.get("remaining_percentage")
+    if remaining is None:
+        return ""
+    total = cw.get("total_tokens") or 1_000_000
+    acw = int(os.environ.get("CLAUDE_CODE_AUTO_COMPACT_WINDOW", "0") or 0)
+    buffer = min(100, acw / total * 100) if acw > 0 else 16.5
+    usable_remaining = max(0, (remaining - buffer) / (100 - buffer) * 100)
+    used = max(0, min(100, round(100 - usable_remaining)))
+    filled = used * width // 100
+    bar = "█" * filled + "░" * (width - filled)
+    color = ("\x1b[32m" if used < 50 else "\x1b[33m" if used < 65
+             else "\x1b[38;5;208m" if used < 80 else "\x1b[31m")
+    return f"ctx {color}{bar} {used}%\x1b[0m"
+
+
+def cmd_statusline(args):
+    """Claude Code statusLine renderer: one line carrying the adoption bar AND
+    the context-consumption meter (the way GSD surfaces context). Reads the
+    host's statusline JSON on stdin; fails silent — a status line must never
+    error. Wire it in settings.json: statusLine.command = "socom statusline"."""
+    import json
+    try:
+        data = json.loads(sys.stdin.read() or "{}")
+    except Exception:
+        data = {}
+    cwd = (data.get("workspace") or {}).get("current_dir") or "."
+    try:
+        state, _ = adoption_rung(repo_root(Path(cwd)))
+        left = adoption_bar(state)
+    except Exception:
+        left = "socom"
+    ctx = _context_meter(data)
+    print(f"{left}  ·  {ctx}" if ctx else left)
+
+
 def cmd_greet(args):
     root = repo_root(Path(args[0]) if args else None)
     print(BANNER)
@@ -2302,6 +2345,7 @@ COMMANDS = {"init": cmd_init, "compile": cmd_compile, "doctor": cmd_doctor,
             "claim": cmd_claim, "release": cmd_release, "handoff": cmd_handoff,
             "prompt": cmd_prompt, "breach": cmd_breach,
             "baseline": cmd_baseline, "greet": cmd_greet,
+            "statusline": cmd_statusline,
             "embed": cmd_embed, "query": cmd_query, "eval": cmd_eval,
             "cycle": cmd_cycle, "lesson": cmd_lesson, "precond": cmd_precond,
             "introspect": cmd_introspect, "contract": cmd_contract,
