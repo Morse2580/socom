@@ -1,7 +1,14 @@
 __pycache__/
 *.pyc
 
-# Foreign local-only state — never part of the tracked substrate. Keeps a
-# legacy SOCOM Claude Code plugin (PreToolUse session-name gate) from
-# polluting an adopted repo's history when both share the .socom/ marker.
-.socom/state/
+# This repo ships the TOOL — bin/, canon/, schemas/, templates/, adapters/, tests/.
+# It does NOT commit a self-adoption. `socom adopt` materializes the substrate and
+# the runtime adapters per-clone; they are generated build output, never source.
+/.socom/
+/CLAUDE.md
+/AGENTS.md
+/.claude/
+/.cursor/
+/.githooks/
+/.gitlab-ci.yml
+/.github/workflows/socom-gates.yml
