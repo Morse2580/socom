@@ -2185,11 +2185,23 @@ def adoption_rung(root: Path) -> tuple[str, str]:
             "-> prompt. Ask the substrate things: `socom query \"...\"`")
 
 
+def adoption_bar(state: str, width: int = 10) -> str:
+    """Render the adoption ladder as a block progress bar: the 7 rungs (T0..T6)
+    map linearly to 0..100%. One honest number a fresh install can watch climb
+    from clone to operational — same shape for everyone (§psychological-accept.)."""
+    m = re.match(r"T(\d+)", state)
+    rung = int(m.group(1)) if m else 0
+    pct = round(rung / 6 * 100)
+    filled = round(pct / 100 * width)
+    return f"socom {'█' * filled}{'░' * (width - filled)} {pct}%"
+
+
 def cmd_greet(args):
     root = repo_root(Path(args[0]) if args else None)
     print(BANNER)
     state, nxt = adoption_rung(root)
     print(f"   repo: {root.name}")
+    print(f"   {adoption_bar(state)}")
     print(f"   rung: {state}")
     print(f"   next: {nxt}")
     blog = root / SOCOM_DIR / "gates" / "breaches.log"
@@ -2225,6 +2237,7 @@ def cmd_adopt(args):
               f"`socom adopt` again. CI re-asserts every gate regardless.",
               file=sys.stderr)
     state, nxt = adoption_rung(root)
+    print(f"  {adoption_bar(state)}")
     print(f"  rung: {state}\n  next: {nxt}")
 
 
