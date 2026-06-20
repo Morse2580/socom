@@ -18,5 +18,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - run: pip install pyyaml
+      - name: build integrity — bin/socom matches src/socom (no committed-artifact drift)
+        run: python3 build.py --check
       - name: re-assert the full check (smoke + xmlcheck + ledgercheck + context + index)
         run: tests/smoke.sh && python3 tests/xmlcheck.py && python3 tests/ledgercheck.py && ./bin/socom context verify && ./bin/socom index . >/dev/null && echo full-ok

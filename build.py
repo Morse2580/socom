@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+"""Assemble src/socom/*.py into the single runnable bin/socom (distribution model
+B: clean multi-module source, one readable committed artifact).
+
+Each module is: docstring, `from __future__`, a stdlib import block, computed
+`from socom.X import …` cross-module imports, a `# === BODY ===` marker, then the
+verbatim body. This concatenates the bodies in dependency order (core first so
+TOOL_ROOT exists before CONTEXT_SCHEMA; cli last so COMMANDS sees every cmd_*),
+hoisting one deduped stdlib import block to the top and dropping the per-module
+`__future__` / intra-package imports (the assembled file is one namespace).
+
+  python3 build.py            # write bin/socom from src/socom
+  python3 build.py --check    # exit 1 if bin/socom differs from a fresh build
+                              # (the drift gate — tests/buildcheck runs this)
+"""
+import stat
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+SRC = ROOT / "src" / "socom"
+TARGET = ROOT / "bin" / "socom"
+MARKER = "# === BODY ==="
+
+# dependency order: core defines TOOL_ROOT before context's CONTEXT_SCHEMA; cli
+# (COMMANDS + the __main__ guard) is last so every cmd_* is already defined.
+ORDER = ["core", "claims", "ledger", "retrieval", "lesson", "handoff",
+         "gate", "context", "lifecycle", "install", "cli"]
+
+
+def _is_pkg_or_future(line):
+    s = line.strip()
+    return s.startswith("from __future__") or s.startswith("from socom") \
+        or s.startswith("from . ") or s.startswith("from .")
+
+
+def assemble():
+    docstring = (SRC / "__init__.py").read_text().rstrip() + "\n"
+    stdlib, bodies = [], []
+    for mod in ORDER:
+        text = (SRC / f"{mod}.py").read_text()
+        if MARKER not in text:
+            raise SystemExit(f"build: src/socom/{mod}.py missing {MARKER!r}")
+        head, body = text.split(MARKER, 1)
+        for line in head.splitlines():
+            s = line.strip()
+            if (s.startswith("import ") or s.startswith("from ")) \
+                    and not _is_pkg_or_future(line):
+                if line not in stdlib:
+                    stdlib.append(line)
+        bodies.append(body.strip("\n"))
+    out = [
+        "#!/usr/bin/env python3",
+        docstring.rstrip("\n"),
+        "# GENERATED from src/socom/*.py by build.py — edit the modules, then"
+        " `python3 build.py`. Do not hand-edit (tests/buildcheck gates drift).",
+        "from __future__ import annotations",
+        "",
+        "\n".join(stdlib),
+        "",
+        "\n\n\n".join(bodies),
+        "",
+    ]
+    return "\n".join(out)
+
+
+def main(argv):
+    built = assemble()
+    if "--check" in argv:
+        current = TARGET.read_text() if TARGET.exists() else ""
+        if current != built:
+            print("build: bin/socom is STALE — run `python3 build.py` "
+                  "(src/socom changed but the artifact was not rebuilt).",
+                  file=sys.stderr)
+            return 1
+        print("build: bin/socom is up to date with src/socom.")
+        return 0
+    TARGET.write_text(built)
+    TARGET.chmod(TARGET.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    print(f"build: wrote {TARGET.relative_to(ROOT)} from {len(ORDER)} modules.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

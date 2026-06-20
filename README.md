@@ -100,6 +100,15 @@ git clone https://github.com/Morse2580/socom.git && cd socom
 ./bin/socom adopt                     # wires this clone's hooks; gates now live
 ```
 
+The source of truth is `src/socom/*.py` (clean modules); `bin/socom` is the
+single readable artifact **assembled** from them by `build.py` — so it stays one
+file you can symlink, with no install step. Edit the modules, then:
+
+```sh
+python3 build.py            # regenerate bin/socom from src/socom
+python3 build.py --check    # CI/smoke gate: fail if bin/socom is stale vs src
+```
+
 Without `adopt`, a fresh clone's local hooks stay dormant until something heals
 `core.hooksPath` — CI still re-asserts every gate, but you lose the fast local
 feedback. `adopt` is the published, one-command path so the protected path is the
