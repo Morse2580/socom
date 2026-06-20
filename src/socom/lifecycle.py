@@ -12,7 +12,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 from socom.claims import claim_expired, claim_holder
-from socom.core import CANON_FILES, HOOKS_DIR, SOCOM_DIR, SOCOM_VERSION, TOOL_ROOT, canonical_hash, load_cfg, md_text, parse_canon, repo_root, write_generated
+from socom.core import CANON_FILES, HOOKS_DIR, SOCOM_DIR, SOCOM_VERSION, canonical_hash, load_cfg, md_text, parse_canon, repo_root, resource, write_generated
 
 # === BODY ===
 
@@ -34,7 +34,7 @@ def cmd_init(args):
     for name in CANON_FILES:
         dst = socom_dir / "canon" / name
         if not dst.exists():
-            dst.write_text((TOOL_ROOT / "canon" / name).read_text())
+            dst.write_text(resource("canon/" + name))
             print(f"  planted {dst}")
 
     idx = socom_dir / "memory" / "INDEX.md"
@@ -379,7 +379,7 @@ def _wire_hooks(root: Path) -> bool:
     # so the portable committed hook can resolve the tool without a PATH install
     # — replaces the old absolute path baked into the shared hook (HR1).
     subprocess.run(["git", "config", "socom.binpath",
-                    str(TOOL_ROOT / "bin" / "socom")],
+                    str(Path(__file__).resolve())],
                    cwd=root, capture_output=True)
     return _git_hooks_path(root) == HOOKS_DIR
 
@@ -418,9 +418,15 @@ def cmd_doctor(args):
     deltas = []
     for name in CANON_FILES:
         local = root / SOCOM_DIR / "canon" / name
-        shipped = TOOL_ROOT / "canon" / name
-        if local.exists() and shipped.exists() and \
-                local.read_bytes() != shipped.read_bytes():
+        if not local.exists():
+            continue
+        try:
+            shipped = resource("canon/" + name)
+        except SystemExit:
+            continue  # neither embedded nor on disk — can't compare, skip
+        # read_bytes().decode (not read_text, which normalizes CRLF) so a real
+        # newline-only divergence is not masked — complete-mediation.
+        if local.read_bytes().decode("utf-8") != shipped:
             deltas.append(name)
 
     if problems:

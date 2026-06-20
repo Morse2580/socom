@@ -11,7 +11,7 @@ import textwrap
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
-from socom.core import SOCOM_DIR, SOCOM_VERSION, TOOL_ROOT, _now_iso, repo_root
+from socom.core import SOCOM_DIR, SOCOM_VERSION, _now_iso, repo_root, resource
 from socom.retrieval import l0_score
 
 # === BODY ===
@@ -32,22 +32,22 @@ from socom.retrieval import l0_score
 # inputs (l0_score-ranked vs the promise goal) until the sum fits the budget.
 # measure/compress MUTATE and are NOT gates (a gate that fixes its own failure is
 # the separation-of-privilege trap); only verify is band-wired.
-CONTEXT_SCHEMA = TOOL_ROOT / "schemas" / "context.xml"
-
-
 _INVARIANT_OPS = {"<=": lambda a, b: a <= b, "<": lambda a, b: a < b,
                   ">=": lambda a, b: a >= b, ">": lambda a, b: a > b,
                   "==": lambda a, b: a == b}
 
 
-def _load_context_contract(schema=CONTEXT_SCHEMA):
-    """Parse schemas/context.xml -> (required, int_fields, invariants, divisor,
+def _load_context_contract(schema=None):
+    """Parse the context schema -> (required, int_fields, invariants, divisor,
     version). The <field> + <invariant> + <measurement> elements AND the schema's
     own socom= version ARE the contract; nothing is hardcoded (single source,
     §least-common-mechanism / open-design). An invariant rhs may name an int field
     OR be an int literal (so a lower bound like input_tokens >= 0 reuses the same
-    mechanism rather than a bespoke check)."""
-    root = ET.parse(schema).getroot()
+    mechanism rather than a bespoke check). schema=None reads the SHIPPED schema
+    (embedded in the distributed file, or schemas/context.xml from a checkout); a
+    path may be passed to validate against an alternative schema (tests)."""
+    root = (ET.parse(schema).getroot() if schema is not None
+            else ET.fromstring(resource("schemas/context.xml")))
     version = root.get("socom")  # the contract version an envelope must declare
     required = [f.get("name") for f in root.find("fields").findall("field")
                 if f.get("required") == "true"]

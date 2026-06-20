@@ -55,9 +55,23 @@ lifecycle, role agents, completion gates, generated next-session prompts) and
 the architecture argued in
 [Protocol over Participants](https://medium.com/data-unlocked/protocol-over-participants-c639e2be0f64).
 
-## Requirements
+## Install (one self-contained file)
 
-socom is a single Python script (`bin/socom`) — symlink it onto `PATH` and run.
+`bin/socom` is a single, self-contained Python file — the shipped canon and
+schemas are **embedded** in it (by `build.py`), so it works with **no clone**.
+Grab the one file, review it, make it executable, run it:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/Morse2580/socom/main/bin/socom
+# read it — it's plain Python — then:
+chmod +x socom && ./socom install      # symlinks itself onto PATH (~/.local/bin)
+```
+
+Download-then-run (auditable) — not `curl … | sh` (which executes unseen code).
+`socom install` only symlinks the file you already have; no copy, no sudo, no
+network at install time.
+
+## Requirements
 
 - **Python ≥ 3.9** (uses `pathlib.Path.is_relative_to`).
 - **PyYAML** — the one third-party dependency (`pip install -r requirements.txt`,
