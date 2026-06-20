@@ -24,6 +24,13 @@ python3 -m py_compile "$SOCOM"; check "cli compiles" 0 $?
 if [ -f "$ROOT/build.py" ]; then
   python3 "$ROOT/build.py" --check >/dev/null 2>&1
   check "build: bin/socom is up to date with src/socom (no drift)" 0 $?
+  # 0c. the src modules import as a real package (no cycles) AND resolve the
+  # shipped canon/schemas in ISOLATION — TOOL_ROOT walks up, so a single module
+  # is importable and unit-testable without the assembled bin/socom.
+  PYTHONPATH="$ROOT/src" python3 -c "import socom.cli" >/dev/null 2>&1
+  check "src/socom imports as a package (acyclic cross-module imports)" 0 $?
+  PYTHONPATH="$ROOT/src" python3 -c "import socom.context as c; assert c._load_context_contract()[3]==4" >/dev/null 2>&1
+  check "src/socom module resolves schemas in isolation (location-independent TOOL_ROOT)" 0 $?
 fi
 
 # 1. init + compile in a fresh repo
