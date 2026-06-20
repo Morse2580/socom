@@ -335,7 +335,9 @@ with tempfile.TemporaryDirectory() as _d:
 # CTX-2: measurement (chars/divisor) + the honesty re-measure of <inputs>.
 eq("_estimate_tokens: round(len/divisor)", socom._estimate_tokens("a" * 40, 4), 10)
 with tempfile.TemporaryDirectory() as _d:
-    _repo = Path(_d)
+    _repo = Path(_d) / "repo"           # repo is a SUBDIR so an outside file exists
+    _repo.mkdir()
+    (Path(_d) / "outside.txt").write_text("secret outside the repo tree")
     (_repo / "art.txt").write_text("x" * 40)  # 40 chars -> 10 tokens at chars/4
     eq("_measure_ref: a live ref measured at the schema divisor",
        socom._measure_ref(_repo, "art.txt", 4), 10)
@@ -369,6 +371,34 @@ with tempfile.TemporaryDirectory() as _d:
         '<inputs><input ref="art.txt" tokens="10"/></inputs></context>')
     check("honesty: skipped when repo is None (CTX-1 schema-only, backward-compat)",
           socom._context_violations(_repo / "e.xml", _creq, _cints, _cinv) == [])
+
+    # path containment (blocker fix): a ref escaping the repo tree reads as None —
+    # no path-traversal side-channel from a crafted envelope.
+    check("_read_ref: an in-repo ref still reads",
+          socom._read_ref(_repo, "art.txt") == "x" * 40)
+    check("_read_ref: a ../ escape is refused (None)",
+          socom._read_ref(_repo, "../outside.txt") is None)
+    check("_read_ref: an absolute path outside the repo is refused (None)",
+          socom._read_ref(_repo, str(Path(_d) / "outside.txt")) is None)
+    try:
+        (_repo / "link.txt").symlink_to(Path(_d) / "outside.txt")
+        check("_read_ref: an in-repo symlink pointing outside is refused (None)",
+              socom._read_ref(_repo, "link.txt") is None)
+    except OSError:
+        pass  # symlinks unsupported on this filesystem — skip
+
+# divisor is single-sourced from the schema: a schema lacking a valid
+# <measurement divisor> must degrade loudly, never silently default (major fix).
+with tempfile.TemporaryDirectory() as _d:
+    _bad = Path(_d) / "noschema.xml"
+    _bad.write_text('<context-schema><fields>'
+                    '<field name="id" type="id" required="true"/></fields>'
+                    '</context-schema>')
+    try:
+        socom._load_context_contract(_bad)
+        check("_load_context_contract: missing <measurement> degrades loudly", False)
+    except SystemExit:
+        check("_load_context_contract: missing <measurement> degrades loudly", True)
 
 # ── summary ──────────────────────────────────────────────────────────────────
 print(f"unit: {_PASS} passed, {_FAIL} failed")

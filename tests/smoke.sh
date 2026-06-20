@@ -494,7 +494,8 @@ check "context verify: a dir of only-valid envelopes PASSES" 0 $?
 # `verify` RE-MEASURES them and fails on any mismatch (un-forgeable), and
 # `compress` drops the lowest-relevance inputs (l0_score vs the promise goal) until
 # the sum fits budget. measure/compress MUTATE and are NOT gates; verify stays pure.
-CX2D="$T/ctx2"; mkdir -p "$CX2D" .socom/promises
+# inputs live INSIDE the repo — refs are repo-contained (path-traversal is refused).
+CX2D="ctx2inputs"; mkdir -p "$CX2D" .socom/promises
 i=0; while [ "$i" -lt 3 ]; do printf 'residuality gate saltzer schroeder complete mediation least privilege fail safe\n'; i=$((i+1)); done > "$CX2D/relevant.txt"
 i=0; while [ "$i" -lt 30 ]; do printf 'unrelated lorem ipsum filler cats weather trivia nonsense padding words here\n'; i=$((i+1)); done > "$CX2D/filler.txt"
 cat > .socom/promises/P-CX2.xml <<'EOF'
@@ -535,7 +536,16 @@ COUT="$("$SOCOM" context compress "$T/cx2-big.xml" 2>&1)"; CCR=$?
 check "context verify: PASSES after compress brings it within budget" 0 $?
 "$SOCOM" context compress "$T/cx2-a.xml" 2>&1 | grep -q "already within budget" \
   && ok "context compress is a no-op when already within budget" || bad "compress no-op path wrong"
+# path containment: a ref escaping the repo tree (absolute / out-of-repo) is
+# refused — measure/verify never read an arbitrary file (path-traversal blocker).
+cat > "$T/cx2-escape.xml" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<context socom="0.1" id="CX2E" promise="P-CX2" seat="builder" ts="t" budget_tokens="100000" input_tokens="9"><inputs><input ref="/etc/hosts" tokens="9"/></inputs></context>
+EOF
+"$SOCOM" context verify "$T/cx2-escape.xml" >/dev/null 2>&1
+check "context verify: an out-of-repo (absolute) ref is refused — path containment" 1 $?
 rm -f .socom/promises/P-CX2.xml
+rm -rf "$CX2D"
 
 rm -rf .socom/promises
 
