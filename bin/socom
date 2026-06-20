@@ -1813,7 +1813,14 @@ def _context_violations(path, required, ints, invariants):
         except ValueError:
             bad.append(f"{key}={raw!r} is not an int")
     for lhs, op, rhs in invariants:
-        if lhs in vals and rhs in vals and op in _INVARIANT_OPS \
+        if op not in _INVARIANT_OPS:
+            # An invariant the verifier cannot evaluate must FAIL, never silently
+            # skip — a schema-declared rule that evaporates is a §degrade-loudly
+            # breach (R6) and a false PASS waiting on the next schema edit.
+            bad.append(f"schema invariant op {op!r} is not recognized "
+                       f"({lhs} {op} {rhs}) — cannot evaluate, failing closed")
+            continue
+        if lhs in vals and rhs in vals \
                 and not _INVARIANT_OPS[op](vals[lhs], vals[rhs]):
             bad.append(f"invariant violated: {lhs}({vals[lhs]}) {op} "
                        f"{rhs}({vals[rhs]}) is false")

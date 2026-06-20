@@ -309,6 +309,16 @@ check("_context_violations: a non-int token field is flagged",
           _viol(_cgood.replace('input_tokens="3200"', 'input_tokens="lots"'))))
 check("_context_violations: wrong root element is flagged",
       any("expected <context>" in v for v in _viol('<envelope id="CTX-1"/>')))
+# degrade-loudly (R6): an invariant op the verifier can't evaluate must FAIL
+# closed, never silently skip — else a schema edit to an unknown op is a false
+# PASS on an over-budget envelope.
+with tempfile.TemporaryDirectory() as _d:
+    _p = Path(_d) / "e.xml"
+    _p.write_text('<context socom="0.1" id="CTX-1" promise="P-1" seat="builder" '
+                  'ts="t" budget_tokens="1000" input_tokens="9999"/>')
+    _uv = socom._context_violations(_p, _creq, _cints, [("input_tokens", "!!", "budget_tokens")])
+    check("_context_violations: an unrecognized invariant op fails closed (not skipped)",
+          any("not recognized" in v for v in _uv))
 
 with tempfile.TemporaryDirectory() as _d:
     _dd = Path(_d)
