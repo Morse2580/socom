@@ -278,22 +278,26 @@ with tempfile.TemporaryDirectory() as _d:
 # ── context envelope (CTX-1: _load_context_contract / _context_violations) ────
 # The field contract AND the budget invariant are parsed FROM schemas/context.xml
 # (single source) — pin that, then pin the validator's verdicts.
-_creq, _cints, _cinv, _cdiv = socom._load_context_contract()
+_creq, _cints, _cinv, _cdiv, _cver = socom._load_context_contract()
 check("_load_context_contract: required fields parsed from the schema",
       set(_creq) == {"id", "promise", "seat", "ts", "budget_tokens", "input_tokens"})
 check("_load_context_contract: int fields parsed from the schema",
       set(_cints) == {"budget_tokens", "input_tokens"})
 check("_load_context_contract: budget invariant parsed (input <= budget)",
       ("input_tokens", "<=", "budget_tokens") in _cinv)
+check("_load_context_contract: >= 0 lower-bound invariants parsed (literal rhs)",
+      ("input_tokens", ">=", "0") in _cinv and ("budget_tokens", ">=", "0") in _cinv)
 check("_load_context_contract: measurement divisor parsed from the schema (chars/4)",
       _cdiv == 4)
+check("_load_context_contract: contract version parsed from the schema socom=",
+      _cver == "0.1")
 
 
 def _viol(xml):
     with tempfile.TemporaryDirectory() as _d:
         p = Path(_d) / "e.xml"
         p.write_text(xml)
-        return socom._context_violations(p, _creq, _cints, _cinv)
+        return socom._context_violations(p, _creq, _cints, _cinv, version=_cver)
 
 
 _cgood = ('<context socom="0.1" id="CTX-1" promise="P-1" seat="builder" '
@@ -311,6 +315,32 @@ check("_context_violations: a non-int token field is flagged",
           _viol(_cgood.replace('input_tokens="3200"', 'input_tokens="lots"'))))
 check("_context_violations: wrong root element is flagged",
       any("expected <context>" in v for v in _viol('<envelope id="CTX-1"/>')))
+# CTX carry-over (CTX-1 reviewer deferral): a NEGATIVE token count must be
+# flagged — left unchecked, input_tokens="-50" trivially satisfies input <=
+# budget (a false PASS). Closed via the >= 0 invariants, literal-rhs machinery.
+check("_context_violations: a negative input_tokens is flagged (>= 0 lower bound)",
+      any("input_tokens" in v and "is false" in v for v in
+          _viol(_cgood.replace('input_tokens="3200"', 'input_tokens="-50"'))))
+check("_context_violations: a negative budget_tokens is flagged (>= 0 lower bound)",
+      any("budget_tokens" in v and "is false" in v for v in
+          _viol(_cgood.replace('budget_tokens="8000"', 'budget_tokens="-1"'))))
+# CTX carry-over: an envelope written for a different contract version is rejected.
+check("_context_violations: a mismatched socom= version is flagged",
+      any("does not match" in v for v in
+          _viol(_cgood.replace('socom="0.1"', 'socom="9.9-bogus"'))))
+check("_context_violations: a missing socom= version is flagged",
+      any("does not match" in v for v in _viol(
+          '<context id="CTX-1" promise="P-1" seat="builder" ts="t" '
+          'budget_tokens="8000" input_tokens="3200"/>')))
+# An invariant rhs that is neither an int field nor an int literal can't be
+# evaluated -> fail closed (degrade loudly), same posture as an unknown op.
+with tempfile.TemporaryDirectory() as _d:
+    _p = Path(_d) / "e.xml"
+    _p.write_text(_cgood)
+    _bv = socom._context_violations(_p, _creq, _cints,
+                                    [("input_tokens", ">=", "notanumber")])
+    check("_context_violations: an unevaluable invariant rhs fails closed",
+          any("neither an int field" in v for v in _bv))
 # degrade-loudly (R6): an invariant op the verifier can't evaluate must FAIL
 # closed, never silently skip — else a schema edit to an unknown op is a false
 # PASS on an over-budget envelope.

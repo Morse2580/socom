@@ -482,6 +482,14 @@ check "context verify: malformed XML FAILS" 1 $?
 printf '%s\n' '<envelope socom="0.1" id="CTX-5"/>' > "$T/cx-wrongroot.xml"
 "$SOCOM" context verify "$T/cx-wrongroot.xml" >/dev/null 2>&1
 check "context verify: wrong root element FAILS" 1 $?
+# carry-over closures: a negative token count is a false-PASS hole (negative
+# input trivially <= budget), and a wrong contract version must be rejected.
+printf '%s\n' '<context socom="0.1" id="CTX-6" promise="P-1" seat="builder" ts="t" budget_tokens="1000" input_tokens="-50"/>' > "$T/cx-neg.xml"
+"$SOCOM" context verify "$T/cx-neg.xml" >/dev/null 2>&1
+check "context verify: a NEGATIVE input_tokens FAILS (>= 0 lower bound)" 1 $?
+printf '%s\n' '<context socom="9.9-bogus" id="CTX-7" promise="P-1" seat="builder" ts="t" budget_tokens="1000" input_tokens="500"/>' > "$T/cx-ver.xml"
+"$SOCOM" context verify "$T/cx-ver.xml" >/dev/null 2>&1
+check "context verify: a mismatched socom= contract version FAILS" 1 $?
 CXD="$T/ctxdir"; mkdir -p "$CXD"; printf '%s\n' "$CXOK" > "$CXD/a.xml"; cp "$T/cx-over.xml" "$CXD/b.xml"
 "$SOCOM" context verify "$CXD" >/dev/null 2>&1
 check "context verify: a dir with ANY invalid envelope FAILS" 1 $?
