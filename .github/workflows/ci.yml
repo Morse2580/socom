@@ -1,0 +1,22 @@
+# socom-the-tool's OWN ci — hand-owned, committed, NOT a socom-generated adapter.
+#
+# The "ship the tool" restructure (546227e) gitignored the GENERATED adapter
+# (.github/workflows/socom-gates.yml) as per-clone build output. But GitHub only
+# runs workflows that are COMMITTED, so a gitignored adapter never fires — the
+# tool repo was left with no CI floor (the substrate failing its own
+# §complete-mediation gate). This file restores it: it is the canonical repo's
+# enforcement, hand-maintained here, never emitted by `socom compile`. Adopter
+# repos still get the generated socom-gates.yml from `socom adopt`; this is only
+# for socom-on-socom.
+name: ci
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install pyyaml
+      - name: re-assert the full check (smoke + xmlcheck + ledgercheck + index)
+        run: tests/smoke.sh && python3 tests/xmlcheck.py && python3 tests/ledgercheck.py && ./bin/socom index . >/dev/null && echo full-ok
