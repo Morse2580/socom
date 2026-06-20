@@ -52,6 +52,30 @@ def _find_tool_root():
 TOOL_ROOT = _find_tool_root()  # the socom checkout (ships canon/ + schemas/)
 
 
+# Shipped resources (canon/*, schemas/*) so the DISTRIBUTED bin/socom is a single
+# self-contained file that works with NO clone. build.py replaces this empty
+# literal with the embedded contents; from source it stays empty and resource()
+# falls back to reading the checkout (TOOL_ROOT). Keep the marker — build.py keys
+# on it.
+RESOURCES = {}  # @EMBED@
+
+
+def resource(relpath: str) -> str:
+    """Text of a shipped resource (e.g. 'schemas/context.xml', 'canon/roles.xml').
+    Prefers the embedded copy (distributed single file); falls back to the checkout
+    on disk (running from source). Degrades LOUDLY (R6) if neither has it — a clean
+    message, never a raw FileNotFoundError traceback."""
+    if relpath in RESOURCES:
+        return RESOURCES[relpath]
+    p = TOOL_ROOT / relpath
+    if p.is_file():
+        return p.read_text()
+    raise SystemExit(
+        f"socom: resource {relpath!r} not found — this build is neither embedded "
+        "nor running from a socom checkout (canon/ + schemas/). Reinstall from a "
+        "release artifact, or run from a clone.")
+
+
 # ── helpers ──────────────────────────────────────────────────────────────
 
 def repo_root(start: Path | None = None) -> Path:
