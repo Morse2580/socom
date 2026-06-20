@@ -2038,13 +2038,17 @@ def _cmd_context_emit(root, args):
     (a tool bug, should never happen) exits nonzero — degrade loudly (R6)."""
     required, ints, invariants, divisor, version = _load_context_contract()
     f = _emit_flags(args)
+    # Friction: a session exports $SOCOM_PROMISE + $SOCOM_SEAT once, then every
+    # emit is just `--budget --input …`. Lowering the cost is how emit actually
+    # gets RUN — a producer nobody invokes leaves the gate dormant.
     seat = f.get("seat") or os.environ.get("SOCOM_SEAT")
-    missing = [n for n, v in (("--promise", f.get("promise")),
+    promise = f.get("promise") or os.environ.get("SOCOM_PROMISE")
+    missing = [n for n, v in (("--promise", promise),
                               ("--seat", seat),
                               ("--budget", f.get("budget"))) if not v]
     if missing:
         sys.exit(f"socom context emit: {', '.join(missing)} required "
-                 "(seat may come from $SOCOM_SEAT) (R6).")
+                 "(promise/seat may come from $SOCOM_PROMISE / $SOCOM_SEAT) (R6).")
     try:
         budget = int(f["budget"])
         if budget < 0:
@@ -2081,7 +2085,7 @@ def _cmd_context_emit(root, args):
         total += m
 
     el = ET.Element("context", {
-        "socom": SOCOM_VERSION, "id": cid, "promise": f["promise"],
+        "socom": SOCOM_VERSION, "id": cid, "promise": promise,
         "seat": seat, "ts": _now_iso(),
         "budget_tokens": str(budget), "input_tokens": str(total)})
     if measured:
@@ -2099,7 +2103,14 @@ def _cmd_context_emit(root, args):
     tmp = out.with_name(out.name + ".tmp")
     _write_envelope(ET.ElementTree(el), tmp)
     viols = _context_violations(tmp, required, ints, invariants, root, divisor, version)
-    budget_only = viols and all("invariant violated" in v for v in viols)
+    # "budget_only" means the SOLE failure is the <= budget invariant (publish
+    # honestly + warn). Match that invariant specifically — a >= 0 lower-bound
+    # violation is a correctness fault, not a budget overage, and must fail closed
+    # (it is unreachable today since measures are >= 0, but don't let the label
+    # silently widen to it).
+    budget_only = bool(viols) and all(
+        ("invariant violated" in v and "<=" in v and "budget_tokens" in v)
+        for v in viols)
     if viols and not budget_only:
         tmp.unlink(missing_ok=True)
         for v in viols:
@@ -2109,7 +2120,7 @@ def _cmd_context_emit(root, args):
     os.replace(tmp, out)
 
     rel = out.relative_to(root)
-    print(f"socom context emit: wrote {rel} — promise={f['promise']} seat={seat} "
+    print(f"socom context emit: wrote {rel} — promise={promise} seat={seat} "
           f"input_tokens={total}/{budget} across {len(measured)} input(s) "
           f"(chars/{divisor} estimate).")
     if budget_only:
@@ -2118,18 +2129,99 @@ def _cmd_context_emit(root, args):
               f"run `socom context compress {rel}`.", file=sys.stderr)
 
 
+def _cmd_context_verify(root, args):
+    """Read-only gate: validate every targeted envelope against the schema (and the
+    CTX-2 re-measure of <inputs>). `--require <P-id[,P-id…]>` additionally asserts
+    that each named promise has at least one VALID envelope referencing it — the
+    opt-in CTX-4 precursor that makes per-work-unit emission CHECKABLE. It is
+    fail-CLOSED on a named-but-unfulfilled promise, while the DEFAULT (no --require)
+    keeps the fail-OPEN posture on an empty dir (lazy creation is not corruption)."""
+    require, pos, i = [], [], 0
+    while i < len(args):
+        tok = args[i]
+        if tok == "--require":
+            if i + 1 >= len(args):
+                sys.exit("socom context verify: --require needs a value "
+                         "(P-id[,P-id…]) (R6).")
+            # Strip each id so " P-A " matches promise="P-A"; reject a value that
+            # yields NO ids (e.g. "," or "  ") rather than silently acting as if
+            # --require was never given — a false green (R6).
+            val = args[i + 1]
+            ids = [p.strip() for p in val.split(",") if p.strip()]
+            if not ids:
+                sys.exit(f"socom context verify: --require {val!r} has no promise "
+                         "ids after splitting on ',' — stray commas or whitespace? "
+                         "(R6).")
+            require += ids
+            i += 2
+        elif tok.startswith("--"):
+            # An unknown flag must not silently fall through to a positional target
+            # (a typo'd --requre would otherwise become a non-existent path and
+            # pass fail-open, dropping the operator's assertion) — degrade loudly.
+            sys.exit(f"socom context verify: unknown flag {tok!r} — usage: verify "
+                     "[<envelope.xml|dir>] [--require P-id[,P-id…]] (R6).")
+        else:
+            pos.append(tok)
+            i += 1
+    raw = pos[0] if pos else f"{SOCOM_DIR}/context"
+    target = Path(raw)
+    if not target.is_absolute():
+        target = root / raw
+
+    required, ints, invariants, divisor, version = _load_context_contract()
+    files = _context_targets(target)
+    fulfilled, bad = set(), 0
+    if not files:
+        print(f"socom context verify: no envelopes at {raw} — nothing to "
+              "validate (created lazily on first emit).")
+    else:
+        for f in files:
+            viols = _context_violations(f, required, ints, invariants, root,
+                                        divisor, version)
+            if viols:
+                bad += 1
+                print(f"  {f.name} · FAIL")
+                for v in viols:
+                    print(f"    {v}", file=sys.stderr)
+            else:
+                print(f"  {f.name} · PASS")
+                if require:  # only re-parse when --require needs the promise map
+                    try:
+                        pid = (ET.parse(f).getroot().get("promise") or "").strip()
+                        if pid:
+                            fulfilled.add(pid)
+                    except (ET.ParseError, OSError):
+                        pass  # a PASS file is parseable; defensive only
+        print(f"socom context verify: {len(files) - bad} valid, {bad} invalid of "
+              f"{len(files)} envelope(s) -> {'OK' if not bad else 'FAILED'}")
+
+    missing = [p for p in require if p not in fulfilled]
+    for p in missing:
+        print(f"socom context verify: REQUIRED promise {p} has no valid context "
+              "envelope — a work unit ran without recording the context it "
+              "consumed (R6).", file=sys.stderr)
+    if bad or missing:
+        sys.exit(1)
+    if require:
+        print(f"socom context verify: all {len(require)} required promise(s) carry "
+              "a valid context envelope.")
+
+
 def cmd_context(args):
     subs = ("verify", "show", "measure", "compress", "emit")
     if not args or args[0] not in subs:
         sys.exit("usage: socom context <verify|show|measure|compress|emit> "
-                 "[<envelope.xml|dir>]  (verify defaults to .socom/context; "
-                 "measure/compress need one envelope file; emit takes flags — "
-                 "--promise --seat --budget --input ... --id --out)")
+                 "[<envelope.xml|dir>]  (verify defaults to .socom/context and "
+                 "takes --require P-id[,P-id…]; measure/compress need one envelope "
+                 "file; emit takes flags — --promise --seat --budget --input ... "
+                 "--id --out)")
     sub = args[0]
     root = repo_root()
 
     if sub == "emit":
         return _cmd_context_emit(root, args[1:])
+    if sub == "verify":
+        return _cmd_context_verify(root, args[1:])
 
     raw = args[1] if len(args) > 1 else f"{SOCOM_DIR}/context"
     target = Path(raw)
@@ -2253,29 +2345,6 @@ def cmd_context(args):
                   "is CTX-3; raise the budget or split the input.", file=sys.stderr)
             sys.exit(1)
         return
-
-    # verify: validate every targeted envelope against schemas/context.xml, and
-    # (CTX-2) re-measure any <inputs> from the live artifacts — pure read-only gate.
-    required, ints, invariants, divisor, version = _load_context_contract()
-    files = _context_targets(target)
-    if not files:
-        print(f"socom context verify: no envelopes at {raw} — nothing to "
-              "validate (created lazily on first emit).")
-        return
-    bad = 0
-    for f in files:
-        viols = _context_violations(f, required, ints, invariants, root, divisor, version)
-        if viols:
-            bad += 1
-            print(f"  {f.name} · FAIL")
-            for v in viols:
-                print(f"    {v}", file=sys.stderr)
-        else:
-            print(f"  {f.name} · PASS")
-    print(f"socom context verify: {len(files) - bad} valid, {bad} invalid of "
-          f"{len(files)} envelope(s) -> {'OK' if not bad else 'FAILED'}")
-    if bad:
-        sys.exit(1)
 
 
 # ── lesson — experience earned into durable, retrievable rules ────────────

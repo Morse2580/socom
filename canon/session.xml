@@ -37,8 +37,10 @@ recall is not trusted.
 
   <phase id="closeout" order="3">
     <md embed="true">
-One uninterrupted pipeline: bucket rows flipped to reality → push → CI
-verified green → handoff written (done / undone / commands / exit codes /
+One uninterrupted pipeline: bucket rows flipped to reality → assert the work
+unit recorded its context (`socom context verify --require` the promise id —
+the envelope you emitted at bootstrap must be present and within budget) → push →
+CI verified green → handoff written (done / undone / commands / exit codes /
 blockers / warnings) → next-session prompt generated then claim-verified →
 memory distillation (cap 2, five gates) → claims released, worktrees
 removed, clean process table.
