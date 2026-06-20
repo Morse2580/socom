@@ -624,6 +624,37 @@ check "context emit: a duplicated scalar flag (--promise twice) is refused" 1 $?
   || bad "emit zero-input envelope wrong"
 rm -rf .socom/context
 
+# 10d-sexies. the REAL LOOP (earn CTX-4): low-friction env-var emit + the opt-in
+# `verify --require <promise>` assertion. --require is fail-CLOSED on an
+# unfulfilled promise, while the default verify stays fail-OPEN on an empty dir.
+SOCOM_PROMISE=P-REAL SOCOM_SEAT=builder "$SOCOM" context emit --budget 100000 \
+   --input emit-a.txt >/dev/null 2>&1
+{ ls .socom/context/CTX-*-001.xml >/dev/null 2>&1 \
+  && grep -q 'promise="P-REAL"' .socom/context/CTX-*-001.xml; } \
+  && ok "context emit: promise/seat fall back to \$SOCOM_PROMISE/\$SOCOM_SEAT" \
+  || bad "emit env-var fallback wrong"
+"$SOCOM" context verify --require P-REAL >/dev/null 2>&1
+check "context verify --require: a fulfilled promise PASSES" 0 $?
+"$SOCOM" context verify --require P-REAL,P-GHOST >/dev/null 2>&1
+check "context verify --require: an unfulfilled promise FAILS (fail-closed)" 1 $?
+"$SOCOM" context verify --require >/dev/null 2>&1
+check "context verify --require: a dangling --require (no value) is refused (R6)" 1 $?
+# review fixes (degrade loudly): a comma-only value yields no ids, a typo'd flag
+# must not become a positional target, and ids/promises are whitespace-trimmed.
+"$SOCOM" context verify --require "," >/dev/null 2>&1
+check "context verify --require: a comma-only value (no ids) is refused (R6)" 1 $?
+"$SOCOM" context verify --requre P-REAL >/dev/null 2>&1
+check "context verify: an unknown flag (typo) is refused, not silently dropped (R6)" 1 $?
+"$SOCOM" context verify --require " P-REAL " >/dev/null 2>&1
+check "context verify --require: ids are whitespace-trimmed (' P-REAL ' matches)" 0 $?
+rm -rf .socom/context
+# the bridge to CTX-4: --require makes ABSENCE a failure, but the DEFAULT stays
+# fail-open so the existing band/CI does not break on a producer-less repo.
+"$SOCOM" context verify >/dev/null 2>&1
+check "context verify (default): empty dir still fail-OPEN (unchanged posture)" 0 $?
+"$SOCOM" context verify --require P-REAL >/dev/null 2>&1
+check "context verify --require: empty dir FAILS (opt-in teeth, not default)" 1 $?
+
 rm -rf .socom/promises
 
 # 10e. precond — velocity-first work-readiness pre-flight (the published gate)
