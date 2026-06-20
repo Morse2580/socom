@@ -82,7 +82,21 @@ CANON_FILES = ["constitution.xml", "roles.xml", "gates.xml", "session.xml",
                "commit-protocol.xml"]
 
 
-TOOL_ROOT = Path(__file__).resolve().parent.parent  # the socom checkout
+def _find_tool_root():
+    """The socom checkout — the dir that ships canon/ + schemas/. Walk UP from this
+    file's location until both are found, so TOOL_ROOT is correct whether this code
+    runs as the assembled bin/socom (…/bin/socom → …/) OR as a src/socom/ module
+    (…/src/socom/core.py → …/) — the latter is what lets the modules be imported
+    and unit-tested in isolation. Falls back to parent.parent (the old assumption)
+    if neither marker is found, so a relocated single file still resolves."""
+    here = Path(__file__).resolve()
+    for d in here.parents:
+        if (d / "canon").is_dir() and (d / "schemas").is_dir():
+            return d
+    return here.parent.parent
+
+
+TOOL_ROOT = _find_tool_root()  # the socom checkout (ships canon/ + schemas/)
 
 
 # ── helpers ──────────────────────────────────────────────────────────────
