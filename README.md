@@ -55,6 +55,19 @@ lifecycle, role agents, completion gates, generated next-session prompts) and
 the architecture argued in
 [Protocol over Participants](https://medium.com/data-unlocked/protocol-over-participants-c639e2be0f64).
 
+## Requirements
+
+socom is a single Python script (`bin/socom`) — symlink it onto `PATH` and run.
+
+- **Python ≥ 3.9** (uses `pathlib.Path.is_relative_to`).
+- **PyYAML** — the one third-party dependency (`pip install -r requirements.txt`,
+  or `pip install pyyaml`). Everything else is the standard library.
+- **git ≥ 2.9** (`core.hooksPath`, worktrees).
+- **A POSIX shell environment** — macOS, Linux, or **WSL** on Windows. socom is
+  POSIX-scoped by design: git hooks and `socom.yaml` checks run through a shell,
+  and the run ledger uses `fcntl.flock`. It is **not** native-Windows; run it
+  under WSL there.
+
 ## From a clone
 
 The whole substrate is in git — any clone on any machine has the full state. To
