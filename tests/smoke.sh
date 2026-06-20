@@ -450,6 +450,45 @@ printf '%s\nnot json{\n' "$LCGOOD" > "$T/lc-json.jsonl"
 $LC "$T/lc-json.jsonl" >/dev/null 2>&1
 check "ledgercheck: malformed JSON line FAILS" 1 $?
 
+# 10d-ter. context — the CTX-1 context-envelope gate. Context made a first-class
+# artifact: `socom context verify` exits 0 iff every targeted envelope is
+# schema-valid (schemas/context.xml, single-sourced field contract + invariant)
+# AND within its declared input budget (input_tokens <= budget_tokens). Fail-open
+# on an absent target/no envelopes, fail-closed on malformed / missing-field /
+# over-budget. The verb IS the gate the bands run (the tool verifies itself);
+# wired into medium+full+CI.
+CXOK='<context socom="0.1" id="CTX-1" promise="P-1" seat="builder" ts="2026-06-20T12:00:00Z" budget_tokens="8000" input_tokens="3200"/>'
+"$SOCOM" context verify "$T/no-such-context.xml" >/dev/null 2>&1
+check "context verify: absent target PASSES (fail-open on absence)" 0 $?
+printf '%s\n' "$CXOK" > "$T/cx-good.xml"
+"$SOCOM" context verify "$T/cx-good.xml" >/dev/null 2>&1
+check "context verify: schema-valid in-budget envelope PASSES" 0 $?
+"$SOCOM" context show "$T/cx-good.xml" | grep -q "3200 / 8000" \
+  && ok "context show prints consumed/declared budget" || bad "context show wrong"
+printf '%s\n' '<context socom="0.1" id="CTX-2" promise="P-1" seat="builder" ts="2026-06-20T12:00:00Z" budget_tokens="1000" input_tokens="3200"/>' > "$T/cx-over.xml"
+CXO="$("$SOCOM" context verify "$T/cx-over.xml" 2>&1)"; CXOR=$?
+{ [ "$CXOR" = 1 ] && echo "$CXO" | grep -q "invariant violated"; } \
+  && ok "context verify: OVER-BUDGET envelope FAILS (input>budget)" \
+  || bad "context verify over-budget not caught (rc=$CXOR)"
+printf '%s\n' '<context socom="0.1" id="CTX-3" seat="builder" ts="2026-06-20T12:00:00Z" budget_tokens="1000" input_tokens="500"/>' > "$T/cx-miss.xml"
+"$SOCOM" context verify "$T/cx-miss.xml" >/dev/null 2>&1
+check "context verify: missing required field (promise) FAILS" 1 $?
+printf '%s\n' '<context socom="0.1" id="CTX-4" promise="P-1" seat="builder" ts="x" budget_tokens="oops" input_tokens="500"/>' > "$T/cx-int.xml"
+"$SOCOM" context verify "$T/cx-int.xml" >/dev/null 2>&1
+check "context verify: non-int token field FAILS" 1 $?
+printf 'not xml <<<\n' > "$T/cx-malformed.xml"
+"$SOCOM" context verify "$T/cx-malformed.xml" >/dev/null 2>&1
+check "context verify: malformed XML FAILS" 1 $?
+printf '%s\n' '<envelope socom="0.1" id="CTX-5"/>' > "$T/cx-wrongroot.xml"
+"$SOCOM" context verify "$T/cx-wrongroot.xml" >/dev/null 2>&1
+check "context verify: wrong root element FAILS" 1 $?
+CXD="$T/ctxdir"; mkdir -p "$CXD"; printf '%s\n' "$CXOK" > "$CXD/a.xml"; cp "$T/cx-over.xml" "$CXD/b.xml"
+"$SOCOM" context verify "$CXD" >/dev/null 2>&1
+check "context verify: a dir with ANY invalid envelope FAILS" 1 $?
+rm -f "$CXD/b.xml"
+"$SOCOM" context verify "$CXD" >/dev/null 2>&1
+check "context verify: a dir of only-valid envelopes PASSES" 0 $?
+
 rm -rf .socom/promises
 
 # 10e. precond — velocity-first work-readiness pre-flight (the published gate)

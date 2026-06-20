@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  socom context envelope (CTX-1) — fill and drop at .socom/context/<id>.xml, then
+  `socom context verify <file>`. One envelope per promise execution: declare the
+  input context this work unit consumed against the budget you set for it. See
+  schemas/context.xml for the field contract and the budget invariant
+  (input_tokens must be <= budget_tokens). Hand-authored in CTX-1; CTX-2 measures
+  and emits these automatically.
+
+  Replace every FILL. Drop the <inputs> block unless you want the per-component
+  breakdown (it is the optional CTX-2 hook; CTX-1 only checks the two totals).
+-->
+<context socom="0.1"
+         id="CTX-FILL-date-seq"
+         promise="P-FILL"
+         seat="FILL: builder|reviewer|validator|scout|…"
+         ts="FILL: 2026-06-20T12:00:00Z"
+         budget_tokens="FILL-int"
+         input_tokens="FILL-int">
+  <!-- optional, CTX-2 hook — per-source token costs; sum should track input_tokens
+  <inputs>
+    <input ref="FILL: path or artifact id" tokens="FILL-int"/>
+  </inputs>
+  -->
+</context>

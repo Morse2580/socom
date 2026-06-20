@@ -6,8 +6,8 @@ domains:
 - canon
 checks:
   fast: tests/smoke.sh
-  medium: tests/smoke.sh && python3 tests/xmlcheck.py && python3 tests/ledgercheck.py
-  full: tests/smoke.sh && python3 tests/xmlcheck.py && python3 tests/ledgercheck.py && ./bin/socom index . >/dev/null && echo full-ok
+  medium: tests/smoke.sh && python3 tests/xmlcheck.py && python3 tests/ledgercheck.py && ./bin/socom context verify
+  full: tests/smoke.sh && python3 tests/xmlcheck.py && python3 tests/ledgercheck.py && ./bin/socom context verify && ./bin/socom index . >/dev/null && echo full-ok
   eval: ./bin/socom cycle --gate --threshold 70
 ci:
   status: 'echo ''bind me: cache-free pipeline state query'''

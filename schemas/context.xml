@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  socom context envelope — the CTX-1 artifact. One envelope per PROMISE
+  EXECUTION declares the context that work unit consumed: a seat ran a promise,
+  it read some input context, and it had a declared budget for that input. The
+  envelope is the durable, schema-valid record of that fact — context made a
+  first-class SOCOM artifact, so it can be gated and replayed instead of
+  vanishing with the process (verify-never-claim applied to context itself).
+
+  WHY A STANDALONE RECORD (not a <context> block inside schemas/promise.xml):
+  the promise is a frozen AGREEMENT — verbatim intent + a ratified contract the
+  promiser cannot amend. Context is the opposite kind of thing: a MUTABLE,
+  execution-time MEASUREMENT (what input was actually consumed vs. the declared
+  budget), produced per-attempt by the running seat. Embedding a mutable
+  execution measurement inside the immutable agreement conflates two lifecycles
+  in one mechanism and lets the promiser write into the record that carries the
+  contract binding it (constitution §separation-of-privilege). The run ledger is
+  the precedent: it stood up its own record (schemas/ledger.xml) rather than
+  bolting outcomes onto the promise. Context is execution-shaped, so it goes the
+  ledger's way — its own schema, its own .socom/context/ files.
+
+  STORAGE — one XML file per envelope at .socom/context/<id>.xml. XML not JSONL
+  (the ledger's format) because an envelope is written ONCE per work unit by a
+  single author: it is low-volume and structured, like a promise/handoff, and so
+  inherits the promise's rationale, not the ledger's high-volume flat-append one
+  (cf. schemas/ledger.xml lines 11-14). XML also earns tests/xmlcheck.py
+  well-formedness, `socom index` retrieval, and embed="true" for free.
+
+  This document is the schema-by-example: the canonical field contract (parsed,
+  single-sourced — `socom context verify` reads the <fields>/<invariant> here and
+  hardcodes nothing) plus a worked instance. The schema wrapper is
+  <context-schema>; a real envelope's root element is <context> (the artifact
+  legitimately owns that tag — unlike the ledger, whose rows are JSONL, leaving
+  <ledger> free as the wrapper).
+
+  Example envelope file (.socom/context/CTX-2026-0620-001.xml), verbatim:
+  <?xml version="1.0" encoding="UTF-8"?>
+  <context socom="0.1" id="CTX-2026-0620-001" promise="P-2026-0612-001"
+           seat="builder" ts="2026-06-20T12:00:00Z"
+           budget_tokens="8000" input_tokens="3200"/>
+-->
+<context-schema socom="0.1">
+
+  <!-- Field contract — these names ARE the envelope's root-element attributes. -->
+  <fields>
+    <field name="id"            type="id"        required="true">The envelope id (CTX-…). One per promise execution.</field>
+    <field name="promise"       type="id"        required="true">The promise this context belongs to (P-…) — the work unit (schemas/promise.xml).</field>
+    <field name="seat"          type="string"    required="true">The seat that emitted the envelope — builder, reviewer, scout, … (schemas/role.xml).</field>
+    <field name="ts"            type="iso-8601"  required="true">When the envelope was emitted (UTC).</field>
+    <field name="budget_tokens" type="int"       required="true">The DECLARED input-context budget for this work unit.</field>
+    <field name="input_tokens"  type="int"       required="true">The MEASURED input context actually consumed.</field>
+  </fields>
+
+  <!-- Cross-field invariants — evaluated over the int fields above. This is the
+       budget half of the CTX metric, declared here in exactly one place so the
+       verifier reads it rather than hardcoding the rule. op is one of
+       <= < >= > == ; lhs and rhs name int fields. -->
+  <invariants>
+    <invariant lhs="input_tokens" op="&lt;=" rhs="budget_tokens">
+      Measured input context must not exceed the declared budget — an
+      over-budget work unit is the ungoverned-context failure CTX exists to catch.
+    </invariant>
+  </invariants>
+
+  <!-- Forward hook (CTX-2, OPTIONAL — not required in CTX-1): a per-component
+       breakdown of the input. CTX-1 asserts only the two top-level token counts
+       + the invariant; CTX-2 makes <inputs> load-bearing (measured + compressible
+       per source against a per-component allocation). -->
+  <optional>
+    <inputs>
+      <input ref="schemas/promise.xml" tokens="1400"/>
+      <input ref=".socom/handoffs/H-2026-06-20-main.xml" tokens="1800"/>
+    </inputs>
+  </optional>
+
+  <!-- Worked example: the readable contract. The live form is the standalone
+       file above (root <context>); this is the schema's documentation copy. -->
+  <example>
+    <context socom="0.1" id="CTX-2026-0620-001" promise="P-2026-0612-001"
+             seat="builder" ts="2026-06-20T12:00:00Z"
+             budget_tokens="8000" input_tokens="3200"/>
+  </example>
+
+</context-schema>

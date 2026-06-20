@@ -275,6 +275,51 @@ with tempfile.TemporaryDirectory() as _d:
     _lines = (_r / ".socom" / "ledger" / "runs.jsonl").read_text().splitlines()
     eq("_append_ledger_row: one JSONL line appended per call", len(_lines), 2)
 
+# ── context envelope (CTX-1: _load_context_contract / _context_violations) ────
+# The field contract AND the budget invariant are parsed FROM schemas/context.xml
+# (single source) — pin that, then pin the validator's verdicts.
+_creq, _cints, _cinv = socom._load_context_contract()
+check("_load_context_contract: required fields parsed from the schema",
+      set(_creq) == {"id", "promise", "seat", "ts", "budget_tokens", "input_tokens"})
+check("_load_context_contract: int fields parsed from the schema",
+      set(_cints) == {"budget_tokens", "input_tokens"})
+check("_load_context_contract: budget invariant parsed (input <= budget)",
+      ("input_tokens", "<=", "budget_tokens") in _cinv)
+
+
+def _viol(xml):
+    with tempfile.TemporaryDirectory() as _d:
+        p = Path(_d) / "e.xml"
+        p.write_text(xml)
+        return socom._context_violations(p, _creq, _cints, _cinv)
+
+
+_cgood = ('<context socom="0.1" id="CTX-1" promise="P-1" seat="builder" '
+          'ts="t" budget_tokens="8000" input_tokens="3200"/>')
+check("_context_violations: a valid in-budget envelope has none", _viol(_cgood) == [])
+check("_context_violations: over-budget is flagged",
+      any("invariant" in v for v in
+          _viol(_cgood.replace('budget_tokens="8000"', 'budget_tokens="1000"'))))
+check("_context_violations: a missing required field is flagged",
+      any("promise" in v for v in _viol(
+          '<context socom="0.1" id="CTX-1" seat="builder" ts="t" '
+          'budget_tokens="8000" input_tokens="3200"/>')))
+check("_context_violations: a non-int token field is flagged",
+      any("is not an int" in v for v in
+          _viol(_cgood.replace('input_tokens="3200"', 'input_tokens="lots"'))))
+check("_context_violations: wrong root element is flagged",
+      any("expected <context>" in v for v in _viol('<envelope id="CTX-1"/>')))
+
+with tempfile.TemporaryDirectory() as _d:
+    _dd = Path(_d)
+    check("_context_targets: absent path -> [] (fail-open)",
+          socom._context_targets(_dd / "nope") == [])
+    (_dd / "a.xml").write_text(_cgood)
+    (_dd / "b.xml").write_text(_cgood)
+    eq("_context_targets: a dir globs its *.xml", len(socom._context_targets(_dd)), 2)
+    check("_context_targets: a file -> [file]",
+          socom._context_targets(_dd / "a.xml") == [_dd / "a.xml"])
+
 # ── summary ──────────────────────────────────────────────────────────────────
 print(f"unit: {_PASS} passed, {_FAIL} failed")
 raise SystemExit(1 if _FAIL else 0)

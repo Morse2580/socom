@@ -31,6 +31,9 @@ Commands:
   contract make the contract testable: verify runs a contract's <check> <run>
            commands (PASS/FAIL on exit), flags no-run checks MANUAL; --record
            appends the outcome to the run ledger (cycle data) | show
+  context  context as a first-class artifact (CTX-1): verify a context envelope
+           (or .socom/context/) is schema-valid AND within its declared input
+           budget (input_tokens <= budget_tokens) | show
   greet    adoption-ladder greeting — where you are, what's next
   statusline Claude Code statusLine: adoption bar + context-consumption meter
            (reads the host's statusline JSON on stdin; GSD-style ctx meter)
@@ -1758,6 +1761,124 @@ def cmd_contract(args):
         sys.exit(1)
 
 
+# ── context — the CTX-1 context envelope, made a first-class artifact ──────
+# Every work unit EMITS a schema-valid context envelope (.socom/context/<id>.xml,
+# schemas/context.xml) declaring the input context it consumed against a declared
+# budget. `socom context verify` IS the gate: exit 0 iff every targeted envelope
+# is schema-valid AND input_tokens <= budget_tokens — fail-OPEN on an absent
+# dir / no envelopes (lazy creation is not corruption), fail-CLOSED on any
+# malformed or over-budget envelope. The field contract AND the invariant are
+# SINGLE-SOURCED from schemas/context.xml (parsed, never hardcoded), exactly as
+# ledgercheck derives the ledger contract from schemas/ledger.xml. The bands run
+# this very verb (the verification tool verifies itself) — no parallel validator.
+CONTEXT_SCHEMA = TOOL_ROOT / "schemas" / "context.xml"
+_INVARIANT_OPS = {"<=": lambda a, b: a <= b, "<": lambda a, b: a < b,
+                  ">=": lambda a, b: a >= b, ">": lambda a, b: a > b,
+                  "==": lambda a, b: a == b}
+
+
+def _load_context_contract(schema=CONTEXT_SCHEMA):
+    """Parse schemas/context.xml -> (required, int_fields, invariants). The
+    <field> + <invariant> elements ARE the contract; nothing is hardcoded
+    (single source, §least-common-mechanism / open-design)."""
+    root = ET.parse(schema).getroot()
+    required = [f.get("name") for f in root.find("fields").findall("field")
+                if f.get("required") == "true"]
+    ints = [f.get("name") for f in root.find("fields").findall("field")
+            if f.get("type") == "int"]
+    inv_block = root.find("invariants")
+    invariants = [(i.get("lhs"), i.get("op"), i.get("rhs"))
+                  for i in inv_block.findall("invariant")] if inv_block is not None else []
+    return required, ints, invariants
+
+
+def _context_violations(path, required, ints, invariants):
+    """Return a list of violation strings for one envelope file (empty = ok)."""
+    try:
+        root = ET.parse(path).getroot()
+    except (ET.ParseError, OSError) as e:
+        return [f"not well-formed XML — {e}"]
+    if root.tag != "context":
+        return [f"root element is <{root.tag}>, expected <context>"]
+    bad, vals = [], {}
+    for key in required:
+        if root.get(key) is None:
+            bad.append(f"missing required attribute {key!r}")
+    for key in ints:
+        raw = root.get(key)
+        if raw is None:
+            continue  # a required int already reported missing above
+        try:
+            vals[key] = int(raw)
+        except ValueError:
+            bad.append(f"{key}={raw!r} is not an int")
+    for lhs, op, rhs in invariants:
+        if lhs in vals and rhs in vals and op in _INVARIANT_OPS \
+                and not _INVARIANT_OPS[op](vals[lhs], vals[rhs]):
+            bad.append(f"invariant violated: {lhs}({vals[lhs]}) {op} "
+                       f"{rhs}({vals[rhs]}) is false")
+    return bad
+
+
+def _context_targets(target):
+    """A file -> [file]; a dir -> its *.xml; absent -> [] (fail-open on absence,
+    the same posture ledgercheck gives an absent ledger)."""
+    if target.is_file():
+        return [target]
+    if target.is_dir():
+        return sorted(target.glob("*.xml"))
+    return []
+
+
+def cmd_context(args):
+    if not args or args[0] not in ("verify", "show"):
+        sys.exit("usage: socom context <verify|show> [<envelope.xml|dir>] "
+                 "(verify defaults to .socom/context)")
+    sub = args[0]
+    root = repo_root()
+    raw = args[1] if len(args) > 1 else f"{SOCOM_DIR}/context"
+    target = Path(raw)
+    if not target.is_absolute():
+        target = root / raw
+
+    if sub == "show":
+        if not target.is_file():
+            sys.exit(f"socom context show: no such envelope '{raw}' "
+                     "(R6: degrade loudly).")
+        try:
+            el = ET.parse(target).getroot()
+        except (ET.ParseError, OSError) as e:
+            sys.exit(f"socom context: {target.name} is not readable "
+                     f"well-formed XML — {e}")
+        print(f"socom context {el.get('id', '?')} [{target.name}]")
+        print(f"  promise: {el.get('promise', '?')}  seat: {el.get('seat', '?')}")
+        print(f"  budget:  {el.get('input_tokens', '?')} / "
+              f"{el.get('budget_tokens', '?')} tokens (consumed / declared)")
+        return
+
+    # verify: validate every targeted envelope against schemas/context.xml.
+    required, ints, invariants = _load_context_contract()
+    files = _context_targets(target)
+    if not files:
+        print(f"socom context verify: no envelopes at {raw} — nothing to "
+              "validate (created lazily on first emit).")
+        return
+    bad = 0
+    for f in files:
+        viols = _context_violations(f, required, ints, invariants)
+        if viols:
+            bad += 1
+            print(f"  {f.name} · FAIL")
+            for v in viols:
+                print(f"    {v}", file=sys.stderr)
+        else:
+            print(f"  {f.name} · PASS")
+    print(f"socom context verify: {len(files) - bad} valid, {bad} invalid of "
+          f"{len(files)} envelope(s) -> {'OK' if not bad else 'FAILED'}")
+    if bad:
+        sys.exit(1)
+
+
 # ── lesson — experience earned into durable, retrievable rules ────────────
 # Ported from Akili's lesson system. A lesson is BORN provisional from a cycle
 # hotspot (the eval->lesson bridge), EARNS active by re-confirmation, and is
@@ -2370,6 +2491,7 @@ COMMANDS = {"init": cmd_init, "compile": cmd_compile, "doctor": cmd_doctor,
             "embed": cmd_embed, "query": cmd_query, "eval": cmd_eval,
             "cycle": cmd_cycle, "lesson": cmd_lesson, "precond": cmd_precond,
             "introspect": cmd_introspect, "contract": cmd_contract,
+            "context": cmd_context,
             "forge": cmd_forge, "adopt": cmd_adopt, "install": cmd_install,
             "uninstall": cmd_uninstall}
 
