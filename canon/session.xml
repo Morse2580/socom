@@ -14,7 +14,12 @@
 3. Claim the work: register the promise against a bucket row and its
    contract.
 4. Load the retrieval map's session-start section and the lessons for the
-   task's domain.
+   task's domain. Then emit a context envelope declaring the artifacts you
+   loaded against the budget you set for the work — only the seat knows what
+   it pulled into context, so the seat is the producer (`socom context emit
+   --promise … --seat … --budget … --input …`). Context is a first-class
+   artifact: record what you consumed so the gate can judge it, never let it
+   vanish with the process.
 5. Non-trivial work enters plan mode; the plan is ratified against the
    contract before any code.
     </md>

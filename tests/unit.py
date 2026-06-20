@@ -400,6 +400,43 @@ with tempfile.TemporaryDirectory() as _d:
     except SystemExit:
         check("_load_context_contract: missing <measurement> degrades loudly", True)
 
+# CTX-3 producer: emit's pure helpers — id sequencing and flag parsing.
+with tempfile.TemporaryDirectory() as _d:
+    _repo = Path(_d)
+    (_repo / socom.SOCOM_DIR / "context").mkdir(parents=True)
+    eq("_next_context_id: first id of the day is …-001",
+       socom._next_context_id(_repo, "2026-0620"), "CTX-2026-0620-001")
+    (_repo / socom.SOCOM_DIR / "context" / "CTX-2026-0620-001.xml").write_text("<context/>")
+    (_repo / socom.SOCOM_DIR / "context" / "CTX-2026-0620-007.xml").write_text("<context/>")
+    eq("_next_context_id: sequences past the highest existing seq (max+1, not count)",
+       socom._next_context_id(_repo, "2026-0620"), "CTX-2026-0620-008")
+    eq("_next_context_id: a different date restarts at …-001",
+       socom._next_context_id(_repo, "2026-0621"), "CTX-2026-0621-001")
+
+_ef = socom._emit_flags(["--promise", "P-1", "--seat", "builder", "--budget", "8000",
+                         "--input", "a.txt", "--input", "b.txt", "--id", "CTX-X"])
+check("_emit_flags: scalar flags parsed",
+      _ef["promise"] == "P-1" and _ef["seat"] == "builder"
+      and _ef["budget"] == "8000" and _ef["id"] == "CTX-X")
+check("_emit_flags: --input is repeatable (accumulates)", _ef["input"] == ["a.txt", "b.txt"])
+check("_emit_flags: no inputs -> empty list (CTX-1-style envelope is legal)",
+      socom._emit_flags(["--promise", "P", "--seat", "s", "--budget", "1"])["input"] == [])
+try:
+    socom._emit_flags(["--promise"])  # dangling flag, no value
+    check("_emit_flags: a dangling flag degrades loudly (SystemExit)", False)
+except SystemExit:
+    check("_emit_flags: a dangling flag degrades loudly (SystemExit)", True)
+try:
+    socom._emit_flags(["--bogus", "x"])  # unknown flag
+    check("_emit_flags: an unknown flag degrades loudly (SystemExit)", False)
+except SystemExit:
+    check("_emit_flags: an unknown flag degrades loudly (SystemExit)", True)
+try:
+    socom._emit_flags(["--promise", "P-1", "--promise", "P-2"])  # duplicate scalar
+    check("_emit_flags: a duplicated scalar flag degrades loudly (SystemExit)", False)
+except SystemExit:
+    check("_emit_flags: a duplicated scalar flag degrades loudly (SystemExit)", True)
+
 # ── summary ──────────────────────────────────────────────────────────────────
 print(f"unit: {_PASS} passed, {_FAIL} failed")
 raise SystemExit(1 if _FAIL else 0)
