@@ -1,0 +1,4 @@
+# socom runtime dependencies. socom is otherwise standard-library only.
+# Install: pip install -r requirements.txt   (or: pip install pyyaml)
+# Floor: Python >= 3.9, git >= 2.9, a POSIX shell (macOS/Linux/WSL).
+PyYAML>=5.1
