@@ -47,9 +47,7 @@ All intelligence is canonical (.socom/); compiled views are one-way renders
 carrying a source hash (residue R3). Local gates may be bypassed for flow;
 CI re-asserts them (residue R1).
 """
-# PEP 563: defer annotation evaluation so `X | None` and friends never run at
-# import time — drops the floor from 3.10 (PEP 604 union at def time) to 3.9
-# (the runtime floor set by Path.is_relative_to). Keep this the FIRST statement.
+# GENERATED from src/socom/*.py by build.py — edit the modules, then `python3 build.py`. Do not hand-edit (tests/buildcheck gates drift).
 from __future__ import annotations
 
 import hashlib
@@ -69,16 +67,21 @@ except ImportError:
     sys.exit("socom: needs PyYAML — `pip install -r requirements.txt` "
              "(or `pip install pyyaml`). See README 'Requirements'.")
 
+
 SOCOM_VERSION = "0.1"
+
+
 SOCOM_DIR = ".socom"  # the substrate root under any repo — single source of truth
+
+
 HOOKS_DIR = ".githooks"  # core.hooksPath target — single source for every wire/read site
+
+
 CANON_FILES = ["constitution.xml", "roles.xml", "gates.xml", "session.xml",
                "doctrine.xml", "forge.xml", "residuality.xml",
                "commit-protocol.xml"]
-# The substrate dirs every repo needs under .socom/ — single source of truth,
-# shared by init (plants them) and precond (heals them).
-SUBSTRATE_DIRS = ["memory/memories", "lessons", "handoffs", "prompts",
-                  "promises", "gates"]
+
+
 TOOL_ROOT = Path(__file__).resolve().parent.parent  # the socom checkout
 
 
@@ -141,522 +144,6 @@ def write_generated(path: Path, body: str, hash_: str, comment=("<!--", "-->"),
               f"— do not edit; edit .socom/ + socom.yaml, then `socom compile` {comment[1]}\n")
     path.write_text(header + body)
     print(f"  wrote {path}")
-
-
-# HR6: redaction at the substrate boundary — index/hydrate refuse
-# secret-shaped content. Focused patterns; full PII taxonomy is roadmap.
-SECRET_RX = re.compile(
-    r"(-----BEGIN [A-Z ]*PRIVATE KEY|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]+"
-    r"|ghp_[A-Za-z0-9]{36}|glpat-[A-Za-z0-9_-]{20}|eyJ[A-Za-z0-9_-]{30,}"
-    r"|(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*['\"]?[^\s'\"]{8,})",
-    re.IGNORECASE)
-
-
-# ── init ─────────────────────────────────────────────────────────────────
-
-def cmd_init(args):
-    root = repo_root(Path(args[0]) if args else None)
-    socom_dir = root / SOCOM_DIR
-    (socom_dir / "canon").mkdir(parents=True, exist_ok=True)
-    for sub in SUBSTRATE_DIRS:
-        (socom_dir / sub).mkdir(parents=True, exist_ok=True)
-
-    for name in CANON_FILES:
-        dst = socom_dir / "canon" / name
-        if not dst.exists():
-            dst.write_text((TOOL_ROOT / "canon" / name).read_text())
-            print(f"  planted {dst}")
-
-    idx = socom_dir / "memory" / "INDEX.md"
-    if not idx.exists():
-        idx.write_text(
-            "# Memory Index — lifecycle-organized retrieval map\n\n"
-            "Load the section matching your current phase. One line per memory:\n"
-            "`- [title](memories/file.md) — when it fires`\n\n"
-            "## Session start\n\n## Mid-session\n\n## Closeout\n\n## Always-on\n")
-        print(f"  planted {idx}")
-
-    lessons_idx = socom_dir / "lessons" / "index.md"
-    if not lessons_idx.exists():
-        lessons_idx.write_text(
-            "# Lessons Index\n\nDomain-sharded; load the file(s) matching the task. "
-            "Entries are provisional until re-confirmed, then active; falsified "
-            "entries move to _retired.md (preserved, never deleted).\n\n"
-            "| Domain | File | Active | Provisional |\n|---|---|---|---|\n")
-        print(f"  planted {lessons_idx}")
-
-    cfg = root / "socom.yaml"
-    if not cfg.exists():
-        cfg.write_text(textwrap.dedent(f"""\
-            socom: "{SOCOM_VERSION}"
-            project: {root.name}
-            domains: [core]          # claim + lesson granularity
-            checks:                  # bind to commands that really run here
-              fast: "true"           # seconds-budget; runs at task-completion
-              medium: "true"         # pre-commit (amber band)
-              full: "true"           # pre-push + CI (red band)
-            ci:
-              status: "echo 'bind me: cache-free pipeline state query'"
-            seats:
-              builder:  {{ runtime: claude-code, model: default }}
-              reviewer: {{ runtime: claude-code, model: different-family-preferred }}
-            """))
-        print(f"  planted {cfg} — EDIT THE BINDINGS, then run `socom compile`")
-    cmd_greet([str(root)])
-
-
-# ── compile ──────────────────────────────────────────────────────────────
-
-def render_body(root: Path, cfg: dict) -> str:
-    constitution = parse_canon(root, "constitution.xml")
-    roles = parse_canon(root, "roles.xml")
-    gates = parse_canon(root, "gates.xml")
-    session = parse_canon(root, "session.xml")
-
-    out = [f"# {cfg.get('project', root.name)} — SOCOM substrate\n"]
-    out.append(
-        "Protocol over participants: the rules below bind every participant — "
-        "agent or human. Canonical source: `.socom/` + `socom.yaml`.\n")
-
-    out.append("## Constitution (Non-Negotiable)\n")
-    for p in sorted(constitution.findall("principle"), key=lambda e: int(e.get("rank", 99))):
-        out.append(f"### {p.get('rank')}. {p.findtext('title')}\n")
-        out.append(md_text(p) + "\n")
-
-    out.append("## Session protocol\n")
-    for ph in sorted(session.findall("phase"), key=lambda e: int(e.get("order", 9))):
-        out.append(f"### {ph.get('id').capitalize()}\n")
-        out.append(md_text(ph) + "\n")
-
-    doctrine_f = root / SOCOM_DIR / "canon" / "doctrine.xml"
-    if doctrine_f.exists():
-        doctrine = ET.parse(doctrine_f).getroot()
-        out.append("## Doctrine — named thinking devices (teaching layer)\n")
-        out.append("Reach for the concept when its trigger fires; full text in "
-                   "`.socom/canon/doctrine.xml` (and via retrieval).\n")
-        out.append("| Concept | Fires when | Essence |\n|---|---|---|")
-        for c in doctrine.findall("concept"):
-            if c.get("state") != "active":
-                continue
-            fires = (c.findtext("fires-when") or "").strip()
-            essence = md_text(c).split(". ")[0].replace("\n", " ") + "."
-            out.append(f"| **{c.findtext('title')}** | {fires} | {essence} |")
-        out.append("")
-
-    out.append("## Seats (open registry — any model, runtime, or human)\n")
-    out.append("| Seat | State | Promise |\n|---|---|---|")
-    for r in roles.findall("role"):
-        desc = (r.findtext("description") or "").strip()
-        out.append(f"| **{r.get('id')}** | {r.get('state')} | {desc} |")
-    out.append("\nFull seat envelopes: `.socom/canon/roles.xml` "
-               "(compiled agents in `.claude/agents/`). Builder and reviewer "
-               "never share context. Briefs open with the user's words verbatim.\n")
-
-    out.append("## Gates\n")
-    out.append("| Gate | Trigger | Tier | Band | Blocks |\n|---|---|---|---|---|")
-    for g in gates.findall("gate"):
-        out.append(f"| {g.get('id')} | {g.get('trigger')} | {g.get('tier')} "
-                   f"| {g.get('band')} | {g.findtext('blocks')} |")
-    out.append("\nLocal bypass is permitted for flow; CI re-asserts every gate. "
-               "Run a gate: `socom gate <id>`.\n")
-
-    forge_f = root / SOCOM_DIR / "canon" / "forge.xml"
-    if forge_f.exists():
-        forge = ET.parse(forge_f).getroot()
-        fb = cfg.get("forge", {}) or {}
-        out.append("## Forge — git-provider operations (universal verbs, "
-                   "repo-bound commands)\n")
-        out.append("Run `socom forge <verb>` — NEVER improvise provider "
-                   "mechanics (auth, polling, MR calls) inline.\n")
-        for r in forge.findall("rules/rule"):
-            out.append(f"- **{r.get('id')}** — " +
-                       " ".join((r.text or "").split()))
-        out.append("\n| Verb | Intent | This repo |\n|---|---|---|")
-        for v in forge.findall("verb"):
-            vid = v.get("id")
-            intent = (v.findtext("intent") or "").strip()
-            b = fb.get(vid)
-            out.append(f"| `{vid}` | {intent} | "
-                       + (f"`{b}`" if b else "*unbound*") + " |")
-        out.append("")
-
-    resid_f = root / SOCOM_DIR / "canon" / "residuality.xml"
-    if resid_f.exists():
-        resid = ET.parse(resid_f).getroot()
-        out.append("## Residuality — the falsifiable gate (constitution "
-                   "§residuality-gate)\n")
-        out.append("Run before any fix or hard-to-reverse decision. A \"yes\" to "
-                   "any gate question is a STOP — rework or leash it.\n")
-        for r in resid.findall("gate/rule"):
-            out.append(f"- **{r.get('id')}** — " +
-                       " ".join((r.text or "").split()))
-        out.append("\nFalsifiable checklist — Saltzer & Schroeder (1975) principles, "
-                   "each a test a design can be failed against:\n")
-        for p in resid.findall("principles/principle"):
-            out.append(f"- **{p.get('id')}** — " +
-                       " ".join((p.text or "").split()))
-        out.append("")
-
-    cp_f = root / SOCOM_DIR / "canon" / "commit-protocol.xml"
-    if cp_f.exists():
-        cp = ET.parse(cp_f).getroot()
-        out.append("## Commit protocol (constitution §structured-commits)\n")
-        out.append("Every commit is institutional memory — the next session reads "
-                   "the log alone and recovers the journey. The six blocks and what "
-                   "each carries; full text in `.socom/canon/commit-protocol.xml`.\n")
-        out.append("| Block | Carries |\n|---|---|")
-        for b in cp.findall("blocks/block"):
-            essence = " ".join((b.text or "").split()).split(". ")[0] + "."
-            # strip the leading "[id] — " label the rule text repeats; the
-            # Block column already carries it (reviewer nit, #7).
-            essence = re.sub(r"^\[%s\]\s*—\s*" % b.get("id"), "", essence)
-            out.append(f"| `[{b.get('id')}]` | {essence} |")
-        out.append("\nThe discipline (Akili-ported teaching layer):\n")
-        for r in cp.findall("discipline/rule"):
-            out.append(f"- **{r.get('id')}** — " +
-                       " ".join((r.text or "").split()))
-        out.append("")
-
-    out.append("## Repo bindings (socom.yaml)\n")
-    checks = cfg.get("checks", {})
-    out.append("| Check | Command |\n|---|---|")
-    for k in ("fast", "medium", "full"):
-        out.append(f"| {k} | `{checks.get(k, 'UNBOUND')}` |")
-    out.append(f"| ci.status | `{cfg.get('ci', {}).get('status', 'UNBOUND')}` |")
-    out.append(f"\nDomains: {', '.join(cfg.get('domains', []))}\n")
-
-    out.append("## Retrieval map\n")
-    out.append(
-        "- Entering a phase? Load that section of `.socom/memory/INDEX.md` "
-        "(session-start / mid-session / closeout / always-on).\n"
-        "- Working a domain? Load its file via `.socom/lessons/index.md`.\n"
-        "- Associative recall: `socom index` emits chunks for any vector store; "
-        "the substrate never depends on it (L0 floor: this file + grep).\n")
-    return "\n".join(out)
-
-
-def render_agent(role) -> str:
-    rid = role.get("id")
-    desc = (role.findtext("description") or "").strip()
-    lines = ["---", f"name: {rid}", f"description: {desc}", "---", "",
-             f"You occupy the **{rid}** seat of this repo's SOCOM substrate. "
-             "Your authority and limits come from the seat, not the model.", "",
-             "## You promise"]
-    lines += [f"- {p.text.strip()}" for p in role.findall("promises/promise")]
-    ops = role.find("operations")
-    if ops is not None:
-        lines += ["", f"**Reads:** {ops.get('reads')}", f"**Writes:** {ops.get('writes')}"]
-    lines += ["", "## You never"]
-    lines += [f"- {r.text.strip()}" for r in role.findall("never/rule")]
-    lines += ["", "Constitution and gates: see CLAUDE.md. Verify, never claim: "
-              "evidence is replayable commands + exit codes, recorded in your result."]
-    return "\n".join(lines) + "\n"
-
-
-# HR1: hooks resolve the tool (PATH -> local git config -> $SOCOM_HOME) and
-# degrade gracefully when absent — the substrate must never be why a fresh
-# clone can't commit. CI re-asserts every gate (R1), so graceful local absence
-# loses nothing. The committed hook carries NO machine-specific absolute path:
-# the builder-machine fallback lives in local git config (socom.binpath, set by
-# `adopt`/_wire_hooks, never committed), so a teammate's clone never inherits
-# this machine's filesystem (constitution §open-design, §least-common-mechanism).
-HOOK_RESOLVER = '''SOCOM="$(command -v socom 2>/dev/null)"
-[ -x "$SOCOM" ] || SOCOM="$(git config socom.binpath 2>/dev/null)"
-[ -x "$SOCOM" ] || { [ -n "$SOCOM_HOME" ] && SOCOM="$SOCOM_HOME/bin/socom"; }
-if [ -z "$SOCOM" ] || [ ! -x "$SOCOM" ]; then
-  echo "socom: tool not found — gate skipped locally, CI re-asserts. (run \\`socom adopt\\` here, or export SOCOM_HOME=<socom checkout>)" >&2
-  exit 0
-fi
-'''
-HOOK_TEMPLATES = {
-    "pre-commit": 'exec "$SOCOM" gate pre-commit',
-    "commit-msg": 'exec "$SOCOM" gate commit-msg "$1"',
-    "pre-push": 'exec "$SOCOM" gate pre-push',
-}
-
-
-def cmd_compile(args):
-    force = "--force" in args
-    args = [a for a in args if a != "--force"]
-    root = repo_root(Path(args[0]) if args else None)
-    cfg = load_cfg(root)
-    h = canonical_hash(root)
-    body = render_body(root, cfg)
-
-    write_generated(root / "CLAUDE.md", body, h, force=force)
-    write_generated(root / "AGENTS.md", body, h, force=force)
-    write_generated(root / ".cursor" / "rules" / "socom.mdc",
-                    "---\nalwaysApply: true\n---\n" + body, h, force=force)
-
-    roles = parse_canon(root, "roles.xml")
-    for r in roles.findall("role"):
-        if r.get("state") == "active":
-            write_generated(root / ".claude" / "agents" / f"{r.get('id')}.md",
-                            render_agent(r), h, force=force)
-
-    hooks_dir = root / HOOKS_DIR
-    for name, cmd in HOOK_TEMPLATES.items():
-        script = (f"#!/bin/sh\n# socom:generated source={h}\n"
-                  f"{HOOK_RESOLVER}{cmd}\n")
-        p = hooks_dir / name
-        if p.exists() and "socom:generated" not in p.read_text()[:200] and not force:
-            print(f"  REFUSED {p}: existing non-socom hook (use --force)", file=sys.stderr)
-            continue
-        p.parent.mkdir(exist_ok=True)
-        p.write_text(script)
-        p.chmod(0o755)
-        print(f"  wrote {p}")
-
-    # CI adapters — the R1 floor as GitOps, generated for EVERY provider so
-    # the repo delivers its enforcement to whichever remote it lands on.
-    full = cfg.get("checks", {}).get("full", "true")
-    extra = (cfg.get("ci") or {}).get("extra")
-    gh_steps = [
-        "      - uses: actions/checkout@v4",
-        "      - uses: actions/setup-python@v5",
-        "        with: { python-version: '3.12' }",
-        "      - run: pip install pyyaml",
-        "      - name: re-assert checks.full (socom gate, R1)",
-        f"        run: {full}",
-    ]
-    if extra:
-        gh_steps += ["      - name: extra CI checks (ci.extra)",
-                     f"        run: {extra}"]
-    write_generated(root / ".github" / "workflows" / "socom-gates.yml",
-                    "name: socom-gates\n"
-                    "on: [push, pull_request, workflow_dispatch]\n"
-                    "jobs:\n  gates:\n    runs-on: ubuntu-latest\n    steps:\n"
-                    + "\n".join(gh_steps) + "\n",
-                    h, comment=("#", ""), force=force)
-    gl = ["socom-gates:", "  image: python:3.12",
-          "  rules:", "    - if: $CI_PIPELINE_SOURCE == 'push' || $CI_PIPELINE_SOURCE == 'merge_request_event'",
-          "  script:", "    - pip install pyyaml", f"    - {full}"]
-    if extra:
-        gl.append(f"    - {extra}")
-    write_generated(root / ".gitlab-ci.yml", "\n".join(gl) + "\n",
-                    h, comment=("#", ""), force=force)
-    ado = ["# include as a job in azure-pipelines.yml (or run standalone)",
-           "jobs:", "  - job: socom_gates", "    pool: { vmImage: ubuntu-latest }",
-           "    steps:",
-           "      - task: UsePythonVersion@0",
-           "        inputs: { versionSpec: '3.12' }",
-           "      - script: pip install pyyaml && " + full,
-           "        displayName: re-assert checks.full (socom gate, R1)"]
-    if extra:
-        ado += ["      - script: " + extra,
-                "        displayName: extra CI checks (ci.extra)"]
-    write_generated(root / SOCOM_DIR / "ci" / "azure-socom-gates.yml",
-                    "\n".join(ado) + "\n", h, comment=("#", ""), force=force)
-
-    # .claude/settings.json — NON-CLOBBERING MERGE: socom only ADDS keys that are
-    # absent (the SessionStart gate hook and the statusLine), and never overwrites
-    # a hand-set statusLine or existing hooks. So `adopt` offers its statusline +
-    # gate without ever stomping a user's own config (e.g. another tool's
-    # statusLine). Invalid JSON is left untouched (don't corrupt; §fail-safe).
-    settings = root / ".claude" / "settings.json"
-    import json
-    # The SessionStart hook resolves socom through the SAME resolver the git hooks
-    # use (HOOK_RESOLVER) — never a machine-specific absolute path (§open-design).
-    sess_cmd = f'{HOOK_RESOLVER}exec "$SOCOM" gate session-start'
-    existing = {}
-    if settings.exists():
-        try:
-            existing = json.loads(settings.read_text())
-        except Exception:
-            print(f"  SKIP {settings} — not valid JSON, left untouched")
-            existing = None
-    if existing is not None:
-        notes = []
-        if "statusLine" not in existing:
-            existing["statusLine"] = {"type": "command", "command": "socom statusline"}
-            notes.append("statusLine -> `socom statusline`")
-        else:
-            notes.append("kept your statusLine")
-        hooks = existing.setdefault("hooks", {})
-        if "SessionStart" not in hooks:
-            hooks["SessionStart"] = [{"matcher": "*", "hooks": [
-                {"type": "command", "command": sess_cmd, "timeout": 30}]}]
-            notes.append("SessionStart gate")
-        settings.parent.mkdir(parents=True, exist_ok=True)
-        settings.write_text(json.dumps(existing, indent=2) + "\n")
-        print(f"  .claude/settings.json: {', '.join(notes)}")
-
-    print(f"socom: compiled (source={h}). Activate git hooks: "
-          f"git config core.hooksPath {HOOKS_DIR}  (or `socom adopt` does it for you)")
-
-
-# ── git-hooks wiring (single source: doctor-heal and adopt route through here) ──
-
-def _git_hooks_path(root: Path) -> str:
-    """Current core.hooksPath for the repo ('' if unset or not a git repo)."""
-    return subprocess.run(["git", "config", "core.hooksPath"], cwd=root,
-                          capture_output=True, text=True).stdout.strip()
-
-
-def _wire_hooks(root: Path) -> bool:
-    """Set core.hooksPath to HOOKS_DIR (idempotent). Returns True if the repo is
-    now wired, False if it could not be (not a git repo). The single WRITER for
-    the hooks-wiring truth — both doctor-heal and `adopt` route through here, so
-    'where the hooks live' lives in exactly one place (§least-common-mechanism).
-    Fails soft: a non-git dir returns False rather than raising (CI re-asserts)."""
-    if _git_hooks_path(root) == HOOKS_DIR:
-        return True
-    subprocess.run(["git", "config", "core.hooksPath", HOOKS_DIR],
-                   cwd=root, capture_output=True)
-    # Record THIS machine's socom location in LOCAL git config (never committed)
-    # so the portable committed hook can resolve the tool without a PATH install
-    # — replaces the old absolute path baked into the shared hook (HR1).
-    subprocess.run(["git", "config", "socom.binpath",
-                    str(TOOL_ROOT / "bin" / "socom")],
-                   cwd=root, capture_output=True)
-    return _git_hooks_path(root) == HOOKS_DIR
-
-
-# ── doctor ───────────────────────────────────────────────────────────────
-
-def cmd_doctor(args):
-    root = repo_root(Path(args[0]) if args else None)
-    cfg = load_cfg(root)
-    h = canonical_hash(root)
-    problems = []
-
-    for rel in ["CLAUDE.md", "AGENTS.md", ".cursor/rules/socom.mdc"]:
-        f = root / rel
-        if not f.exists():
-            problems.append(f"missing compiled view: {rel}")
-            continue
-        m = re.search(r"socom:generated v=\S+ source=(\w+)", f.read_text())
-        if not m:
-            problems.append(f"{rel}: no socom:generated header — hand-written or tampered")
-        elif m.group(1) != h:
-            problems.append(f"{rel}: stale (source={m.group(1)}, canonical={h}) — DRIFT, recompile")
-
-    for k in ("fast", "medium", "full"):
-        if cfg.get("checks", {}).get(k) in (None, "", "true"):
-            problems.append(f"socom.yaml checks.{k} is unbound (placeholder)")
-
-    try:
-        if _git_hooks_path(root) != HOOKS_DIR:
-            problems.append(f"git core.hooksPath not set to {HOOKS_DIR} — gates not wired")
-    except FileNotFoundError:
-        problems.append("git not available")
-
-    # HR9: canon divergence from the tool's shipped canon is visible and
-    # chosen, never accidental. Informational — divergence IS binding.
-    deltas = []
-    for name in CANON_FILES:
-        local = root / SOCOM_DIR / "canon" / name
-        shipped = TOOL_ROOT / "canon" / name
-        if local.exists() and shipped.exists() and \
-                local.read_bytes() != shipped.read_bytes():
-            deltas.append(name)
-
-    if problems:
-        print("socom doctor — FINDINGS:")
-        for p in problems:
-            print(f"  ✗ {p}")
-        sys.exit(1)
-    if deltas:
-        print(f"socom doctor — INFO: local canon diverges from shipped canon "
-              f"({', '.join(deltas)}) — fine if chosen; upstream what generalizes")
-    print(f"socom doctor — clean (canonical source={h})")
-
-
-# ── precond — the published gate: is THIS work ready to start? ────────────
-# Ported from Akili's precondition-audit (backlog #3): a fast pre-flight that
-# the repo is work-ready BEFORE a seat starts — the "before" bookend to gates.
-# Velocity-first (operator constraint): auto-heals safe gaps, WARNS by default,
-# blocks ONLY on the unrecoverable. It accelerates flow by fixing/surfacing the
-# exact gap at the altitude where it's met, never by stopping for trivia.
-# Sibling to doctor: doctor = substrate health (static); precond = work
-# readiness (seat-aware, healing). Run before dispatch; --no-heal is the CI
-# posture (assert, don't fix).
-def cmd_precond(args):
-    import time, shutil
-    t0 = time.monotonic()
-    root = repo_root()
-    seat = next((a for a in args if not a.startswith("-")), None)
-    heal = "--no-heal" not in args
-    cfg = load_cfg(root)
-    rows = []  # (mark, text) ; mark in ✓ ~ ! ✗
-    blocks = warns = healed = 0
-
-    # 1. Substrate dirs — heal-on: mkdir; heal-off: block (work writes will fail).
-    missing = [d for d in SUBSTRATE_DIRS
-               if not (root / SOCOM_DIR / d).is_dir()]
-    if not missing:
-        rows.append(("✓", "substrate dirs present"))
-    elif heal:
-        for d in missing:
-            (root / SOCOM_DIR / d).mkdir(parents=True, exist_ok=True)
-        healed += 1
-        rows.append(("~", f"healed: mkdir .socom/{{{','.join(missing)}}}"))
-    else:
-        blocks += 1
-        rows.append(("✗", f"BLOCKS: missing .socom/{{{','.join(missing)}}} "
-                          "(run without --no-heal to auto-create)"))
-
-    # 2. Tools — unrecoverable if absent.
-    for tool in ("git", "python3"):
-        if shutil.which(tool):
-            rows.append(("✓", f"{tool} on PATH"))
-        else:
-            blocks += 1
-            rows.append(("✗", f"BLOCKS: {tool} not on PATH"))
-
-    # 3. Git hooks wired — heal-on: set config (safe, reversible); else warn.
-    if _git_hooks_path(root) == HOOKS_DIR:
-        rows.append(("✓", "git hooks wired (core.hooksPath)"))
-    elif heal:
-        _wire_hooks(root)
-        healed += 1
-        rows.append(("~", f"healed: git config core.hooksPath {HOOKS_DIR}"))
-    else:
-        warns += 1
-        rows.append(("!", "WARN: hooks not wired — local gates skip (CI re-asserts)"))
-
-    # 4. Checks bound — warn (work proceeds; gates assert vacuously if unbound).
-    unbound = [k for k in ("fast", "medium", "full")
-               if cfg.get("checks", {}).get(k) in (None, "", "true")]
-    if unbound:
-        warns += 1
-        rows.append(("!", f"WARN: checks {unbound} unbound — gates can't assert"))
-    else:
-        rows.append(("✓", "checks.fast/medium/full bound"))
-
-    # 5. Drift — warn with the exact fix (working stale is a risk, not a hard stop here).
-    claude = root / "CLAUDE.md"
-    if claude.exists():
-        m = re.search(r"source=(\w+)", claude.read_text())
-        if m and m.group(1) != canonical_hash(root):
-            warns += 1
-            rows.append(("!", "WARN: compiled views stale — run `socom compile`"))
-        else:
-            rows.append(("✓", "compiled views in sync"))
-
-    # 6. Claim — only meaningful for production seats; warn if none held by you (R2).
-    if seat in ("builder", "reviewer", "validator", "analyst"):
-        cdir = root / SOCOM_DIR / "claims"
-        mine = [p.stem for p in cdir.glob("*.claim")
-                if not claim_expired(p) and claim_holder() in p.read_text()] \
-            if cdir.exists() else []
-        if mine:
-            rows.append(("✓", f"domain claimed by you: {mine}"))
-        else:
-            warns += 1
-            rows.append(("!", f"WARN: no domain claimed by you ({claim_holder()}) "
-                              "— parallel seats need a claim (R2)"))
-
-    ms = round((time.monotonic() - t0) * 1000)
-    label = f"precond (seat={seat})" if seat else "precond"
-    print(f"{label}:")
-    for mark, text in rows:
-        print(f"  {mark} {text}")
-    verdict = "RED" if blocks else "PASS"
-    extra = f", {healed} healed" if healed else ""
-    print(f"-> {verdict} ({ms}ms): {blocks} blocker(s), {warns} warning(s){extra}")
-    if blocks:
-        sys.exit(1)
 
 
 # ── claims (R2) ──────────────────────────────────────────────────────────
@@ -746,320 +233,244 @@ def reap_orphans(root: Path) -> list[str]:
     return report
 
 
-# ── handoff + next-session prompt ───────────────────────────────────────
+# ── contract — make the validation contract testable, not inert ──────────
+# §contracts-before-code: a contract's <check> elements carry a <run> command
+# and an <expect> outcome. `verify` RUNS each runnable check (PASS/FAIL on exit
+# code) and flags the rest MANUAL — the SOCOM-native conformance-test runner.
 
-def cmd_handoff(args):
-    """Generate a handoff skeleton from observable git state; the session
-    fills judgment fields (undone/blockers/warnings) before closeout."""
+def _contract_el(root_el):
+    """The <contract> element of a promise root, or root itself if it IS one.
+    Pure: returns the element or None."""
+    if root_el.tag == "contract":
+        return root_el
+    return root_el.find("contract")
+
+
+def _contract_checks(contract_el) -> list:
+    """Pure: a contract element -> [{id, assessor, run, expect, auto}]. A check
+    with a <run> command is auto-verifiable; one without is MANUAL."""
+    checks = []
+    for c in contract_el.findall("check"):
+        run = c.findtext("run")
+        run = run.strip() if run and run.strip() else None
+        checks.append({
+            "id": c.get("id", "?"),
+            "assessor": c.get("assessor", "?"),
+            "run": run,
+            "expect": " ".join((c.findtext("expect") or "").split()),
+            "auto": run is not None,
+        })
+    return checks
+
+
+def _verify_summary(results: list) -> dict:
+    """Pure: [{auto, passed}] -> tallies. ok iff no auto check FAILED. Manual
+    checks never count as passed (fail-closed) and never as failed."""
+    passed = sum(1 for r in results if r["auto"] and r["passed"])
+    failed = sum(1 for r in results if r["auto"] and not r["passed"])
+    manual = sum(1 for r in results if not r["auto"])
+    return {"passed": passed, "failed": failed, "manual": manual,
+            "ok": failed == 0}
+
+
+def _next_attempt(rows: list, promise: str, contract: str) -> int:
+    """Pure: the 1-based attempt number for the next (promise, contract)
+    execution — one past the highest attempt already recorded for that pair.
+    cycle groups pass@1/pass@k by promise, so the attempt sequence is
+    per-promise; attempt 1's verdict decides pass@1 (schemas/ledger.xml)."""
+    prior = [int(r.get("attempt", 0)) for r in rows
+             if r.get("promise") == promise and r.get("contract") == contract]
+    return (max(prior) + 1) if prior else 1
+
+
+def _append_ledger_row(root, promise, seat, contract, summary, duration_s) -> dict:
+    """The single writer for .socom/ledger/runs.jsonl: read the ledger, compute
+    the next attempt for (promise, contract), append one row for this
+    assessment, and return it. Both `contract verify --record` and the
+    task-completion gate record through here, so the wire format and the attempt
+    sequence have ONE source of truth (§least-common-mechanism). Callers own the
+    fail-closed guards (standalone / manual-pending / no-evidence) — this writes
+    unconditionally once a row is warranted."""
+    import json
+    try:
+        import fcntl
+    except ImportError:
+        # The ledger writer needs POSIX advisory locking (flock) to serialize
+        # concurrent seats. socom is POSIX-scoped (macOS/Linux/WSL) — say so
+        # plainly rather than crash with a bare ImportError (R6: degrade loudly).
+        sys.exit("socom: the run ledger requires POSIX fcntl.flock (unix only — "
+                 "macOS/Linux/WSL). On native Windows, run socom under WSL.")
+    ledger = root / SOCOM_DIR / "ledger" / "runs.jsonl"
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    # Serialize the whole read -> compute-attempt -> append under one exclusive
+    # lock: without it, two seats recording concurrently (multi-agent is the
+    # goal) read the same tail, both compute attempt=K+1, and both write it —
+    # duplicate attempts break cycle's pass@1/pass@k, and interleaved writes can
+    # tear a row. 'a+' creates the file if absent and keeps one fd for both the
+    # read (seek 0) and the append (O_APPEND ignores seek, always tail). flock is
+    # POSIX advisory and same-host — honored because this is the SINGLE writer
+    # for runs.jsonl (all writers cooperate); the ledger is a same-host artifact,
+    # so cross-host/NFS locking is out of scope (unix only: darwin/linux).
+    with ledger.open("a+") as fh:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        fh.seek(0)
+        rows = [json.loads(ln) for ln in fh.read().splitlines() if ln.strip()]
+        attempt = _next_attempt(rows, promise, contract)
+        row = _ledger_row(promise, seat, contract, summary, attempt, _now_iso(),
+                          duration_s)
+        fh.write(json.dumps(row) + "\n")
+    return row
+
+
+def _ledger_row(promise, seat, contract, summary, attempt, ts, duration_s) -> dict:
+    """Pure: a verify outcome -> one ledger JSONL row (the schemas/ledger.xml
+    field contract — these keys ARE the wire keys). verdict 'kept' iff no auto
+    check failed; gate_band 'red' because a contract verify is the
+    task-completion-band assessment that decides done. Only ever called for a
+    fully-mechanical verify (manual==0) — the manual-pending guard lives in the
+    caller so the mechanical assessor never records a verdict it cannot make
+    (constitution §context-economy / §separation-of-privilege)."""
+    return {
+        "ts": ts,
+        "seat": seat,
+        "promise": promise,
+        "contract": contract,
+        "gate_band": "red",
+        "exit_code": 0 if summary["ok"] else 1,
+        "duration_s": duration_s,
+        "attempt": attempt,
+        "verdict": "kept" if summary["ok"] else "broken",
+    }
+
+
+def _promise_ref(root_el):
+    """Pure: (promise_id, seat, contract_ref) from a <promise> root element, or
+    (None, None, None) when it is not a recordable promise — a standalone
+    contract has no executing seat to attribute a ledger row to. The shared
+    promise->ledger identity used by both `contract verify --record` and the
+    task-completion gate."""
+    if root_el.tag != "promise":
+        return None, None, None
+    promiser = root_el.find("promiser")
+    contract = root_el.find("contract")
+    return (root_el.get("id"),
+            promiser.get("seat") if promiser is not None else None,
+            contract.get("ref") if contract is not None else None)
+
+
+def cmd_contract(args):
+    record = "--record" in args
+    args = [a for a in args if a != "--record"]
+    if not args or args[0] not in ("verify", "show"):
+        sys.exit("usage: socom contract <verify|show> <promise-or-contract.xml> "
+                 "[--record]")
+    sub = args[0]
+    if len(args) < 2:
+        sys.exit(f"usage: socom contract {sub} <promise-or-contract.xml>")
     root = repo_root()
-    summary = " ".join(args) or "session work"
-    branch = subprocess.run(["git", "branch", "--show-current"], cwd=root,
-                            capture_output=True, text=True).stdout.strip() or "detached"
-    log = subprocess.run(["git", "log", "--oneline", "-10"], cwd=root,
-                         capture_output=True, text=True).stdout.strip()
-    dirty = subprocess.run(["git", "status", "--short"], cwd=root,
-                           capture_output=True, text=True).stdout.strip()
-    date = datetime.now(timezone.utc).date().isoformat()
-    hid = f"H-{date}-{re.sub(r'[^a-z0-9-]', '-', branch.lower())[:40]}"
-    out = root / SOCOM_DIR / "handoffs" / f"{hid}.xml"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    commits = "\n".join(f"    <commit>{ln}</commit>" for ln in log.splitlines())
-    dirty_el = (f"  <uncommitted>\n{dirty}\n  </uncommitted>\n" if dirty else "")
-    out.write_text(f"""<?xml version="1.0" encoding="UTF-8"?>
-<handoff socom="{SOCOM_VERSION}" id="{hid}" branch="{branch}"
-         date="{_now_iso()}">
-  <summary embed="true">{summary}</summary>
-  <done embed="true">FILL: what was completed, with evidence refs</done>
-  <undone embed="true">FILL: what remains, and why</undone>
-  <recent-commits>
-{commits}
-  </recent-commits>
-{dirty_el}  <blockers embed="true">FILL or remove</blockers>
-  <warnings embed="true">FILL or remove</warnings>
-  <next embed="true">FILL: ranked candidates for the next session</next>
-</handoff>
-""")
-    print(f"socom handoff: skeleton -> {out}\n  Fill the FILL fields before "
-          "closeout; the session-end gate checks freshness, the prompt builds on it."
-          "\n  Context: the seat's `socom context emit` envelope (.socom/context) is "
-          "what `socom context verify` gates — emit it if this session loaded "
-          "context against a budget.")
-
-
-# Claim-verification: every probe-able claim in the generated prompt is
-# checked against the repo and annotated VERIFIED / HYPOTHESIS. Prompts
-# state what was true at write time; the annotations say what still is.
-def verify_claims(root: Path, text: str) -> list[str]:
-    notes = []
-    for path_m in set(re.findall(r"(?:^|[\s`(])((?:[\w.-]+/)+[\w.-]+\.\w{1,6})", text)):
-        exists = (root / path_m).exists()
-        notes.append(f"{'VERIFIED' if exists else 'HYPOTHESIS'}: path {path_m} "
-                     f"{'exists' if exists else 'NOT FOUND in repo'}")
-    for sha in set(re.findall(r"\b[0-9a-f]{7,12}\b", text)):
-        rc = subprocess.run(["git", "cat-file", "-e", sha], cwd=root,
-                            capture_output=True).returncode
-        notes.append(f"{'VERIFIED' if rc == 0 else 'HYPOTHESIS'}: commit {sha}")
-    return notes
-
-
-def cmd_prompt(args):
-    root = repo_root()
-    cfg = load_cfg(root)
-    handoffs = sorted((root / SOCOM_DIR / "handoffs").glob("*.xml"))
-    if not handoffs:
-        sys.exit("socom prompt: no handoffs — run `socom handoff <summary>` first")
-    latest = handoffs[-1]
-    body = latest.read_text()
-    unfilled = body.count("FILL")
-    claims = verify_claims(root, body)
-    verified = sum(1 for c in claims if c.startswith("VERIFIED"))
-    # Prompt identity: id derived from the source handoff (the single ordering
-    # authority — H-<date>-<branch>), plus an in-file generation timestamp so the
-    # session-start drift scan has a write-time it can read without git mtime.
-    pid = "P" + latest.stem[1:]
-    gen_ts = _now_iso()
-    src_date_m = re.search(r'date="([^"]+)"', body)
-    src_date = src_date_m.group(1) if src_date_m else "unknown"
-    out = root / SOCOM_DIR / "prompts" / "next-session.md"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    notes = "\n".join(f"- {c}" for c in claims) or "- (no probe-able claims)"
-    out.write_text(f"""<!-- socom:prompt id={pid} generated={gen_ts} source-handoff={latest.name} — regenerated each closeout, do not commit by hand -->
-# Next session — {cfg.get('project', root.name)}
-
-**Prompt-id:** `{pid}` · **Generated:** {gen_ts} · **From handoff:** `{latest.name}` (as-of {src_date})
-
-You are resuming work on this repo's SOCOM substrate. Begin by:
-
-1. `socom gate session-start` (drift check + orphan reaper + breach debt — NON-NEGOTIABLE)
-2. Read `{latest.relative_to(root)}` end-to-end — the exit state you inherit.
-3. `socom claim --scan`, then claim your domain before any work.
-4. Load the session-start section of `.socom/memory/INDEX.md` and the lessons
-   for your domain.
-5. Non-trivial work: enter plan mode; ratify a contract before code.
-
-## Inherited state (from {latest.name})
-{"⚠ handoff has " + str(unfilled) + " unfilled FILL field(s) — treat its claims as provisional" if unfilled else "handoff was fully filled at closeout"}
-
-## Claim verification ({verified}/{len(claims)} verified at generation time)
-{notes}
-
-Anything marked HYPOTHESIS must be re-checked before you rely on it.
-""")
-    print(f"socom prompt: -> {out} ({verified}/{len(claims)} claims verified"
-          f"{', ' + str(unfilled) + ' FILL fields outstanding' if unfilled else ''})")
-
-
-# ── breach lifecycle (HR3: amber must close a loop) ─────────────────────
-
-def cmd_breach(args):
-    root = repo_root()
-    log = root / SOCOM_DIR / "gates" / "breaches.log"
-    resolved = root / SOCOM_DIR / "gates" / "breaches.resolved.log"
-    lines = [ln for ln in log.read_text().splitlines() if ln.strip()] \
-        if log.exists() else []
-    if not args or args[0] == "list":
-        for i, ln in enumerate(lines, 1):
-            print(f"  {i}. {ln}")
-        print(f"socom breach: {len(lines)} open")
-        return
-    if args[0] == "resolve":
-        which = args[1] if len(args) > 1 else "all"
-        note = " ".join(args[2:]) or "resolved"
-        keep, done = [], []
-        for i, ln in enumerate(lines, 1):
-            if which == "all" or str(i) == which:
-                done.append(ln)
-            else:
-                keep.append(ln)
-        if not done:
-            sys.exit(f"socom breach: nothing matched '{which}'")
-        ts = _now_iso()
-        with resolved.open("a") as f:
-            for ln in done:
-                f.write(f"{ln}\tresolved={ts}\tnote={note}\n")
-        log.write_text("\n".join(keep) + ("\n" if keep else ""))
-        print(f"socom breach: resolved {len(done)}, {len(keep)} remain open")
-        return
-    sys.exit("usage: socom breach [list|resolve <n|all> [note]]")
-
-
-# ── gate ─────────────────────────────────────────────────────────────────
-
-def run_check(cmd: str, root: Path) -> int:
-    print(f"  $ {cmd}")
-    return subprocess.run(cmd, shell=True, cwd=root).returncode
-
-
-def log_breach(root: Path, gate: str, detail: str):
-    log = root / SOCOM_DIR / "gates" / "breaches.log"
-    log.parent.mkdir(parents=True, exist_ok=True)
-    ts = _now_iso()
-    with log.open("a") as f:
-        f.write(f"{ts}\t{gate}\t{detail}\n")
-
-
-COMMIT_RX = re.compile(r"^(feat|fix|chore|refactor|test|docs)\([a-z0-9._-]+\): .+")
-
-
-def _gate_record(root, promise_arg, rc, duration_s):
-    """Record a task-completion assessment to the run ledger: the gate just
-    assessed the named promise — verdict kept iff the bound check passed. Best-
-    effort — a missing / malformed / standalone arg WARNS but never blocks the
-    gate (the gate's job is its check; the ledger row is the bonus that lets
-    `socom cycle` measure real done-attempts). Mirrors the fail-closed posture
-    of `contract verify --record` and writes through the one shared writer."""
-    f = Path(promise_arg)
+    f = Path(args[1])
     if not f.is_absolute():
-        f = root / promise_arg
+        f = root / args[1]
     if not f.exists():
-        print(f"socom gate task-completion: no ledger row — '{promise_arg}' "
-              "not found (the gate still ran).", file=sys.stderr)
-        return
+        sys.exit(f"socom contract: no such file '{args[1]}' (R6: degrade loudly).")
     try:
         root_el = ET.parse(f).getroot()
     except (ET.ParseError, OSError) as e:
-        # OSError too (e.g. a directory arg) — a bad arg must WARN, never crash
-        # the gate into a false RED (the gate's check already ran).
-        print(f"socom gate task-completion: no ledger row — {f.name} is not "
-              f"readable well-formed XML ({e}).", file=sys.stderr)
-        return
-    promise_id, seat, cref = _promise_ref(root_el)
-    if not promise_id or not seat:
-        print(f"socom gate task-completion: no ledger row — {f.name} is not a "
-              "promise with a promiser seat (a standalone contract has no "
-              "executing seat to attribute).", file=sys.stderr)
-        return
-    row = _append_ledger_row(root, promise_id, seat, cref, {"ok": rc == 0},
-                             duration_s)
-    print(f"socom gate task-completion: recorded ledger row — {seat} "
-          f"{promise_id} attempt {row['attempt']} verdict {row['verdict']} "
-          "(.socom/ledger/runs.jsonl).")
+        sys.exit(f"socom contract: {f.name} is not readable well-formed XML — {e}")
+    contract = _contract_el(root_el)
+    if contract is None:
+        sys.exit(f"socom contract: no <contract> in {f.name} "
+                 "(a promise embeds one, or pass a standalone contract).")
+    checks = _contract_checks(contract)
+    state = contract.get("state", "?")
+    goal = " ".join((contract.findtext("goal") or "").split())
 
-
-def cmd_gate(args):
-    if not args:
-        sys.exit("usage: socom gate <session-start|task-completion|pre-commit|"
-                 "commit-msg|pre-push|session-end> [args]")
-    name, rest = args[0], args[1:]
-    root = repo_root()
-    cfg = load_cfg(root)
-    checks = cfg.get("checks", {})
-
-    if name == "commit-msg":
-        msg = Path(rest[0]).read_text() if rest else ""
-        first = msg.splitlines()[0] if msg.splitlines() else ""
-        if not COMMIT_RX.match(first):
-            sys.exit(f"socom gate commit-msg: RED — first line must be "
-                     f"'type(scope): description', got: {first!r}")
-        missing = [b for b in ("[what]", "[test]") if b not in msg]
-        if missing:
-            log_breach(root, "commit-msg", f"amber: missing {missing} blocks")
-            print(f"socom gate commit-msg: AMBER — missing {missing}; logged. "
-                  "Full blocks belong on the first branch commit.")
-            return
-        # HR4: substance heuristic — evidence should look like evidence
-        # (a command, an exit code, an output line), not a vibe. Anchor the
-        # block token to line-start so a prose mention of "[test]" inside an
-        # earlier block can't capture a digit-less fragment (false negative).
-        m = re.search(r"^\[test\](.*?)(?:\n\[|\Z)", msg, re.DOTALL | re.M)
-        body = (m.group(1) if m else "").strip()
-        looks_like_evidence = (len(body) >= 20 and
-                               re.search(r"(\$ |rc=|exit|PASS|FAIL|\d)", body))
-        if not looks_like_evidence:
-            log_breach(root, "commit-msg", "amber: [test] block has no "
-                                           "evidence-shaped content")
-            print("socom gate commit-msg: AMBER — [test] reads like a claim, "
-                  "not evidence (no command/exit-code/output). Logged; CI replays.")
+    if sub == "show":
+        print(f"socom contract {contract.get('ref', '?')} [{state}]")
+        print(f"  goal: {goal}")
+        for c in checks:
+            kind = f"run: {c['run']}" if c["auto"] else "MANUAL (no <run>)"
+            print(f"  check {c['id']} · {c['assessor']} · {kind}")
+            print(f"    expect: {c['expect']}")
         return
 
-    if name == "session-start":
-        h = canonical_hash(root)
-        claude = root / "CLAUDE.md"
-        if claude.exists():
-            m = re.search(r"source=(\w+)", claude.read_text())
-            if m and m.group(1) != h:
-                print(f"socom: P0 DRIFT — compiled views stale ({m.group(1)} != {h}); "
-                      "run `socom compile`", file=sys.stderr)
-                sys.exit(2)
-        for ln in reap_orphans(root):  # R12: reap, don't just report
-            print(f"  {ln}")
-        wt = subprocess.run(["git", "worktree", "list"], cwd=root,
-                            capture_output=True, text=True).stdout
-        # HR3: amber closes a loop — every session opens by seeing its debt.
-        # Entries carry gate + detail, never author identity (telemetry about
-        # the system, not surveillance of people).
-        blog = root / SOCOM_DIR / "gates" / "breaches.log"
-        if blog.exists():
-            lines = [ln for ln in blog.read_text().splitlines() if ln.strip()]
-            if lines:
-                print(f"socom session-start: {len(lines)} amber breach(es) on "
-                      f"record — oldest {lines[0].split(chr(9))[0]}; last 3:")
-                for ln in lines[-3:]:
-                    print(f"    {ln}")
-                print("  review or resolve before new work piles on top.")
-        print(f"socom session-start: source={h} ok; worktrees:\n{wt.strip()}")
-        return
-
-    if name == "session-end":
-        handoffs = sorted((root / SOCOM_DIR / "handoffs").glob("*.xml"))
-        today = datetime.now(timezone.utc).date().isoformat()
-        fresh = [f for f in handoffs if today in f.name]
-        if not fresh:
-            sys.exit("socom gate session-end: RED — no handoff written today "
-                     "(.socom/handoffs/H-<date>*.xml). A session may not vanish.")
-        if "FILL" in fresh[-1].read_text():
-            sys.exit(f"socom gate session-end: RED — {fresh[-1].name} still has "
-                     "unfilled FILL fields. A handoff of placeholders is a "
-                     "vanishing session with paperwork.")
-        prompt = root / SOCOM_DIR / "prompts" / "next-session.md"
-        if not prompt.exists() or \
-                prompt.stat().st_mtime < fresh[-1].stat().st_mtime:
-            sys.exit("socom gate session-end: RED — next-session prompt missing "
-                     "or older than the handoff. Run `socom prompt`.")
-        open_claims = [p.stem for p in (root / SOCOM_DIR / "claims").glob("*.claim")
-                       if not claim_expired(p)] \
-            if (root / SOCOM_DIR / "claims").exists() else []
-        if open_claims:
-            print(f"socom session-end: AMBER — live claims not released: "
-                  f"{open_claims} (TTL will expire them, but release is the intent)")
-            log_breach(root, "session-end", f"amber: unreleased claims {open_claims}")
-        print(f"socom session-end: PASS — handoff {fresh[-1].name} filled, "
-              "prompt generated + claim-verified. Distill memories (cap 2, "
-              "five gates) before you go.")
-        return
-
-    # Built-ins are handled above; every other gate id resolves to its own
-    # bound check (checks.<id>) — so canon can add gates like `eval` that bind
-    # to a repo check without new dispatch code.
-    builtins = ("task-completion", "pre-commit", "pre-push")
-    tier = {"task-completion": "fast", "pre-commit": "medium",
-            "pre-push": "full"}.get(name, name)
-    cmd = checks.get(tier)
-    if cmd is None and name not in builtins:
-        sys.exit(f"socom: unknown gate '{name}' (no built-in handler and no "
-                 f"checks.{name} binding in socom.yaml)")
-    if not cmd or cmd == "true":
-        print(f"socom gate {name}: checks.{tier} unbound — passing (bind it in socom.yaml)")
-        return
-    import time
+    # verify: run each auto check, report; manual checks flagged, never passed.
+    if state != "ratified":
+        print(f"socom contract: WARN — {contract.get('ref', '?')} state is "
+              f"'{state}', not 'ratified' (work runs against ratified contracts).")
+    import json, time
     _t0 = time.monotonic()
-    rc = run_check(cmd, root)
+    results = []
+    for c in checks:
+        if c["auto"]:
+            cp = subprocess.run(c["run"], shell=True, cwd=root,
+                                capture_output=True, text=True)
+            passed = cp.returncode == 0
+            tail = (cp.stdout + cp.stderr).strip().splitlines()[-1:] or [""]
+            print(f"  check {c['id']} · {c['assessor']} · "
+                  f"{'PASS' if passed else 'FAIL'} (exit {cp.returncode})")
+            print(f"    $ {c['run']}")
+            print(f"    expect: {c['expect']}")
+            if tail[0]:
+                print(f"    output: {tail[0][:100]}")
+            results.append({**c, "passed": passed})
+        else:
+            print(f"  check {c['id']} · {c['assessor']} · MANUAL — "
+                  f"needs {c['assessor']}, not auto-verifiable")
+            print(f"    expect: {c['expect']}")
+            results.append({**c, "passed": False})
+
     duration_s = int(time.monotonic() - _t0)
-    # task-completion, given a promise, records its assessment to the run ledger
-    # — the canonical "a gate assessed the promise -> kept/broken" event
-    # (schemas/ledger.xml), so `socom cycle` measures real done-attempts WITHOUT
-    # a manual flag. Recorded BEFORE the RED exit: a broken attempt is the
-    # pass@1-vs-pass@k signal, not noise. No promise arg -> behaviour unchanged.
-    if name == "task-completion" and rest:
-        _gate_record(root, rest[0], rc, duration_s)
-    if rc != 0:
-        if name == "pre-commit":  # amber band
-            log_breach(root, name, f"checks.medium failed rc={rc}")
-            print(f"socom gate {name}: AMBER — failed (rc={rc}); breach logged, "
-                  "commit proceeds, CI re-asserts at red.")
-            return
-        sys.exit(f"socom gate {name}: RED — checks.{tier} failed (rc={rc})")
-    print(f"socom gate {name}: PASS")
+    s = _verify_summary(results)
+    print(f"socom contract verify: {s['passed']} passed, {s['failed']} failed, "
+          f"{s['manual']} manual -> {'OK' if s['ok'] else 'FAILED'}")
+    if s["manual"]:
+        print(f"  {s['manual']} manual check(s) still need an assessor — "
+              "verify confirms the auto checks only (fail-closed on the rest).")
+
+    # --record: append this verify outcome to the run ledger so `socom cycle`
+    # rolls REAL data (the first automatic producer; cycle/lesson otherwise
+    # measure synthetic rows). Guarded: a row is the assessment of record, not
+    # every exploratory run, so it is opt-in. A promise (id + promiser seat) is
+    # required — a standalone contract has no executing seat to attribute. And
+    # a row is WITHHELD while any check is MANUAL: the verdict then belongs to
+    # the human assessor, and the mechanical assessor must not claim it
+    # (constitution §separation-of-privilege — assessment is never delegated to
+    # the promiser). The row is the same fail-closed posture #6 gave verify.
+    if record:
+        promise_id, seat, cref = _promise_ref(root_el)
+        if not promise_id or not seat:
+            print("socom contract verify: --record needs a promise with a "
+                  "promiser seat (a standalone contract has no executing seat "
+                  "to attribute) — no ledger row written.", file=sys.stderr)
+        elif s["manual"]:
+            print("socom contract verify: --record withheld — "
+                  f"{s['manual']} manual check(s) pending; the verdict is the "
+                  "human assessor's to record, not the mechanical runner's "
+                  "(§separation-of-privilege).", file=sys.stderr)
+        elif s["passed"] + s["failed"] == 0:
+            print("socom contract verify: --record withheld — no auto check "
+                  "ran, so there is no evidence to record. A vacuous 'kept' in "
+                  "the ledger is exactly what verify-never-claim forbids.",
+                  file=sys.stderr)
+        else:
+            row = _append_ledger_row(root, promise_id, seat, cref, s,
+                                     duration_s)
+            print(f"socom contract verify: recorded ledger row — {seat} "
+                  f"{promise_id} attempt {row['attempt']} verdict "
+                  f"{row['verdict']} (.socom/ledger/runs.jsonl).")
+
+    if not s["ok"]:
+        sys.exit(1)
+
+
+# HR6: redaction at the substrate boundary — index/hydrate refuse
+# secret-shaped content. Focused patterns; full PII taxonomy is roadmap.
+SECRET_RX = re.compile(
+    r"(-----BEGIN [A-Z ]*PRIVATE KEY|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]+"
+    r"|ghp_[A-Za-z0-9]{36}|glpat-[A-Za-z0-9_-]{20}|eyJ[A-Za-z0-9_-]{30,}"
+    r"|(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*['\"]?[^\s'\"]{8,})",
+    re.IGNORECASE)
 
 
 # ── hydrate ──────────────────────────────────────────────────────────────
@@ -1198,6 +609,8 @@ def cmd_index(args):
 # vector index is absent, loudly.
 
 BM25_K1, BM25_B = 1.5, 0.75
+
+
 EXCLUDED_STATES = {"retired", "superseded", "broken"}
 
 
@@ -1549,235 +962,689 @@ def cmd_cycle(args):
         print(f"  -> {written}")
 
 
-# ── contract — make the validation contract testable, not inert ──────────
-# §contracts-before-code: a contract's <check> elements carry a <run> command
-# and an <expect> outcome. `verify` RUNS each runnable check (PASS/FAIL on exit
-# code) and flags the rest MANUAL — the SOCOM-native conformance-test runner.
+# ── baseline (the gate before naive RAG) ─────────────────────────────────
+# L1 may start only once an L0 floor is measured: corpus shape, L0 latency,
+# and probe hit@k under keyword matching. The L1 acceptance contract is
+# "same probes, strictly better hit@k, latency within budget" — contracts
+# before code, applied to the substrate's own evolution (STORAGE.md).
 
-def _contract_el(root_el):
-    """The <contract> element of a promise root, or root itself if it IS one.
-    Pure: returns the element or None."""
-    if root_el.tag == "contract":
-        return root_el
-    return root_el.find("contract")
-
-
-def _contract_checks(contract_el) -> list:
-    """Pure: a contract element -> [{id, assessor, run, expect, auto}]. A check
-    with a <run> command is auto-verifiable; one without is MANUAL."""
-    checks = []
-    for c in contract_el.findall("check"):
-        run = c.findtext("run")
-        run = run.strip() if run and run.strip() else None
-        checks.append({
-            "id": c.get("id", "?"),
-            "assessor": c.get("assessor", "?"),
-            "run": run,
-            "expect": " ".join((c.findtext("expect") or "").split()),
-            "auto": run is not None,
-        })
-    return checks
+def l0_score(query: str, chunks: list, k: int = 5) -> list:
+    """Keyword-overlap retrieval — the floor any L1 must beat."""
+    q = set(re.findall(r"\w+", query.lower()))
+    scored = sorted(chunks, key=lambda c: -len(
+        q & set(re.findall(r"\w+", c["text"].lower()))))
+    return [c["id"] for c in scored[:k]]
 
 
-def _verify_summary(results: list) -> dict:
-    """Pure: [{auto, passed}] -> tallies. ok iff no auto check FAILED. Manual
-    checks never count as passed (fail-closed) and never as failed."""
-    passed = sum(1 for r in results if r["auto"] and r["passed"])
-    failed = sum(1 for r in results if r["auto"] and not r["passed"])
-    manual = sum(1 for r in results if not r["auto"])
-    return {"passed": passed, "failed": failed, "manual": manual,
-            "ok": failed == 0}
+def cmd_baseline(args):
+    import json, time
+    root = repo_root(Path(args[0]) if args else None)
+    t0 = time.monotonic()
+    chunks = cmd_index([str(root)])
+    index_s = time.monotonic() - t0
 
+    t0 = time.monotonic()
+    subprocess.run(["grep", "-ri", "verify", "--include=*.xml", "--include=*.md",
+                    str(root / SOCOM_DIR)], capture_output=True)
+    grep_s = time.monotonic() - t0
 
-def _next_attempt(rows: list, promise: str, contract: str) -> int:
-    """Pure: the 1-based attempt number for the next (promise, contract)
-    execution — one past the highest attempt already recorded for that pair.
-    cycle groups pass@1/pass@k by promise, so the attempt sequence is
-    per-promise; attempt 1's verdict decides pass@1 (schemas/ledger.xml)."""
-    prior = [int(r.get("attempt", 0)) for r in rows
-             if r.get("promise") == promise and r.get("contract") == contract]
-    return (max(prior) + 1) if prior else 1
+    probes_f = root / SOCOM_DIR / "index" / "probes.yaml"
+    if not probes_f.exists():
+        probes_f.write_text(
+            "# query -> expected chunk id substring; scored hit@5 under L0.\n"
+            "# Grow this set as the substrate grows — it is the RAG contract.\n"
+            "probes:\n"
+            "  - query: \"how do I prove a task is done\"\n"
+            "    expect: \"verify-never-claim\"\n"
+            "  - query: \"when should I write the acceptance checks\"\n"
+            "    expect: \"contracts-before-code\"\n")
+        print(f"  planted {probes_f} — extend it; it is the L1 acceptance contract")
+    probes = yaml.safe_load(probes_f.read_text()).get("probes", [])
+    hits = 0
+    results = []
+    for p in probes:
+        top = l0_score(p["query"], chunks)
+        hit = any(p["expect"] in cid for cid in top)
+        hits += hit
+        results.append({"query": p["query"], "expect": p["expect"],
+                        "hit@5": hit, "top": top[:3]})
 
-
-def _append_ledger_row(root, promise, seat, contract, summary, duration_s) -> dict:
-    """The single writer for .socom/ledger/runs.jsonl: read the ledger, compute
-    the next attempt for (promise, contract), append one row for this
-    assessment, and return it. Both `contract verify --record` and the
-    task-completion gate record through here, so the wire format and the attempt
-    sequence have ONE source of truth (§least-common-mechanism). Callers own the
-    fail-closed guards (standalone / manual-pending / no-evidence) — this writes
-    unconditionally once a row is warranted."""
-    import json
-    try:
-        import fcntl
-    except ImportError:
-        # The ledger writer needs POSIX advisory locking (flock) to serialize
-        # concurrent seats. socom is POSIX-scoped (macOS/Linux/WSL) — say so
-        # plainly rather than crash with a bare ImportError (R6: degrade loudly).
-        sys.exit("socom: the run ledger requires POSIX fcntl.flock (unix only — "
-                 "macOS/Linux/WSL). On native Windows, run socom under WSL.")
-    ledger = root / SOCOM_DIR / "ledger" / "runs.jsonl"
-    ledger.parent.mkdir(parents=True, exist_ok=True)
-    # Serialize the whole read -> compute-attempt -> append under one exclusive
-    # lock: without it, two seats recording concurrently (multi-agent is the
-    # goal) read the same tail, both compute attempt=K+1, and both write it —
-    # duplicate attempts break cycle's pass@1/pass@k, and interleaved writes can
-    # tear a row. 'a+' creates the file if absent and keeps one fd for both the
-    # read (seek 0) and the append (O_APPEND ignores seek, always tail). flock is
-    # POSIX advisory and same-host — honored because this is the SINGLE writer
-    # for runs.jsonl (all writers cooperate); the ledger is a same-host artifact,
-    # so cross-host/NFS locking is out of scope (unix only: darwin/linux).
-    with ledger.open("a+") as fh:
-        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
-        fh.seek(0)
-        rows = [json.loads(ln) for ln in fh.read().splitlines() if ln.strip()]
-        attempt = _next_attempt(rows, promise, contract)
-        row = _ledger_row(promise, seat, contract, summary, attempt, _now_iso(),
-                          duration_s)
-        fh.write(json.dumps(row) + "\n")
-    return row
-
-
-def _ledger_row(promise, seat, contract, summary, attempt, ts, duration_s) -> dict:
-    """Pure: a verify outcome -> one ledger JSONL row (the schemas/ledger.xml
-    field contract — these keys ARE the wire keys). verdict 'kept' iff no auto
-    check failed; gate_band 'red' because a contract verify is the
-    task-completion-band assessment that decides done. Only ever called for a
-    fully-mechanical verify (manual==0) — the manual-pending guard lives in the
-    caller so the mechanical assessor never records a verdict it cannot make
-    (constitution §context-economy / §separation-of-privilege)."""
-    return {
-        "ts": ts,
-        "seat": seat,
-        "promise": promise,
-        "contract": contract,
-        "gate_band": "red",
-        "exit_code": 0 if summary["ok"] else 1,
-        "duration_s": duration_s,
-        "attempt": attempt,
-        "verdict": "kept" if summary["ok"] else "broken",
+    by_type: dict = {}
+    for c in chunks:
+        by_type[c["artifact"]] = by_type.get(c["artifact"], 0) + 1
+    baseline = {
+        "socom": SOCOM_VERSION,
+        "measured_at": _now_iso(),
+        "corpus": {"chunks": len(chunks), "artifacts_by_type": by_type,
+                   "total_chars": sum(len(c["text"]) for c in chunks)},
+        "latency_s": {"index_walk": round(index_s, 4), "grep_cold": round(grep_s, 4)},
+        "probes": {"count": len(probes), "hit_at_5": hits,
+                   "rate": round(hits / len(probes), 3) if probes else None,
+                   "results": results},
+        "l1_acceptance": "same probes (>=12), hit@5 >= L0 AND MRR@5 strictly "
+                         "greater, latency within budget, zero redaction "
+                         "violations (amended per R10, recorded in probes.yaml)",
     }
+    out = root / SOCOM_DIR / "index" / "baseline.json"
+    out.write_text(json.dumps(baseline, indent=2) + "\n")
+    print(f"socom baseline: {len(chunks)} chunks, probes {hits}/{len(probes)} "
+          f"hit@5 under L0 -> {out}\n  Naive RAG (L1) may start; it must beat "
+          "this floor on the same probes.")
 
 
-def _promise_ref(root_el):
-    """Pure: (promise_id, seat, contract_ref) from a <promise> root element, or
-    (None, None, None) when it is not a recordable promise — a standalone
-    contract has no executing seat to attribute a ledger row to. The shared
-    promise->ledger identity used by both `contract verify --record` and the
-    task-completion gate."""
-    if root_el.tag != "promise":
-        return None, None, None
-    promiser = root_el.find("promiser")
-    contract = root_el.find("contract")
-    return (root_el.get("id"),
-            promiser.get("seat") if promiser is not None else None,
-            contract.get("ref") if contract is not None else None)
+# ── lesson — experience earned into durable, retrievable rules ────────────
+# Ported from Akili's lesson system. A lesson is BORN provisional from a cycle
+# hotspot (the eval->lesson bridge), EARNS active by re-confirmation, and is
+# RETIRED (never deleted) when falsified. Lives at .socom/lessons/<id>.xml so
+# `socom index` retrieves it for free; the lifecycle filter hides retired.
+def _lesson_files(root):
+    d = root / SOCOM_DIR / "lessons"
+    return sorted(d.glob("L-*.xml")) if d.exists() else []
 
 
-def cmd_contract(args):
-    record = "--record" in args
-    args = [a for a in args if a != "--record"]
-    if not args or args[0] not in ("verify", "show"):
-        sys.exit("usage: socom contract <verify|show> <promise-or-contract.xml> "
-                 "[--record]")
-    sub = args[0]
-    if len(args) < 2:
-        sys.exit(f"usage: socom contract {sub} <promise-or-contract.xml>")
+def _lesson_attr(text, name):
+    m = re.search(rf'\b{name}="([^"]*)"', text)
+    return m.group(1) if m else ""
+
+
+def _lesson_statement(text):
+    m = re.search(r"<statement[^>]*>(.*?)</statement>", text, re.DOTALL)
+    return " ".join(m.group(1).split())[:80] if m else ""
+
+
+def _lesson_template(lid, domain, promise, cycle, broken, total):
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<!-- socom lesson — provisional candidate born from a cycle hotspot. Refine the
+     statement and why into the specific guard, then promote it once
+     re-confirmed (socom lesson promote {lid}), or retire it with a reason if
+     falsified. The body is never deleted; retirement flips state, adds a tag. -->
+<lesson id="{lid}" domain="{domain}" state="provisional" source="cycle"
+        lifecycle="mid-session">
+  <statement embed="true">
+    Promise {promise} keeps failing assessment ({broken}/{total} broken) —
+    encode the guard that prevents this recurring failure before reworking it.
+  </statement>
+  <why embed="true">
+    Born from cycle {cycle}: repeated `broken` verdicts on {promise} signal a
+    failure class, not a one-off. Refine this into the specific guard, then
+    promote so it surfaces as domain guidance.
+  </why>
+  <derived-from promise="{promise}" cycle="{cycle}" broken="{broken}" total="{total}"/>
+  <evidence embed="true">
+    cycle hotspot: {promise} broken {broken}/{total}.
+  </evidence>
+  <validated count="0"/>
+</lesson>
+"""
+
+
+def _regen_lessons_index(root):
+    by_domain = {}
+    for f in _lesson_files(root):
+        t = f.read_text()
+        by_domain.setdefault(_lesson_attr(t, "domain") or "general", []).append(
+            (f.stem, _lesson_attr(t, "state")))
+    lines = ["# Lessons Index", "",
+             "Domain-sharded; load the file(s) matching the task. Entries are "
+             "provisional until re-confirmed, then active; falsified entries are "
+             "state=retired (preserved, never deleted).", "",
+             "| Domain | Lessons | Active | Provisional |", "|---|---|---|---|"]
+    for dom in sorted(by_domain):
+        ls = by_domain[dom]
+        act = sum(1 for _, s in ls if s == "active")
+        prov = sum(1 for _, s in ls if s == "provisional")
+        lines.append(f"| {dom} | {', '.join(i for i, _ in ls)} | {act} | {prov} |")
+    (root / SOCOM_DIR / "lessons" / "index.md").write_text("\n".join(lines) + "\n")
+
+
+def cmd_lesson(args):
+    import json
     root = repo_root()
-    f = Path(args[1])
+    if not args:
+        sys.exit("usage: socom lesson <candidates|list|promote|retire> [args]")
+    sub, rest = args[0], args[1:]
+
+    def flag_val(name, default=None):
+        return rest[rest.index(name) + 1] if name in rest \
+            and rest.index(name) + 1 < len(rest) else default
+
+    ldir = root / SOCOM_DIR / "lessons"
+    ldir.mkdir(parents=True, exist_ok=True)
+
+    if sub == "candidates":
+        domain = flag_val("--domain", "general")
+        min_broken = int(flag_val("--min-broken", "2"))
+        cdir = root / SOCOM_DIR / "cycles"
+        cycles = sorted(cdir.glob("cycle-*.json")) if cdir.exists() else []
+        if not cycles:
+            sys.exit("socom lesson candidates: no cycle artifact — run "
+                     "`socom cycle` first (the bridge consumes its hotspots).")
+        cyc = cycles[-1]
+        hotspots = json.loads(cyc.read_text()).get("hotspots", [])
+        existing = {_lesson_attr(f.read_text(), "promise")
+                    for f in _lesson_files(root)}
+        born = 0
+        for h in hotspots:
+            promise = h.get("promise")
+            if h.get("broken", 0) < min_broken or promise in existing:
+                continue  # below threshold, or idempotent: one per source promise
+            lid = f"L-{promise}"
+            (ldir / f"{lid}.xml").write_text(_lesson_template(
+                lid, domain, promise, cyc.name, h.get("broken", 0),
+                h.get("total", 0)))
+            existing.add(promise)
+            born += 1
+            print(f"  + {lid} (provisional) <- hotspot {promise} "
+                  f"broken {h.get('broken')}/{h.get('total')}")
+        _regen_lessons_index(root)
+        print(f"socom lesson: {born} candidate(s) born from {cyc.name}; "
+              f"{len(hotspots)} hotspot(s) seen. Refine, then "
+              f"`socom lesson promote <id>`.")
+        return
+
+    if sub == "list":
+        dom_f, state_f = flag_val("--domain"), flag_val("--state")
+        rows = []
+        for f in _lesson_files(root):
+            t = f.read_text()
+            d, s = _lesson_attr(t, "domain"), _lesson_attr(t, "state")
+            if (dom_f and d != dom_f) or (state_f and s != state_f):
+                continue
+            rows.append((f.stem, d, s, _lesson_statement(t)))
+        for lid, d, s, stmt in rows:
+            print(f"  {s:<11} [{d}] {lid}: {stmt}")
+        suffix = (f" domain={dom_f}" if dom_f else "") + \
+                 (f" state={state_f}" if state_f else "")
+        print(f"socom lesson: {len(rows)} lesson(s){suffix}")
+        return
+
+    if sub in ("promote", "retire"):
+        if not rest:
+            sys.exit(f"usage: socom lesson {sub} <id>"
+                     + (' --reason "..."' if sub == "retire" else ""))
+        lid = rest[0]
+        f = ldir / f"{lid}.xml"
+        if not f.exists():
+            sys.exit(f"socom lesson {sub}: no such lesson {lid}")
+        t = f.read_text()
+        cur = _lesson_attr(t, "state")
+        if sub == "promote":
+            if cur != "provisional":
+                sys.exit(f"socom lesson promote: {lid} is '{cur}'; only "
+                         "provisional lessons promote")
+            f.write_text(re.sub(r'state="provisional"', 'state="active"',
+                                t, count=1))
+            _regen_lessons_index(root)
+            print(f"socom lesson: {lid} provisional -> active")
+            return
+        if cur == "retired":
+            sys.exit(f"socom lesson retire: {lid} already retired")
+        reason = flag_val("--reason", "falsified")
+        date = datetime.now(timezone.utc).date().isoformat()
+        t = re.sub(rf'state="{cur}"', 'state="retired"', t, count=1)
+        t = t.replace("</lesson>",
+                      f'  <retire reason="{reason}" date="{date}"/>\n</lesson>')
+        f.write_text(t)
+        _regen_lessons_index(root)
+        print(f"socom lesson: {lid} {cur} -> retired (preserved; reason: {reason})")
+        return
+
+    sys.exit(f"socom lesson: unknown subcommand '{sub}'")
+
+
+# ── introspect (backlog #4: agent introspection, increment 1) ────────────
+# Post-session self-capture: parse machine-verifiable assertions from a
+# closing handoff's <evidence> commands into a replayable append-only log
+# (schemas/assertion.xml), and birth provisional lesson candidates from
+# CAPTURED failures. Deterministic — the only one of Akili's five extractors
+# with no model in the loop (the rest deferred to preserve the L0 floor).
+# Outcome-conditional and non-blocking: capture never fails a closeout.
+
+def _assertion_lesson_template(lid, domain, aid, handoff, verify, expect_exit):
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<!-- socom lesson — provisional candidate born from a captured failure assertion
+     ({aid}). A command in {handoff}'s evidence exited unexpectedly (expected
+     {expect_exit}) with no explanatory note. Refine this into the specific guard,
+     then promote once re-confirmed (socom lesson promote {lid}), or retire with a
+     reason if it was a one-off. Provisional by design: a single occurrence earns
+     active only by re-confirmation. The body is never deleted. -->
+<lesson id="{lid}" domain="{domain}" state="provisional" source="introspect"
+        lifecycle="mid-session">
+  <statement embed="true">
+    `{verify}` failed unexpectedly (expected exit {expect_exit}) at closeout —
+    encode the guard that makes this command's failure mode impossible, or
+    explain it as a deliberate check (then annotate it in the handoff).
+  </statement>
+  <why embed="true">
+    Born from assertion {aid} ({handoff}): an un-noted non-expected exit captured
+    in the session evidence signals a failure worth a guard, not a passing check.
+    Refine into the specific guard, then promote so it surfaces as guidance.
+  </why>
+  <derived-from assertion="{aid}" handoff="{handoff}"/>
+  <evidence embed="true">
+    assertion {aid}: `{verify}` expected exit {expect_exit}.
+  </evidence>
+  <validated count="0"/>
+</lesson>
+"""
+
+
+def cmd_introspect(args):
+    import json
+    import xml.etree.ElementTree as ET
+    root = repo_root()
+    pos = [a for a in args if not a.startswith("-")]
+    domain = args[args.index("--domain") + 1] if "--domain" in args \
+        and args.index("--domain") + 1 < len(args) else "general"
+
+    # Resolve the handoff: explicit path/name, else the latest H-*.xml.
+    hdir = root / SOCOM_DIR / "handoffs"
+    if pos:
+        cand = Path(pos[0])
+        handoff = cand if cand.exists() else hdir / pos[0]
+        if not handoff.exists():
+            sys.exit(f"socom introspect: no such handoff '{pos[0]}' "
+                     f"(looked at it directly and under .socom/handoffs/).")
+    else:
+        hs = sorted(hdir.glob("H-*.xml")) if hdir.exists() else []
+        if not hs:
+            sys.exit("socom introspect: no handoff — .socom/handoffs/H-*.xml "
+                     "absent. Nothing closed to introspect (R6: degrade loudly). "
+                     "Pass a handoff path, or write one with `socom handoff`.")
+        handoff = hs[-1]
+
+    # Parse — a malformed handoff WARNS and exits 0 (capture never blocks closeout).
+    try:
+        tree = ET.parse(handoff)
+    except ET.ParseError as e:
+        print(f"socom introspect: WARN — {handoff.name} is not well-formed XML "
+              f"({e}); nothing captured. (capture never blocks closeout)")
+        return
+    hroot = tree.getroot()
+    hid = hroot.get("id") or handoff.stem
+    hts = hroot.get("date") or ""
+
+    ev = hroot.find("evidence")
+    commands = list(ev.findall("command")) if ev is not None else []
+    if not commands:
+        print(f"socom introspect: {handoff.name} has no <evidence> commands — "
+              "no assertions to capture.")
+        return
+
+    # Idempotency: load existing assertion ids; one row per (handoff, index).
+    adir = root / SOCOM_DIR / "assertions"
+    adir.mkdir(parents=True, exist_ok=True)
+    log = adir / "log.jsonl"
+    seen = set()
+    if log.exists():
+        for ln in log.read_text().splitlines():
+            ln = ln.strip()
+            if ln:
+                try:
+                    seen.add(json.loads(ln)["id"])
+                except (ValueError, KeyError):
+                    continue
+
+    ldir = root / SOCOM_DIR / "lessons"
+    existing_lessons = {_lesson_attr(f.read_text(), "id") for f in _lesson_files(root)}
+
+    rows, born = [], 0
+    for i, c in enumerate(commands):
+        aid = f"A-{hid}-{i}"
+        if aid in seen:
+            continue
+        verify = " ".join((c.text or "").split())
+        try:
+            expect_exit = int(c.get("exit", "0"))
+        except ValueError:
+            expect_exit = 0
+        note = c.get("note", "")
+        category = c.get("category", "general")
+        row = {"id": aid, "ts": hts, "source_handoff": hid, "verify": verify,
+               "expect_exit": expect_exit, "category": category}
+        if note:
+            row["note"] = note
+        rows.append(row)
+
+        # Bridge: an un-noted unexpected failure births a provisional lesson.
+        if expect_exit != 0 and not note:
+            lid = f"L-{aid}"
+            if lid not in existing_lessons:
+                ldir.mkdir(parents=True, exist_ok=True)
+                (ldir / f"{lid}.xml").write_text(_assertion_lesson_template(
+                    lid, domain, aid, hid, verify, expect_exit))
+                existing_lessons.add(lid)
+                born += 1
+                print(f"  + {lid} (provisional) <- captured failure {aid}: "
+                      f"`{verify[:48]}`")
+
+    if rows:
+        with log.open("a") as fh:
+            for r in rows:
+                fh.write(json.dumps(r) + "\n")
+        if born:
+            _regen_lessons_index(root)
+
+    print(f"socom introspect: {handoff.name} -> {len(rows)} new assertion(s) "
+          f"({len(commands)} command(s) seen, {len(commands) - len(rows)} already "
+          f"logged); {born} lesson candidate(s) born. Replay log: "
+          f".socom/assertions/log.jsonl")
+
+
+# ── handoff + next-session prompt ───────────────────────────────────────
+
+def cmd_handoff(args):
+    """Generate a handoff skeleton from observable git state; the session
+    fills judgment fields (undone/blockers/warnings) before closeout."""
+    root = repo_root()
+    summary = " ".join(args) or "session work"
+    branch = subprocess.run(["git", "branch", "--show-current"], cwd=root,
+                            capture_output=True, text=True).stdout.strip() or "detached"
+    log = subprocess.run(["git", "log", "--oneline", "-10"], cwd=root,
+                         capture_output=True, text=True).stdout.strip()
+    dirty = subprocess.run(["git", "status", "--short"], cwd=root,
+                           capture_output=True, text=True).stdout.strip()
+    date = datetime.now(timezone.utc).date().isoformat()
+    hid = f"H-{date}-{re.sub(r'[^a-z0-9-]', '-', branch.lower())[:40]}"
+    out = root / SOCOM_DIR / "handoffs" / f"{hid}.xml"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    commits = "\n".join(f"    <commit>{ln}</commit>" for ln in log.splitlines())
+    dirty_el = (f"  <uncommitted>\n{dirty}\n  </uncommitted>\n" if dirty else "")
+    out.write_text(f"""<?xml version="1.0" encoding="UTF-8"?>
+<handoff socom="{SOCOM_VERSION}" id="{hid}" branch="{branch}"
+         date="{_now_iso()}">
+  <summary embed="true">{summary}</summary>
+  <done embed="true">FILL: what was completed, with evidence refs</done>
+  <undone embed="true">FILL: what remains, and why</undone>
+  <recent-commits>
+{commits}
+  </recent-commits>
+{dirty_el}  <blockers embed="true">FILL or remove</blockers>
+  <warnings embed="true">FILL or remove</warnings>
+  <next embed="true">FILL: ranked candidates for the next session</next>
+</handoff>
+""")
+    print(f"socom handoff: skeleton -> {out}\n  Fill the FILL fields before "
+          "closeout; the session-end gate checks freshness, the prompt builds on it."
+          "\n  Context: the seat's `socom context emit` envelope (.socom/context) is "
+          "what `socom context verify` gates — emit it if this session loaded "
+          "context against a budget.")
+
+
+# Claim-verification: every probe-able claim in the generated prompt is
+# checked against the repo and annotated VERIFIED / HYPOTHESIS. Prompts
+# state what was true at write time; the annotations say what still is.
+def verify_claims(root: Path, text: str) -> list[str]:
+    notes = []
+    for path_m in set(re.findall(r"(?:^|[\s`(])((?:[\w.-]+/)+[\w.-]+\.\w{1,6})", text)):
+        exists = (root / path_m).exists()
+        notes.append(f"{'VERIFIED' if exists else 'HYPOTHESIS'}: path {path_m} "
+                     f"{'exists' if exists else 'NOT FOUND in repo'}")
+    for sha in set(re.findall(r"\b[0-9a-f]{7,12}\b", text)):
+        rc = subprocess.run(["git", "cat-file", "-e", sha], cwd=root,
+                            capture_output=True).returncode
+        notes.append(f"{'VERIFIED' if rc == 0 else 'HYPOTHESIS'}: commit {sha}")
+    return notes
+
+
+def cmd_prompt(args):
+    root = repo_root()
+    cfg = load_cfg(root)
+    handoffs = sorted((root / SOCOM_DIR / "handoffs").glob("*.xml"))
+    if not handoffs:
+        sys.exit("socom prompt: no handoffs — run `socom handoff <summary>` first")
+    latest = handoffs[-1]
+    body = latest.read_text()
+    unfilled = body.count("FILL")
+    claims = verify_claims(root, body)
+    verified = sum(1 for c in claims if c.startswith("VERIFIED"))
+    # Prompt identity: id derived from the source handoff (the single ordering
+    # authority — H-<date>-<branch>), plus an in-file generation timestamp so the
+    # session-start drift scan has a write-time it can read without git mtime.
+    pid = "P" + latest.stem[1:]
+    gen_ts = _now_iso()
+    src_date_m = re.search(r'date="([^"]+)"', body)
+    src_date = src_date_m.group(1) if src_date_m else "unknown"
+    out = root / SOCOM_DIR / "prompts" / "next-session.md"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    notes = "\n".join(f"- {c}" for c in claims) or "- (no probe-able claims)"
+    out.write_text(f"""<!-- socom:prompt id={pid} generated={gen_ts} source-handoff={latest.name} — regenerated each closeout, do not commit by hand -->
+# Next session — {cfg.get('project', root.name)}
+
+**Prompt-id:** `{pid}` · **Generated:** {gen_ts} · **From handoff:** `{latest.name}` (as-of {src_date})
+
+You are resuming work on this repo's SOCOM substrate. Begin by:
+
+1. `socom gate session-start` (drift check + orphan reaper + breach debt — NON-NEGOTIABLE)
+2. Read `{latest.relative_to(root)}` end-to-end — the exit state you inherit.
+3. `socom claim --scan`, then claim your domain before any work.
+4. Load the session-start section of `.socom/memory/INDEX.md` and the lessons
+   for your domain.
+5. Non-trivial work: enter plan mode; ratify a contract before code.
+
+## Inherited state (from {latest.name})
+{"⚠ handoff has " + str(unfilled) + " unfilled FILL field(s) — treat its claims as provisional" if unfilled else "handoff was fully filled at closeout"}
+
+## Claim verification ({verified}/{len(claims)} verified at generation time)
+{notes}
+
+Anything marked HYPOTHESIS must be re-checked before you rely on it.
+""")
+    print(f"socom prompt: -> {out} ({verified}/{len(claims)} claims verified"
+          f"{', ' + str(unfilled) + ' FILL fields outstanding' if unfilled else ''})")
+
+
+# ── breach lifecycle (HR3: amber must close a loop) ─────────────────────
+
+def cmd_breach(args):
+    root = repo_root()
+    log = root / SOCOM_DIR / "gates" / "breaches.log"
+    resolved = root / SOCOM_DIR / "gates" / "breaches.resolved.log"
+    lines = [ln for ln in log.read_text().splitlines() if ln.strip()] \
+        if log.exists() else []
+    if not args or args[0] == "list":
+        for i, ln in enumerate(lines, 1):
+            print(f"  {i}. {ln}")
+        print(f"socom breach: {len(lines)} open")
+        return
+    if args[0] == "resolve":
+        which = args[1] if len(args) > 1 else "all"
+        note = " ".join(args[2:]) or "resolved"
+        keep, done = [], []
+        for i, ln in enumerate(lines, 1):
+            if which == "all" or str(i) == which:
+                done.append(ln)
+            else:
+                keep.append(ln)
+        if not done:
+            sys.exit(f"socom breach: nothing matched '{which}'")
+        ts = _now_iso()
+        with resolved.open("a") as f:
+            for ln in done:
+                f.write(f"{ln}\tresolved={ts}\tnote={note}\n")
+        log.write_text("\n".join(keep) + ("\n" if keep else ""))
+        print(f"socom breach: resolved {len(done)}, {len(keep)} remain open")
+        return
+    sys.exit("usage: socom breach [list|resolve <n|all> [note]]")
+
+
+# ── gate ─────────────────────────────────────────────────────────────────
+
+def run_check(cmd: str, root: Path) -> int:
+    print(f"  $ {cmd}")
+    return subprocess.run(cmd, shell=True, cwd=root).returncode
+
+
+def log_breach(root: Path, gate: str, detail: str):
+    log = root / SOCOM_DIR / "gates" / "breaches.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    ts = _now_iso()
+    with log.open("a") as f:
+        f.write(f"{ts}\t{gate}\t{detail}\n")
+
+
+COMMIT_RX = re.compile(r"^(feat|fix|chore|refactor|test|docs)\([a-z0-9._-]+\): .+")
+
+
+def _gate_record(root, promise_arg, rc, duration_s):
+    """Record a task-completion assessment to the run ledger: the gate just
+    assessed the named promise — verdict kept iff the bound check passed. Best-
+    effort — a missing / malformed / standalone arg WARNS but never blocks the
+    gate (the gate's job is its check; the ledger row is the bonus that lets
+    `socom cycle` measure real done-attempts). Mirrors the fail-closed posture
+    of `contract verify --record` and writes through the one shared writer."""
+    f = Path(promise_arg)
     if not f.is_absolute():
-        f = root / args[1]
+        f = root / promise_arg
     if not f.exists():
-        sys.exit(f"socom contract: no such file '{args[1]}' (R6: degrade loudly).")
+        print(f"socom gate task-completion: no ledger row — '{promise_arg}' "
+              "not found (the gate still ran).", file=sys.stderr)
+        return
     try:
         root_el = ET.parse(f).getroot()
     except (ET.ParseError, OSError) as e:
-        sys.exit(f"socom contract: {f.name} is not readable well-formed XML — {e}")
-    contract = _contract_el(root_el)
-    if contract is None:
-        sys.exit(f"socom contract: no <contract> in {f.name} "
-                 "(a promise embeds one, or pass a standalone contract).")
-    checks = _contract_checks(contract)
-    state = contract.get("state", "?")
-    goal = " ".join((contract.findtext("goal") or "").split())
+        # OSError too (e.g. a directory arg) — a bad arg must WARN, never crash
+        # the gate into a false RED (the gate's check already ran).
+        print(f"socom gate task-completion: no ledger row — {f.name} is not "
+              f"readable well-formed XML ({e}).", file=sys.stderr)
+        return
+    promise_id, seat, cref = _promise_ref(root_el)
+    if not promise_id or not seat:
+        print(f"socom gate task-completion: no ledger row — {f.name} is not a "
+              "promise with a promiser seat (a standalone contract has no "
+              "executing seat to attribute).", file=sys.stderr)
+        return
+    row = _append_ledger_row(root, promise_id, seat, cref, {"ok": rc == 0},
+                             duration_s)
+    print(f"socom gate task-completion: recorded ledger row — {seat} "
+          f"{promise_id} attempt {row['attempt']} verdict {row['verdict']} "
+          "(.socom/ledger/runs.jsonl).")
 
-    if sub == "show":
-        print(f"socom contract {contract.get('ref', '?')} [{state}]")
-        print(f"  goal: {goal}")
-        for c in checks:
-            kind = f"run: {c['run']}" if c["auto"] else "MANUAL (no <run>)"
-            print(f"  check {c['id']} · {c['assessor']} · {kind}")
-            print(f"    expect: {c['expect']}")
+
+def cmd_gate(args):
+    if not args:
+        sys.exit("usage: socom gate <session-start|task-completion|pre-commit|"
+                 "commit-msg|pre-push|session-end> [args]")
+    name, rest = args[0], args[1:]
+    root = repo_root()
+    cfg = load_cfg(root)
+    checks = cfg.get("checks", {})
+
+    if name == "commit-msg":
+        msg = Path(rest[0]).read_text() if rest else ""
+        first = msg.splitlines()[0] if msg.splitlines() else ""
+        if not COMMIT_RX.match(first):
+            sys.exit(f"socom gate commit-msg: RED — first line must be "
+                     f"'type(scope): description', got: {first!r}")
+        missing = [b for b in ("[what]", "[test]") if b not in msg]
+        if missing:
+            log_breach(root, "commit-msg", f"amber: missing {missing} blocks")
+            print(f"socom gate commit-msg: AMBER — missing {missing}; logged. "
+                  "Full blocks belong on the first branch commit.")
+            return
+        # HR4: substance heuristic — evidence should look like evidence
+        # (a command, an exit code, an output line), not a vibe. Anchor the
+        # block token to line-start so a prose mention of "[test]" inside an
+        # earlier block can't capture a digit-less fragment (false negative).
+        m = re.search(r"^\[test\](.*?)(?:\n\[|\Z)", msg, re.DOTALL | re.M)
+        body = (m.group(1) if m else "").strip()
+        looks_like_evidence = (len(body) >= 20 and
+                               re.search(r"(\$ |rc=|exit|PASS|FAIL|\d)", body))
+        if not looks_like_evidence:
+            log_breach(root, "commit-msg", "amber: [test] block has no "
+                                           "evidence-shaped content")
+            print("socom gate commit-msg: AMBER — [test] reads like a claim, "
+                  "not evidence (no command/exit-code/output). Logged; CI replays.")
         return
 
-    # verify: run each auto check, report; manual checks flagged, never passed.
-    if state != "ratified":
-        print(f"socom contract: WARN — {contract.get('ref', '?')} state is "
-              f"'{state}', not 'ratified' (work runs against ratified contracts).")
-    import json, time
+    if name == "session-start":
+        h = canonical_hash(root)
+        claude = root / "CLAUDE.md"
+        if claude.exists():
+            m = re.search(r"source=(\w+)", claude.read_text())
+            if m and m.group(1) != h:
+                print(f"socom: P0 DRIFT — compiled views stale ({m.group(1)} != {h}); "
+                      "run `socom compile`", file=sys.stderr)
+                sys.exit(2)
+        for ln in reap_orphans(root):  # R12: reap, don't just report
+            print(f"  {ln}")
+        wt = subprocess.run(["git", "worktree", "list"], cwd=root,
+                            capture_output=True, text=True).stdout
+        # HR3: amber closes a loop — every session opens by seeing its debt.
+        # Entries carry gate + detail, never author identity (telemetry about
+        # the system, not surveillance of people).
+        blog = root / SOCOM_DIR / "gates" / "breaches.log"
+        if blog.exists():
+            lines = [ln for ln in blog.read_text().splitlines() if ln.strip()]
+            if lines:
+                print(f"socom session-start: {len(lines)} amber breach(es) on "
+                      f"record — oldest {lines[0].split(chr(9))[0]}; last 3:")
+                for ln in lines[-3:]:
+                    print(f"    {ln}")
+                print("  review or resolve before new work piles on top.")
+        print(f"socom session-start: source={h} ok; worktrees:\n{wt.strip()}")
+        return
+
+    if name == "session-end":
+        handoffs = sorted((root / SOCOM_DIR / "handoffs").glob("*.xml"))
+        today = datetime.now(timezone.utc).date().isoformat()
+        fresh = [f for f in handoffs if today in f.name]
+        if not fresh:
+            sys.exit("socom gate session-end: RED — no handoff written today "
+                     "(.socom/handoffs/H-<date>*.xml). A session may not vanish.")
+        if "FILL" in fresh[-1].read_text():
+            sys.exit(f"socom gate session-end: RED — {fresh[-1].name} still has "
+                     "unfilled FILL fields. A handoff of placeholders is a "
+                     "vanishing session with paperwork.")
+        prompt = root / SOCOM_DIR / "prompts" / "next-session.md"
+        if not prompt.exists() or \
+                prompt.stat().st_mtime < fresh[-1].stat().st_mtime:
+            sys.exit("socom gate session-end: RED — next-session prompt missing "
+                     "or older than the handoff. Run `socom prompt`.")
+        open_claims = [p.stem for p in (root / SOCOM_DIR / "claims").glob("*.claim")
+                       if not claim_expired(p)] \
+            if (root / SOCOM_DIR / "claims").exists() else []
+        if open_claims:
+            print(f"socom session-end: AMBER — live claims not released: "
+                  f"{open_claims} (TTL will expire them, but release is the intent)")
+            log_breach(root, "session-end", f"amber: unreleased claims {open_claims}")
+        print(f"socom session-end: PASS — handoff {fresh[-1].name} filled, "
+              "prompt generated + claim-verified. Distill memories (cap 2, "
+              "five gates) before you go.")
+        return
+
+    # Built-ins are handled above; every other gate id resolves to its own
+    # bound check (checks.<id>) — so canon can add gates like `eval` that bind
+    # to a repo check without new dispatch code.
+    builtins = ("task-completion", "pre-commit", "pre-push")
+    tier = {"task-completion": "fast", "pre-commit": "medium",
+            "pre-push": "full"}.get(name, name)
+    cmd = checks.get(tier)
+    if cmd is None and name not in builtins:
+        sys.exit(f"socom: unknown gate '{name}' (no built-in handler and no "
+                 f"checks.{name} binding in socom.yaml)")
+    if not cmd or cmd == "true":
+        print(f"socom gate {name}: checks.{tier} unbound — passing (bind it in socom.yaml)")
+        return
+    import time
     _t0 = time.monotonic()
-    results = []
-    for c in checks:
-        if c["auto"]:
-            cp = subprocess.run(c["run"], shell=True, cwd=root,
-                                capture_output=True, text=True)
-            passed = cp.returncode == 0
-            tail = (cp.stdout + cp.stderr).strip().splitlines()[-1:] or [""]
-            print(f"  check {c['id']} · {c['assessor']} · "
-                  f"{'PASS' if passed else 'FAIL'} (exit {cp.returncode})")
-            print(f"    $ {c['run']}")
-            print(f"    expect: {c['expect']}")
-            if tail[0]:
-                print(f"    output: {tail[0][:100]}")
-            results.append({**c, "passed": passed})
-        else:
-            print(f"  check {c['id']} · {c['assessor']} · MANUAL — "
-                  f"needs {c['assessor']}, not auto-verifiable")
-            print(f"    expect: {c['expect']}")
-            results.append({**c, "passed": False})
-
+    rc = run_check(cmd, root)
     duration_s = int(time.monotonic() - _t0)
-    s = _verify_summary(results)
-    print(f"socom contract verify: {s['passed']} passed, {s['failed']} failed, "
-          f"{s['manual']} manual -> {'OK' if s['ok'] else 'FAILED'}")
-    if s["manual"]:
-        print(f"  {s['manual']} manual check(s) still need an assessor — "
-              "verify confirms the auto checks only (fail-closed on the rest).")
-
-    # --record: append this verify outcome to the run ledger so `socom cycle`
-    # rolls REAL data (the first automatic producer; cycle/lesson otherwise
-    # measure synthetic rows). Guarded: a row is the assessment of record, not
-    # every exploratory run, so it is opt-in. A promise (id + promiser seat) is
-    # required — a standalone contract has no executing seat to attribute. And
-    # a row is WITHHELD while any check is MANUAL: the verdict then belongs to
-    # the human assessor, and the mechanical assessor must not claim it
-    # (constitution §separation-of-privilege — assessment is never delegated to
-    # the promiser). The row is the same fail-closed posture #6 gave verify.
-    if record:
-        promise_id, seat, cref = _promise_ref(root_el)
-        if not promise_id or not seat:
-            print("socom contract verify: --record needs a promise with a "
-                  "promiser seat (a standalone contract has no executing seat "
-                  "to attribute) — no ledger row written.", file=sys.stderr)
-        elif s["manual"]:
-            print("socom contract verify: --record withheld — "
-                  f"{s['manual']} manual check(s) pending; the verdict is the "
-                  "human assessor's to record, not the mechanical runner's "
-                  "(§separation-of-privilege).", file=sys.stderr)
-        elif s["passed"] + s["failed"] == 0:
-            print("socom contract verify: --record withheld — no auto check "
-                  "ran, so there is no evidence to record. A vacuous 'kept' in "
-                  "the ledger is exactly what verify-never-claim forbids.",
-                  file=sys.stderr)
-        else:
-            row = _append_ledger_row(root, promise_id, seat, cref, s,
-                                     duration_s)
-            print(f"socom contract verify: recorded ledger row — {seat} "
-                  f"{promise_id} attempt {row['attempt']} verdict "
-                  f"{row['verdict']} (.socom/ledger/runs.jsonl).")
-
-    if not s["ok"]:
-        sys.exit(1)
+    # task-completion, given a promise, records its assessment to the run ledger
+    # — the canonical "a gate assessed the promise -> kept/broken" event
+    # (schemas/ledger.xml), so `socom cycle` measures real done-attempts WITHOUT
+    # a manual flag. Recorded BEFORE the RED exit: a broken attempt is the
+    # pass@1-vs-pass@k signal, not noise. No promise arg -> behaviour unchanged.
+    if name == "task-completion" and rest:
+        _gate_record(root, rest[0], rc, duration_s)
+    if rc != 0:
+        if name == "pre-commit":  # amber band
+            log_breach(root, name, f"checks.medium failed rc={rc}")
+            print(f"socom gate {name}: AMBER — failed (rc={rc}); breach logged, "
+                  "commit proceeds, CI re-asserts at red.")
+            return
+        sys.exit(f"socom gate {name}: RED — checks.{tier} failed (rc={rc})")
+    print(f"socom gate {name}: PASS")
 
 
 # ── context — the CTX-1/CTX-2 context envelope, made a first-class artifact ─
@@ -1797,6 +1664,8 @@ def cmd_contract(args):
 # measure/compress MUTATE and are NOT gates (a gate that fixes its own failure is
 # the separation-of-privilege trap); only verify is band-wired.
 CONTEXT_SCHEMA = TOOL_ROOT / "schemas" / "context.xml"
+
+
 _INVARIANT_OPS = {"<=": lambda a, b: a <= b, "<": lambda a, b: a < b,
                   ">=": lambda a, b: a >= b, ">": lambda a, b: a > b,
                   "==": lambda a, b: a == b}
@@ -2361,373 +2230,519 @@ def cmd_context(args):
         return
 
 
-# ── lesson — experience earned into durable, retrievable rules ────────────
-# Ported from Akili's lesson system. A lesson is BORN provisional from a cycle
-# hotspot (the eval->lesson bridge), EARNS active by re-confirmation, and is
-# RETIRED (never deleted) when falsified. Lives at .socom/lessons/<id>.xml so
-# `socom index` retrieves it for free; the lifecycle filter hides retired.
-def _lesson_files(root):
-    d = root / SOCOM_DIR / "lessons"
-    return sorted(d.glob("L-*.xml")) if d.exists() else []
+# The substrate dirs every repo needs under .socom/ — single source of truth,
+# shared by init (plants them) and precond (heals them).
+SUBSTRATE_DIRS = ["memory/memories", "lessons", "handoffs", "prompts",
+                  "promises", "gates"]
 
 
-def _lesson_attr(text, name):
-    m = re.search(rf'\b{name}="([^"]*)"', text)
-    return m.group(1) if m else ""
+# ── init ─────────────────────────────────────────────────────────────────
 
-
-def _lesson_statement(text):
-    m = re.search(r"<statement[^>]*>(.*?)</statement>", text, re.DOTALL)
-    return " ".join(m.group(1).split())[:80] if m else ""
-
-
-def _lesson_template(lid, domain, promise, cycle, broken, total):
-    return f"""<?xml version="1.0" encoding="UTF-8"?>
-<!-- socom lesson — provisional candidate born from a cycle hotspot. Refine the
-     statement and why into the specific guard, then promote it once
-     re-confirmed (socom lesson promote {lid}), or retire it with a reason if
-     falsified. The body is never deleted; retirement flips state, adds a tag. -->
-<lesson id="{lid}" domain="{domain}" state="provisional" source="cycle"
-        lifecycle="mid-session">
-  <statement embed="true">
-    Promise {promise} keeps failing assessment ({broken}/{total} broken) —
-    encode the guard that prevents this recurring failure before reworking it.
-  </statement>
-  <why embed="true">
-    Born from cycle {cycle}: repeated `broken` verdicts on {promise} signal a
-    failure class, not a one-off. Refine this into the specific guard, then
-    promote so it surfaces as domain guidance.
-  </why>
-  <derived-from promise="{promise}" cycle="{cycle}" broken="{broken}" total="{total}"/>
-  <evidence embed="true">
-    cycle hotspot: {promise} broken {broken}/{total}.
-  </evidence>
-  <validated count="0"/>
-</lesson>
-"""
-
-
-def _regen_lessons_index(root):
-    by_domain = {}
-    for f in _lesson_files(root):
-        t = f.read_text()
-        by_domain.setdefault(_lesson_attr(t, "domain") or "general", []).append(
-            (f.stem, _lesson_attr(t, "state")))
-    lines = ["# Lessons Index", "",
-             "Domain-sharded; load the file(s) matching the task. Entries are "
-             "provisional until re-confirmed, then active; falsified entries are "
-             "state=retired (preserved, never deleted).", "",
-             "| Domain | Lessons | Active | Provisional |", "|---|---|---|---|"]
-    for dom in sorted(by_domain):
-        ls = by_domain[dom]
-        act = sum(1 for _, s in ls if s == "active")
-        prov = sum(1 for _, s in ls if s == "provisional")
-        lines.append(f"| {dom} | {', '.join(i for i, _ in ls)} | {act} | {prov} |")
-    (root / SOCOM_DIR / "lessons" / "index.md").write_text("\n".join(lines) + "\n")
-
-
-def cmd_lesson(args):
-    import json
-    root = repo_root()
-    if not args:
-        sys.exit("usage: socom lesson <candidates|list|promote|retire> [args]")
-    sub, rest = args[0], args[1:]
-
-    def flag_val(name, default=None):
-        return rest[rest.index(name) + 1] if name in rest \
-            and rest.index(name) + 1 < len(rest) else default
-
-    ldir = root / SOCOM_DIR / "lessons"
-    ldir.mkdir(parents=True, exist_ok=True)
-
-    if sub == "candidates":
-        domain = flag_val("--domain", "general")
-        min_broken = int(flag_val("--min-broken", "2"))
-        cdir = root / SOCOM_DIR / "cycles"
-        cycles = sorted(cdir.glob("cycle-*.json")) if cdir.exists() else []
-        if not cycles:
-            sys.exit("socom lesson candidates: no cycle artifact — run "
-                     "`socom cycle` first (the bridge consumes its hotspots).")
-        cyc = cycles[-1]
-        hotspots = json.loads(cyc.read_text()).get("hotspots", [])
-        existing = {_lesson_attr(f.read_text(), "promise")
-                    for f in _lesson_files(root)}
-        born = 0
-        for h in hotspots:
-            promise = h.get("promise")
-            if h.get("broken", 0) < min_broken or promise in existing:
-                continue  # below threshold, or idempotent: one per source promise
-            lid = f"L-{promise}"
-            (ldir / f"{lid}.xml").write_text(_lesson_template(
-                lid, domain, promise, cyc.name, h.get("broken", 0),
-                h.get("total", 0)))
-            existing.add(promise)
-            born += 1
-            print(f"  + {lid} (provisional) <- hotspot {promise} "
-                  f"broken {h.get('broken')}/{h.get('total')}")
-        _regen_lessons_index(root)
-        print(f"socom lesson: {born} candidate(s) born from {cyc.name}; "
-              f"{len(hotspots)} hotspot(s) seen. Refine, then "
-              f"`socom lesson promote <id>`.")
-        return
-
-    if sub == "list":
-        dom_f, state_f = flag_val("--domain"), flag_val("--state")
-        rows = []
-        for f in _lesson_files(root):
-            t = f.read_text()
-            d, s = _lesson_attr(t, "domain"), _lesson_attr(t, "state")
-            if (dom_f and d != dom_f) or (state_f and s != state_f):
-                continue
-            rows.append((f.stem, d, s, _lesson_statement(t)))
-        for lid, d, s, stmt in rows:
-            print(f"  {s:<11} [{d}] {lid}: {stmt}")
-        suffix = (f" domain={dom_f}" if dom_f else "") + \
-                 (f" state={state_f}" if state_f else "")
-        print(f"socom lesson: {len(rows)} lesson(s){suffix}")
-        return
-
-    if sub in ("promote", "retire"):
-        if not rest:
-            sys.exit(f"usage: socom lesson {sub} <id>"
-                     + (' --reason "..."' if sub == "retire" else ""))
-        lid = rest[0]
-        f = ldir / f"{lid}.xml"
-        if not f.exists():
-            sys.exit(f"socom lesson {sub}: no such lesson {lid}")
-        t = f.read_text()
-        cur = _lesson_attr(t, "state")
-        if sub == "promote":
-            if cur != "provisional":
-                sys.exit(f"socom lesson promote: {lid} is '{cur}'; only "
-                         "provisional lessons promote")
-            f.write_text(re.sub(r'state="provisional"', 'state="active"',
-                                t, count=1))
-            _regen_lessons_index(root)
-            print(f"socom lesson: {lid} provisional -> active")
-            return
-        if cur == "retired":
-            sys.exit(f"socom lesson retire: {lid} already retired")
-        reason = flag_val("--reason", "falsified")
-        date = datetime.now(timezone.utc).date().isoformat()
-        t = re.sub(rf'state="{cur}"', 'state="retired"', t, count=1)
-        t = t.replace("</lesson>",
-                      f'  <retire reason="{reason}" date="{date}"/>\n</lesson>')
-        f.write_text(t)
-        _regen_lessons_index(root)
-        print(f"socom lesson: {lid} {cur} -> retired (preserved; reason: {reason})")
-        return
-
-    sys.exit(f"socom lesson: unknown subcommand '{sub}'")
-
-
-# ── introspect (backlog #4: agent introspection, increment 1) ────────────
-# Post-session self-capture: parse machine-verifiable assertions from a
-# closing handoff's <evidence> commands into a replayable append-only log
-# (schemas/assertion.xml), and birth provisional lesson candidates from
-# CAPTURED failures. Deterministic — the only one of Akili's five extractors
-# with no model in the loop (the rest deferred to preserve the L0 floor).
-# Outcome-conditional and non-blocking: capture never fails a closeout.
-
-def _assertion_lesson_template(lid, domain, aid, handoff, verify, expect_exit):
-    return f"""<?xml version="1.0" encoding="UTF-8"?>
-<!-- socom lesson — provisional candidate born from a captured failure assertion
-     ({aid}). A command in {handoff}'s evidence exited unexpectedly (expected
-     {expect_exit}) with no explanatory note. Refine this into the specific guard,
-     then promote once re-confirmed (socom lesson promote {lid}), or retire with a
-     reason if it was a one-off. Provisional by design: a single occurrence earns
-     active only by re-confirmation. The body is never deleted. -->
-<lesson id="{lid}" domain="{domain}" state="provisional" source="introspect"
-        lifecycle="mid-session">
-  <statement embed="true">
-    `{verify}` failed unexpectedly (expected exit {expect_exit}) at closeout —
-    encode the guard that makes this command's failure mode impossible, or
-    explain it as a deliberate check (then annotate it in the handoff).
-  </statement>
-  <why embed="true">
-    Born from assertion {aid} ({handoff}): an un-noted non-expected exit captured
-    in the session evidence signals a failure worth a guard, not a passing check.
-    Refine into the specific guard, then promote so it surfaces as guidance.
-  </why>
-  <derived-from assertion="{aid}" handoff="{handoff}"/>
-  <evidence embed="true">
-    assertion {aid}: `{verify}` expected exit {expect_exit}.
-  </evidence>
-  <validated count="0"/>
-</lesson>
-"""
-
-
-def cmd_introspect(args):
-    import json
-    import xml.etree.ElementTree as ET
-    root = repo_root()
-    pos = [a for a in args if not a.startswith("-")]
-    domain = args[args.index("--domain") + 1] if "--domain" in args \
-        and args.index("--domain") + 1 < len(args) else "general"
-
-    # Resolve the handoff: explicit path/name, else the latest H-*.xml.
-    hdir = root / SOCOM_DIR / "handoffs"
-    if pos:
-        cand = Path(pos[0])
-        handoff = cand if cand.exists() else hdir / pos[0]
-        if not handoff.exists():
-            sys.exit(f"socom introspect: no such handoff '{pos[0]}' "
-                     f"(looked at it directly and under .socom/handoffs/).")
-    else:
-        hs = sorted(hdir.glob("H-*.xml")) if hdir.exists() else []
-        if not hs:
-            sys.exit("socom introspect: no handoff — .socom/handoffs/H-*.xml "
-                     "absent. Nothing closed to introspect (R6: degrade loudly). "
-                     "Pass a handoff path, or write one with `socom handoff`.")
-        handoff = hs[-1]
-
-    # Parse — a malformed handoff WARNS and exits 0 (capture never blocks closeout).
-    try:
-        tree = ET.parse(handoff)
-    except ET.ParseError as e:
-        print(f"socom introspect: WARN — {handoff.name} is not well-formed XML "
-              f"({e}); nothing captured. (capture never blocks closeout)")
-        return
-    hroot = tree.getroot()
-    hid = hroot.get("id") or handoff.stem
-    hts = hroot.get("date") or ""
-
-    ev = hroot.find("evidence")
-    commands = list(ev.findall("command")) if ev is not None else []
-    if not commands:
-        print(f"socom introspect: {handoff.name} has no <evidence> commands — "
-              "no assertions to capture.")
-        return
-
-    # Idempotency: load existing assertion ids; one row per (handoff, index).
-    adir = root / SOCOM_DIR / "assertions"
-    adir.mkdir(parents=True, exist_ok=True)
-    log = adir / "log.jsonl"
-    seen = set()
-    if log.exists():
-        for ln in log.read_text().splitlines():
-            ln = ln.strip()
-            if ln:
-                try:
-                    seen.add(json.loads(ln)["id"])
-                except (ValueError, KeyError):
-                    continue
-
-    ldir = root / SOCOM_DIR / "lessons"
-    existing_lessons = {_lesson_attr(f.read_text(), "id") for f in _lesson_files(root)}
-
-    rows, born = [], 0
-    for i, c in enumerate(commands):
-        aid = f"A-{hid}-{i}"
-        if aid in seen:
-            continue
-        verify = " ".join((c.text or "").split())
-        try:
-            expect_exit = int(c.get("exit", "0"))
-        except ValueError:
-            expect_exit = 0
-        note = c.get("note", "")
-        category = c.get("category", "general")
-        row = {"id": aid, "ts": hts, "source_handoff": hid, "verify": verify,
-               "expect_exit": expect_exit, "category": category}
-        if note:
-            row["note"] = note
-        rows.append(row)
-
-        # Bridge: an un-noted unexpected failure births a provisional lesson.
-        if expect_exit != 0 and not note:
-            lid = f"L-{aid}"
-            if lid not in existing_lessons:
-                ldir.mkdir(parents=True, exist_ok=True)
-                (ldir / f"{lid}.xml").write_text(_assertion_lesson_template(
-                    lid, domain, aid, hid, verify, expect_exit))
-                existing_lessons.add(lid)
-                born += 1
-                print(f"  + {lid} (provisional) <- captured failure {aid}: "
-                      f"`{verify[:48]}`")
-
-    if rows:
-        with log.open("a") as fh:
-            for r in rows:
-                fh.write(json.dumps(r) + "\n")
-        if born:
-            _regen_lessons_index(root)
-
-    print(f"socom introspect: {handoff.name} -> {len(rows)} new assertion(s) "
-          f"({len(commands)} command(s) seen, {len(commands) - len(rows)} already "
-          f"logged); {born} lesson candidate(s) born. Replay log: "
-          f".socom/assertions/log.jsonl")
-
-
-# ── baseline (the gate before naive RAG) ─────────────────────────────────
-# L1 may start only once an L0 floor is measured: corpus shape, L0 latency,
-# and probe hit@k under keyword matching. The L1 acceptance contract is
-# "same probes, strictly better hit@k, latency within budget" — contracts
-# before code, applied to the substrate's own evolution (STORAGE.md).
-
-def l0_score(query: str, chunks: list, k: int = 5) -> list:
-    """Keyword-overlap retrieval — the floor any L1 must beat."""
-    q = set(re.findall(r"\w+", query.lower()))
-    scored = sorted(chunks, key=lambda c: -len(
-        q & set(re.findall(r"\w+", c["text"].lower()))))
-    return [c["id"] for c in scored[:k]]
-
-
-def cmd_baseline(args):
-    import json, time
+def cmd_init(args):
     root = repo_root(Path(args[0]) if args else None)
+    socom_dir = root / SOCOM_DIR
+    (socom_dir / "canon").mkdir(parents=True, exist_ok=True)
+    for sub in SUBSTRATE_DIRS:
+        (socom_dir / sub).mkdir(parents=True, exist_ok=True)
+
+    for name in CANON_FILES:
+        dst = socom_dir / "canon" / name
+        if not dst.exists():
+            dst.write_text((TOOL_ROOT / "canon" / name).read_text())
+            print(f"  planted {dst}")
+
+    idx = socom_dir / "memory" / "INDEX.md"
+    if not idx.exists():
+        idx.write_text(
+            "# Memory Index — lifecycle-organized retrieval map\n\n"
+            "Load the section matching your current phase. One line per memory:\n"
+            "`- [title](memories/file.md) — when it fires`\n\n"
+            "## Session start\n\n## Mid-session\n\n## Closeout\n\n## Always-on\n")
+        print(f"  planted {idx}")
+
+    lessons_idx = socom_dir / "lessons" / "index.md"
+    if not lessons_idx.exists():
+        lessons_idx.write_text(
+            "# Lessons Index\n\nDomain-sharded; load the file(s) matching the task. "
+            "Entries are provisional until re-confirmed, then active; falsified "
+            "entries move to _retired.md (preserved, never deleted).\n\n"
+            "| Domain | File | Active | Provisional |\n|---|---|---|---|\n")
+        print(f"  planted {lessons_idx}")
+
+    cfg = root / "socom.yaml"
+    if not cfg.exists():
+        cfg.write_text(textwrap.dedent(f"""\
+            socom: "{SOCOM_VERSION}"
+            project: {root.name}
+            domains: [core]          # claim + lesson granularity
+            checks:                  # bind to commands that really run here
+              fast: "true"           # seconds-budget; runs at task-completion
+              medium: "true"         # pre-commit (amber band)
+              full: "true"           # pre-push + CI (red band)
+            ci:
+              status: "echo 'bind me: cache-free pipeline state query'"
+            seats:
+              builder:  {{ runtime: claude-code, model: default }}
+              reviewer: {{ runtime: claude-code, model: different-family-preferred }}
+            """))
+        print(f"  planted {cfg} — EDIT THE BINDINGS, then run `socom compile`")
+    cmd_greet([str(root)])
+
+
+# ── compile ──────────────────────────────────────────────────────────────
+
+def render_body(root: Path, cfg: dict) -> str:
+    constitution = parse_canon(root, "constitution.xml")
+    roles = parse_canon(root, "roles.xml")
+    gates = parse_canon(root, "gates.xml")
+    session = parse_canon(root, "session.xml")
+
+    out = [f"# {cfg.get('project', root.name)} — SOCOM substrate\n"]
+    out.append(
+        "Protocol over participants: the rules below bind every participant — "
+        "agent or human. Canonical source: `.socom/` + `socom.yaml`.\n")
+
+    out.append("## Constitution (Non-Negotiable)\n")
+    for p in sorted(constitution.findall("principle"), key=lambda e: int(e.get("rank", 99))):
+        out.append(f"### {p.get('rank')}. {p.findtext('title')}\n")
+        out.append(md_text(p) + "\n")
+
+    out.append("## Session protocol\n")
+    for ph in sorted(session.findall("phase"), key=lambda e: int(e.get("order", 9))):
+        out.append(f"### {ph.get('id').capitalize()}\n")
+        out.append(md_text(ph) + "\n")
+
+    doctrine_f = root / SOCOM_DIR / "canon" / "doctrine.xml"
+    if doctrine_f.exists():
+        doctrine = ET.parse(doctrine_f).getroot()
+        out.append("## Doctrine — named thinking devices (teaching layer)\n")
+        out.append("Reach for the concept when its trigger fires; full text in "
+                   "`.socom/canon/doctrine.xml` (and via retrieval).\n")
+        out.append("| Concept | Fires when | Essence |\n|---|---|---|")
+        for c in doctrine.findall("concept"):
+            if c.get("state") != "active":
+                continue
+            fires = (c.findtext("fires-when") or "").strip()
+            essence = md_text(c).split(". ")[0].replace("\n", " ") + "."
+            out.append(f"| **{c.findtext('title')}** | {fires} | {essence} |")
+        out.append("")
+
+    out.append("## Seats (open registry — any model, runtime, or human)\n")
+    out.append("| Seat | State | Promise |\n|---|---|---|")
+    for r in roles.findall("role"):
+        desc = (r.findtext("description") or "").strip()
+        out.append(f"| **{r.get('id')}** | {r.get('state')} | {desc} |")
+    out.append("\nFull seat envelopes: `.socom/canon/roles.xml` "
+               "(compiled agents in `.claude/agents/`). Builder and reviewer "
+               "never share context. Briefs open with the user's words verbatim.\n")
+
+    out.append("## Gates\n")
+    out.append("| Gate | Trigger | Tier | Band | Blocks |\n|---|---|---|---|---|")
+    for g in gates.findall("gate"):
+        out.append(f"| {g.get('id')} | {g.get('trigger')} | {g.get('tier')} "
+                   f"| {g.get('band')} | {g.findtext('blocks')} |")
+    out.append("\nLocal bypass is permitted for flow; CI re-asserts every gate. "
+               "Run a gate: `socom gate <id>`.\n")
+
+    forge_f = root / SOCOM_DIR / "canon" / "forge.xml"
+    if forge_f.exists():
+        forge = ET.parse(forge_f).getroot()
+        fb = cfg.get("forge", {}) or {}
+        out.append("## Forge — git-provider operations (universal verbs, "
+                   "repo-bound commands)\n")
+        out.append("Run `socom forge <verb>` — NEVER improvise provider "
+                   "mechanics (auth, polling, MR calls) inline.\n")
+        for r in forge.findall("rules/rule"):
+            out.append(f"- **{r.get('id')}** — " +
+                       " ".join((r.text or "").split()))
+        out.append("\n| Verb | Intent | This repo |\n|---|---|---|")
+        for v in forge.findall("verb"):
+            vid = v.get("id")
+            intent = (v.findtext("intent") or "").strip()
+            b = fb.get(vid)
+            out.append(f"| `{vid}` | {intent} | "
+                       + (f"`{b}`" if b else "*unbound*") + " |")
+        out.append("")
+
+    resid_f = root / SOCOM_DIR / "canon" / "residuality.xml"
+    if resid_f.exists():
+        resid = ET.parse(resid_f).getroot()
+        out.append("## Residuality — the falsifiable gate (constitution "
+                   "§residuality-gate)\n")
+        out.append("Run before any fix or hard-to-reverse decision. A \"yes\" to "
+                   "any gate question is a STOP — rework or leash it.\n")
+        for r in resid.findall("gate/rule"):
+            out.append(f"- **{r.get('id')}** — " +
+                       " ".join((r.text or "").split()))
+        out.append("\nFalsifiable checklist — Saltzer & Schroeder (1975) principles, "
+                   "each a test a design can be failed against:\n")
+        for p in resid.findall("principles/principle"):
+            out.append(f"- **{p.get('id')}** — " +
+                       " ".join((p.text or "").split()))
+        out.append("")
+
+    cp_f = root / SOCOM_DIR / "canon" / "commit-protocol.xml"
+    if cp_f.exists():
+        cp = ET.parse(cp_f).getroot()
+        out.append("## Commit protocol (constitution §structured-commits)\n")
+        out.append("Every commit is institutional memory — the next session reads "
+                   "the log alone and recovers the journey. The six blocks and what "
+                   "each carries; full text in `.socom/canon/commit-protocol.xml`.\n")
+        out.append("| Block | Carries |\n|---|---|")
+        for b in cp.findall("blocks/block"):
+            essence = " ".join((b.text or "").split()).split(". ")[0] + "."
+            # strip the leading "[id] — " label the rule text repeats; the
+            # Block column already carries it (reviewer nit, #7).
+            essence = re.sub(r"^\[%s\]\s*—\s*" % b.get("id"), "", essence)
+            out.append(f"| `[{b.get('id')}]` | {essence} |")
+        out.append("\nThe discipline (Akili-ported teaching layer):\n")
+        for r in cp.findall("discipline/rule"):
+            out.append(f"- **{r.get('id')}** — " +
+                       " ".join((r.text or "").split()))
+        out.append("")
+
+    out.append("## Repo bindings (socom.yaml)\n")
+    checks = cfg.get("checks", {})
+    out.append("| Check | Command |\n|---|---|")
+    for k in ("fast", "medium", "full"):
+        out.append(f"| {k} | `{checks.get(k, 'UNBOUND')}` |")
+    out.append(f"| ci.status | `{cfg.get('ci', {}).get('status', 'UNBOUND')}` |")
+    out.append(f"\nDomains: {', '.join(cfg.get('domains', []))}\n")
+
+    out.append("## Retrieval map\n")
+    out.append(
+        "- Entering a phase? Load that section of `.socom/memory/INDEX.md` "
+        "(session-start / mid-session / closeout / always-on).\n"
+        "- Working a domain? Load its file via `.socom/lessons/index.md`.\n"
+        "- Associative recall: `socom index` emits chunks for any vector store; "
+        "the substrate never depends on it (L0 floor: this file + grep).\n")
+    return "\n".join(out)
+
+
+def render_agent(role) -> str:
+    rid = role.get("id")
+    desc = (role.findtext("description") or "").strip()
+    lines = ["---", f"name: {rid}", f"description: {desc}", "---", "",
+             f"You occupy the **{rid}** seat of this repo's SOCOM substrate. "
+             "Your authority and limits come from the seat, not the model.", "",
+             "## You promise"]
+    lines += [f"- {p.text.strip()}" for p in role.findall("promises/promise")]
+    ops = role.find("operations")
+    if ops is not None:
+        lines += ["", f"**Reads:** {ops.get('reads')}", f"**Writes:** {ops.get('writes')}"]
+    lines += ["", "## You never"]
+    lines += [f"- {r.text.strip()}" for r in role.findall("never/rule")]
+    lines += ["", "Constitution and gates: see CLAUDE.md. Verify, never claim: "
+              "evidence is replayable commands + exit codes, recorded in your result."]
+    return "\n".join(lines) + "\n"
+
+
+# HR1: hooks resolve the tool (PATH -> local git config -> $SOCOM_HOME) and
+# degrade gracefully when absent — the substrate must never be why a fresh
+# clone can't commit. CI re-asserts every gate (R1), so graceful local absence
+# loses nothing. The committed hook carries NO machine-specific absolute path:
+# the builder-machine fallback lives in local git config (socom.binpath, set by
+# `adopt`/_wire_hooks, never committed), so a teammate's clone never inherits
+# this machine's filesystem (constitution §open-design, §least-common-mechanism).
+HOOK_RESOLVER = '''SOCOM="$(command -v socom 2>/dev/null)"
+[ -x "$SOCOM" ] || SOCOM="$(git config socom.binpath 2>/dev/null)"
+[ -x "$SOCOM" ] || { [ -n "$SOCOM_HOME" ] && SOCOM="$SOCOM_HOME/bin/socom"; }
+if [ -z "$SOCOM" ] || [ ! -x "$SOCOM" ]; then
+  echo "socom: tool not found — gate skipped locally, CI re-asserts. (run \\`socom adopt\\` here, or export SOCOM_HOME=<socom checkout>)" >&2
+  exit 0
+fi
+'''
+
+
+HOOK_TEMPLATES = {
+    "pre-commit": 'exec "$SOCOM" gate pre-commit',
+    "commit-msg": 'exec "$SOCOM" gate commit-msg "$1"',
+    "pre-push": 'exec "$SOCOM" gate pre-push',
+}
+
+
+def cmd_compile(args):
+    force = "--force" in args
+    args = [a for a in args if a != "--force"]
+    root = repo_root(Path(args[0]) if args else None)
+    cfg = load_cfg(root)
+    h = canonical_hash(root)
+    body = render_body(root, cfg)
+
+    write_generated(root / "CLAUDE.md", body, h, force=force)
+    write_generated(root / "AGENTS.md", body, h, force=force)
+    write_generated(root / ".cursor" / "rules" / "socom.mdc",
+                    "---\nalwaysApply: true\n---\n" + body, h, force=force)
+
+    roles = parse_canon(root, "roles.xml")
+    for r in roles.findall("role"):
+        if r.get("state") == "active":
+            write_generated(root / ".claude" / "agents" / f"{r.get('id')}.md",
+                            render_agent(r), h, force=force)
+
+    hooks_dir = root / HOOKS_DIR
+    for name, cmd in HOOK_TEMPLATES.items():
+        script = (f"#!/bin/sh\n# socom:generated source={h}\n"
+                  f"{HOOK_RESOLVER}{cmd}\n")
+        p = hooks_dir / name
+        if p.exists() and "socom:generated" not in p.read_text()[:200] and not force:
+            print(f"  REFUSED {p}: existing non-socom hook (use --force)", file=sys.stderr)
+            continue
+        p.parent.mkdir(exist_ok=True)
+        p.write_text(script)
+        p.chmod(0o755)
+        print(f"  wrote {p}")
+
+    # CI adapters — the R1 floor as GitOps, generated for EVERY provider so
+    # the repo delivers its enforcement to whichever remote it lands on.
+    full = cfg.get("checks", {}).get("full", "true")
+    extra = (cfg.get("ci") or {}).get("extra")
+    gh_steps = [
+        "      - uses: actions/checkout@v4",
+        "      - uses: actions/setup-python@v5",
+        "        with: { python-version: '3.12' }",
+        "      - run: pip install pyyaml",
+        "      - name: re-assert checks.full (socom gate, R1)",
+        f"        run: {full}",
+    ]
+    if extra:
+        gh_steps += ["      - name: extra CI checks (ci.extra)",
+                     f"        run: {extra}"]
+    write_generated(root / ".github" / "workflows" / "socom-gates.yml",
+                    "name: socom-gates\n"
+                    "on: [push, pull_request, workflow_dispatch]\n"
+                    "jobs:\n  gates:\n    runs-on: ubuntu-latest\n    steps:\n"
+                    + "\n".join(gh_steps) + "\n",
+                    h, comment=("#", ""), force=force)
+    gl = ["socom-gates:", "  image: python:3.12",
+          "  rules:", "    - if: $CI_PIPELINE_SOURCE == 'push' || $CI_PIPELINE_SOURCE == 'merge_request_event'",
+          "  script:", "    - pip install pyyaml", f"    - {full}"]
+    if extra:
+        gl.append(f"    - {extra}")
+    write_generated(root / ".gitlab-ci.yml", "\n".join(gl) + "\n",
+                    h, comment=("#", ""), force=force)
+    ado = ["# include as a job in azure-pipelines.yml (or run standalone)",
+           "jobs:", "  - job: socom_gates", "    pool: { vmImage: ubuntu-latest }",
+           "    steps:",
+           "      - task: UsePythonVersion@0",
+           "        inputs: { versionSpec: '3.12' }",
+           "      - script: pip install pyyaml && " + full,
+           "        displayName: re-assert checks.full (socom gate, R1)"]
+    if extra:
+        ado += ["      - script: " + extra,
+                "        displayName: extra CI checks (ci.extra)"]
+    write_generated(root / SOCOM_DIR / "ci" / "azure-socom-gates.yml",
+                    "\n".join(ado) + "\n", h, comment=("#", ""), force=force)
+
+    # .claude/settings.json — NON-CLOBBERING MERGE: socom only ADDS keys that are
+    # absent (the SessionStart gate hook and the statusLine), and never overwrites
+    # a hand-set statusLine or existing hooks. So `adopt` offers its statusline +
+    # gate without ever stomping a user's own config (e.g. another tool's
+    # statusLine). Invalid JSON is left untouched (don't corrupt; §fail-safe).
+    settings = root / ".claude" / "settings.json"
+    import json
+    # The SessionStart hook resolves socom through the SAME resolver the git hooks
+    # use (HOOK_RESOLVER) — never a machine-specific absolute path (§open-design).
+    sess_cmd = f'{HOOK_RESOLVER}exec "$SOCOM" gate session-start'
+    existing = {}
+    if settings.exists():
+        try:
+            existing = json.loads(settings.read_text())
+        except Exception:
+            print(f"  SKIP {settings} — not valid JSON, left untouched")
+            existing = None
+    if existing is not None:
+        notes = []
+        if "statusLine" not in existing:
+            existing["statusLine"] = {"type": "command", "command": "socom statusline"}
+            notes.append("statusLine -> `socom statusline`")
+        else:
+            notes.append("kept your statusLine")
+        hooks = existing.setdefault("hooks", {})
+        if "SessionStart" not in hooks:
+            hooks["SessionStart"] = [{"matcher": "*", "hooks": [
+                {"type": "command", "command": sess_cmd, "timeout": 30}]}]
+            notes.append("SessionStart gate")
+        settings.parent.mkdir(parents=True, exist_ok=True)
+        settings.write_text(json.dumps(existing, indent=2) + "\n")
+        print(f"  .claude/settings.json: {', '.join(notes)}")
+
+    print(f"socom: compiled (source={h}). Activate git hooks: "
+          f"git config core.hooksPath {HOOKS_DIR}  (or `socom adopt` does it for you)")
+
+
+# ── git-hooks wiring (single source: doctor-heal and adopt route through here) ──
+
+def _git_hooks_path(root: Path) -> str:
+    """Current core.hooksPath for the repo ('' if unset or not a git repo)."""
+    return subprocess.run(["git", "config", "core.hooksPath"], cwd=root,
+                          capture_output=True, text=True).stdout.strip()
+
+
+def _wire_hooks(root: Path) -> bool:
+    """Set core.hooksPath to HOOKS_DIR (idempotent). Returns True if the repo is
+    now wired, False if it could not be (not a git repo). The single WRITER for
+    the hooks-wiring truth — both doctor-heal and `adopt` route through here, so
+    'where the hooks live' lives in exactly one place (§least-common-mechanism).
+    Fails soft: a non-git dir returns False rather than raising (CI re-asserts)."""
+    if _git_hooks_path(root) == HOOKS_DIR:
+        return True
+    subprocess.run(["git", "config", "core.hooksPath", HOOKS_DIR],
+                   cwd=root, capture_output=True)
+    # Record THIS machine's socom location in LOCAL git config (never committed)
+    # so the portable committed hook can resolve the tool without a PATH install
+    # — replaces the old absolute path baked into the shared hook (HR1).
+    subprocess.run(["git", "config", "socom.binpath",
+                    str(TOOL_ROOT / "bin" / "socom")],
+                   cwd=root, capture_output=True)
+    return _git_hooks_path(root) == HOOKS_DIR
+
+
+# ── doctor ───────────────────────────────────────────────────────────────
+
+def cmd_doctor(args):
+    root = repo_root(Path(args[0]) if args else None)
+    cfg = load_cfg(root)
+    h = canonical_hash(root)
+    problems = []
+
+    for rel in ["CLAUDE.md", "AGENTS.md", ".cursor/rules/socom.mdc"]:
+        f = root / rel
+        if not f.exists():
+            problems.append(f"missing compiled view: {rel}")
+            continue
+        m = re.search(r"socom:generated v=\S+ source=(\w+)", f.read_text())
+        if not m:
+            problems.append(f"{rel}: no socom:generated header — hand-written or tampered")
+        elif m.group(1) != h:
+            problems.append(f"{rel}: stale (source={m.group(1)}, canonical={h}) — DRIFT, recompile")
+
+    for k in ("fast", "medium", "full"):
+        if cfg.get("checks", {}).get(k) in (None, "", "true"):
+            problems.append(f"socom.yaml checks.{k} is unbound (placeholder)")
+
+    try:
+        if _git_hooks_path(root) != HOOKS_DIR:
+            problems.append(f"git core.hooksPath not set to {HOOKS_DIR} — gates not wired")
+    except FileNotFoundError:
+        problems.append("git not available")
+
+    # HR9: canon divergence from the tool's shipped canon is visible and
+    # chosen, never accidental. Informational — divergence IS binding.
+    deltas = []
+    for name in CANON_FILES:
+        local = root / SOCOM_DIR / "canon" / name
+        shipped = TOOL_ROOT / "canon" / name
+        if local.exists() and shipped.exists() and \
+                local.read_bytes() != shipped.read_bytes():
+            deltas.append(name)
+
+    if problems:
+        print("socom doctor — FINDINGS:")
+        for p in problems:
+            print(f"  ✗ {p}")
+        sys.exit(1)
+    if deltas:
+        print(f"socom doctor — INFO: local canon diverges from shipped canon "
+              f"({', '.join(deltas)}) — fine if chosen; upstream what generalizes")
+    print(f"socom doctor — clean (canonical source={h})")
+
+
+# ── precond — the published gate: is THIS work ready to start? ────────────
+# Ported from Akili's precondition-audit (backlog #3): a fast pre-flight that
+# the repo is work-ready BEFORE a seat starts — the "before" bookend to gates.
+# Velocity-first (operator constraint): auto-heals safe gaps, WARNS by default,
+# blocks ONLY on the unrecoverable. It accelerates flow by fixing/surfacing the
+# exact gap at the altitude where it's met, never by stopping for trivia.
+# Sibling to doctor: doctor = substrate health (static); precond = work
+# readiness (seat-aware, healing). Run before dispatch; --no-heal is the CI
+# posture (assert, don't fix).
+def cmd_precond(args):
+    import time, shutil
     t0 = time.monotonic()
-    chunks = cmd_index([str(root)])
-    index_s = time.monotonic() - t0
+    root = repo_root()
+    seat = next((a for a in args if not a.startswith("-")), None)
+    heal = "--no-heal" not in args
+    cfg = load_cfg(root)
+    rows = []  # (mark, text) ; mark in ✓ ~ ! ✗
+    blocks = warns = healed = 0
 
-    t0 = time.monotonic()
-    subprocess.run(["grep", "-ri", "verify", "--include=*.xml", "--include=*.md",
-                    str(root / SOCOM_DIR)], capture_output=True)
-    grep_s = time.monotonic() - t0
+    # 1. Substrate dirs — heal-on: mkdir; heal-off: block (work writes will fail).
+    missing = [d for d in SUBSTRATE_DIRS
+               if not (root / SOCOM_DIR / d).is_dir()]
+    if not missing:
+        rows.append(("✓", "substrate dirs present"))
+    elif heal:
+        for d in missing:
+            (root / SOCOM_DIR / d).mkdir(parents=True, exist_ok=True)
+        healed += 1
+        rows.append(("~", f"healed: mkdir .socom/{{{','.join(missing)}}}"))
+    else:
+        blocks += 1
+        rows.append(("✗", f"BLOCKS: missing .socom/{{{','.join(missing)}}} "
+                          "(run without --no-heal to auto-create)"))
 
-    probes_f = root / SOCOM_DIR / "index" / "probes.yaml"
-    if not probes_f.exists():
-        probes_f.write_text(
-            "# query -> expected chunk id substring; scored hit@5 under L0.\n"
-            "# Grow this set as the substrate grows — it is the RAG contract.\n"
-            "probes:\n"
-            "  - query: \"how do I prove a task is done\"\n"
-            "    expect: \"verify-never-claim\"\n"
-            "  - query: \"when should I write the acceptance checks\"\n"
-            "    expect: \"contracts-before-code\"\n")
-        print(f"  planted {probes_f} — extend it; it is the L1 acceptance contract")
-    probes = yaml.safe_load(probes_f.read_text()).get("probes", [])
-    hits = 0
-    results = []
-    for p in probes:
-        top = l0_score(p["query"], chunks)
-        hit = any(p["expect"] in cid for cid in top)
-        hits += hit
-        results.append({"query": p["query"], "expect": p["expect"],
-                        "hit@5": hit, "top": top[:3]})
+    # 2. Tools — unrecoverable if absent.
+    for tool in ("git", "python3"):
+        if shutil.which(tool):
+            rows.append(("✓", f"{tool} on PATH"))
+        else:
+            blocks += 1
+            rows.append(("✗", f"BLOCKS: {tool} not on PATH"))
 
-    by_type: dict = {}
-    for c in chunks:
-        by_type[c["artifact"]] = by_type.get(c["artifact"], 0) + 1
-    baseline = {
-        "socom": SOCOM_VERSION,
-        "measured_at": _now_iso(),
-        "corpus": {"chunks": len(chunks), "artifacts_by_type": by_type,
-                   "total_chars": sum(len(c["text"]) for c in chunks)},
-        "latency_s": {"index_walk": round(index_s, 4), "grep_cold": round(grep_s, 4)},
-        "probes": {"count": len(probes), "hit_at_5": hits,
-                   "rate": round(hits / len(probes), 3) if probes else None,
-                   "results": results},
-        "l1_acceptance": "same probes (>=12), hit@5 >= L0 AND MRR@5 strictly "
-                         "greater, latency within budget, zero redaction "
-                         "violations (amended per R10, recorded in probes.yaml)",
-    }
-    out = root / SOCOM_DIR / "index" / "baseline.json"
-    out.write_text(json.dumps(baseline, indent=2) + "\n")
-    print(f"socom baseline: {len(chunks)} chunks, probes {hits}/{len(probes)} "
-          f"hit@5 under L0 -> {out}\n  Naive RAG (L1) may start; it must beat "
-          "this floor on the same probes.")
+    # 3. Git hooks wired — heal-on: set config (safe, reversible); else warn.
+    if _git_hooks_path(root) == HOOKS_DIR:
+        rows.append(("✓", "git hooks wired (core.hooksPath)"))
+    elif heal:
+        _wire_hooks(root)
+        healed += 1
+        rows.append(("~", f"healed: git config core.hooksPath {HOOKS_DIR}"))
+    else:
+        warns += 1
+        rows.append(("!", "WARN: hooks not wired — local gates skip (CI re-asserts)"))
+
+    # 4. Checks bound — warn (work proceeds; gates assert vacuously if unbound).
+    unbound = [k for k in ("fast", "medium", "full")
+               if cfg.get("checks", {}).get(k) in (None, "", "true")]
+    if unbound:
+        warns += 1
+        rows.append(("!", f"WARN: checks {unbound} unbound — gates can't assert"))
+    else:
+        rows.append(("✓", "checks.fast/medium/full bound"))
+
+    # 5. Drift — warn with the exact fix (working stale is a risk, not a hard stop here).
+    claude = root / "CLAUDE.md"
+    if claude.exists():
+        m = re.search(r"source=(\w+)", claude.read_text())
+        if m and m.group(1) != canonical_hash(root):
+            warns += 1
+            rows.append(("!", "WARN: compiled views stale — run `socom compile`"))
+        else:
+            rows.append(("✓", "compiled views in sync"))
+
+    # 6. Claim — only meaningful for production seats; warn if none held by you (R2).
+    if seat in ("builder", "reviewer", "validator", "analyst"):
+        cdir = root / SOCOM_DIR / "claims"
+        mine = [p.stem for p in cdir.glob("*.claim")
+                if not claim_expired(p) and claim_holder() in p.read_text()] \
+            if cdir.exists() else []
+        if mine:
+            rows.append(("✓", f"domain claimed by you: {mine}"))
+        else:
+            warns += 1
+            rows.append(("!", f"WARN: no domain claimed by you ({claim_holder()}) "
+                              "— parallel seats need a claim (R2)"))
+
+    ms = round((time.monotonic() - t0) * 1000)
+    label = f"precond (seat={seat})" if seat else "precond"
+    print(f"{label}:")
+    for mark, text in rows:
+        print(f"  {mark} {text}")
+    verdict = "RED" if blocks else "PASS"
+    extra = f", {healed} healed" if healed else ""
+    print(f"-> {verdict} ({ms}ms): {blocks} blocker(s), {warns} warning(s){extra}")
+    if blocks:
+        sys.exit(1)
 
 
 # ── forge (universal git-provider operations) ────────────────────────────
@@ -2976,6 +2991,7 @@ COMMANDS = {"init": cmd_init, "compile": cmd_compile, "doctor": cmd_doctor,
             "context": cmd_context,
             "forge": cmd_forge, "adopt": cmd_adopt, "install": cmd_install,
             "uninstall": cmd_uninstall}
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):

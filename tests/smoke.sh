@@ -18,6 +18,14 @@ check() { # check <desc> <expected_rc> <actual_rc>
 # 0. CLI parses
 python3 -m py_compile "$SOCOM"; check "cli compiles" 0 $?
 
+# 0b. build integrity (distribution B): bin/socom IS the assembled artifact of
+# src/socom/*.py. Assert it is not stale — a src edit without a rebuild is the
+# committed-artifact drift the buildcheck gate exists to catch.
+if [ -f "$ROOT/build.py" ]; then
+  python3 "$ROOT/build.py" --check >/dev/null 2>&1
+  check "build: bin/socom is up to date with src/socom (no drift)" 0 $?
+fi
+
 # 1. init + compile in a fresh repo
 R="$T/repo"; mkdir -p "$R"; cd "$R"
 git init -q -b main .
