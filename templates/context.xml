@@ -1,14 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  socom context envelope (CTX-1) — fill and drop at .socom/context/<id>.xml, then
-  `socom context verify <file>`. One envelope per promise execution: declare the
-  input context this work unit consumed against the budget you set for it. See
-  schemas/context.xml for the field contract and the budget invariant
-  (input_tokens must be <= budget_tokens). Hand-authored in CTX-1; CTX-2 measures
-  and emits these automatically.
+  socom context envelope — fill and drop at .socom/context/<id>.xml. One envelope
+  per promise execution: declare the input context this work unit consumed against
+  the budget you set for it. See schemas/context.xml for the field contract, the
+  budget invariant (input_tokens <= budget_tokens), and the measurement rule.
 
-  Replace every FILL. Drop the <inputs> block unless you want the per-component
-  breakdown (it is the optional CTX-2 hook; CTX-1 only checks the two totals).
+  Two ways to use it:
+   - CTX-1 (declare): omit <inputs>, set input_tokens by hand, `socom context
+     verify <file>`. The gate checks only declared <= budget.
+   - CTX-2 (measure): list each input as an <input ref="repo/relative/path"/>, then
+     `socom context measure <file>` to fill the token counts FROM the live files,
+     then `socom context verify <file>`. verify RE-MEASURES the refs and fails
+     unless your declared counts match — so the number cannot be faked. If you are
+     over budget, `socom context compress <file>` drops the lowest-relevance inputs
+     until it fits. Counts are a chars/4 estimate (a lower bound — leave headroom).
+
+  Replace every FILL. Drop the <inputs> block for the CTX-1 declare style.
 -->
 <context socom="0.1"
          id="CTX-FILL-date-seq"
@@ -16,10 +23,10 @@
          seat="FILL: builder|reviewer|validator|scout|…"
          ts="FILL: 2026-06-20T12:00:00Z"
          budget_tokens="FILL-int"
-         input_tokens="FILL-int">
-  <!-- optional, CTX-2 hook — per-source token costs; sum should track input_tokens
+         input_tokens="0">
+  <!-- CTX-2: list the inputs, leave tokens="0", run `socom context measure`.
+       Drop this whole block for the CTX-1 declare style. -->
   <inputs>
-    <input ref="FILL: path or artifact id" tokens="FILL-int"/>
+    <input ref="FILL: repo-relative path" tokens="0"/>
   </inputs>
-  -->
 </context>

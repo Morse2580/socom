@@ -489,6 +489,54 @@ rm -f "$CXD/b.xml"
 "$SOCOM" context verify "$CXD" >/dev/null 2>&1
 check "context verify: a dir of only-valid envelopes PASSES" 0 $?
 
+# 10d-quater. context CTX-2 — MEASURED + COMPRESSIBLE input. input_tokens is no
+# longer hand-authored: `measure` writes per-ref counts from the live artifacts,
+# `verify` RE-MEASURES them and fails on any mismatch (un-forgeable), and
+# `compress` drops the lowest-relevance inputs (l0_score vs the promise goal) until
+# the sum fits budget. measure/compress MUTATE and are NOT gates; verify stays pure.
+CX2D="$T/ctx2"; mkdir -p "$CX2D" .socom/promises
+i=0; while [ "$i" -lt 3 ]; do printf 'residuality gate saltzer schroeder complete mediation least privilege fail safe\n'; i=$((i+1)); done > "$CX2D/relevant.txt"
+i=0; while [ "$i" -lt 30 ]; do printf 'unrelated lorem ipsum filler cats weather trivia nonsense padding words here\n'; i=$((i+1)); done > "$CX2D/filler.txt"
+cat > .socom/promises/P-CX2.xml <<'EOF'
+<promise id="P-CX2" state="open"><contract ref="C-CX2" state="ratified"><goal>residuality gate saltzer schroeder protection principles complete mediation</goal></contract></promise>
+EOF
+mkE() { cat > "$1" <<EOF2
+<?xml version="1.0" encoding="UTF-8"?>
+<context socom="0.1" id="$2" promise="P-CX2" seat="builder" ts="2026-06-20T12:00:00Z" budget_tokens="$3" input_tokens="0">
+  <inputs><input ref="$CX2D/relevant.txt" tokens="0"/><input ref="$CX2D/filler.txt" tokens="0"/></inputs>
+</context>
+EOF2
+}
+mkE "$T/cx2-a.xml" CX2A 100000
+"$SOCOM" context measure "$T/cx2-a.xml" 2>&1 | grep -q "input_tokens=" \
+  && ok "context measure writes token counts from the live refs" || bad "measure did not write counts"
+"$SOCOM" context verify "$T/cx2-a.xml" >/dev/null 2>&1
+check "context verify: a measured envelope PASSES (declared == re-measured)" 0 $?
+sed 's/input_tokens="[0-9]*"/input_tokens="7"/' "$T/cx2-a.xml" > "$T/cx2-lie.xml"
+"$SOCOM" context verify "$T/cx2-lie.xml" >/dev/null 2>&1
+check "context verify: a forged input_tokens FAILS (re-measure mismatch)" 1 $?
+cat > "$T/cx2-missing.xml" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<context socom="0.1" id="CX2M" promise="P-CX2" seat="builder" ts="t" budget_tokens="100000" input_tokens="5"><inputs><input ref="$CX2D/nope.txt" tokens="5"/></inputs></context>
+EOF
+"$SOCOM" context verify "$T/cx2-missing.xml" >/dev/null 2>&1
+check "context verify: an unreadable input ref FAILS (degrade loudly)" 1 $?
+"$SOCOM" context verify "$T/cx-good.xml" >/dev/null 2>&1
+check "context verify: a CTX-1 no-<inputs> envelope still PASSES (backward-compat)" 0 $?
+mkE "$T/cx2-big.xml" CX2B 100
+"$SOCOM" context measure "$T/cx2-big.xml" >/dev/null
+"$SOCOM" context verify "$T/cx2-big.xml" >/dev/null 2>&1
+check "context verify: an over-budget measured envelope FAILS" 1 $?
+COUT="$("$SOCOM" context compress "$T/cx2-big.xml" 2>&1)"; CCR=$?
+{ [ "$CCR" = 0 ] && echo "$COUT" | grep -q "filler.txt"; } \
+  && ok "context compress drops the least-relevant input (filler, keeps relevant)" \
+  || bad "compress dropped wrong/none (rc=$CCR): $COUT"
+"$SOCOM" context verify "$T/cx2-big.xml" >/dev/null 2>&1
+check "context verify: PASSES after compress brings it within budget" 0 $?
+"$SOCOM" context compress "$T/cx2-a.xml" 2>&1 | grep -q "already within budget" \
+  && ok "context compress is a no-op when already within budget" || bad "compress no-op path wrong"
+rm -f .socom/promises/P-CX2.xml
+
 rm -rf .socom/promises
 
 # 10e. precond — velocity-first work-readiness pre-flight (the published gate)

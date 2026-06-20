@@ -62,23 +62,48 @@
     </invariant>
   </invariants>
 
-  <!-- Forward hook (CTX-2, OPTIONAL — not required in CTX-1): a per-component
-       breakdown of the input. CTX-1 asserts only the two top-level token counts
-       + the invariant; CTX-2 makes <inputs> load-bearing (measured + compressible
-       per source against a per-component allocation). -->
-  <optional>
-    <inputs>
-      <input ref="schemas/promise.xml" tokens="1400"/>
-      <input ref=".socom/handoffs/H-2026-06-20-main.xml" tokens="1800"/>
-    </inputs>
-  </optional>
+  <!-- Measurement contract (CTX-2) — how input_tokens is counted, declared in
+       ONE place so `socom context measure` and `socom context verify` both read
+       the divisor instead of hardcoding it (single source, as with the invariant
+       op above). estimator chars/N: tokens = round(len(text) / divisor). This is
+       the deterministic, offline, dependency-free "~4 chars per token" rule of
+       thumb (OpenAI) — NOT a model-exact tokenizer. It UNDER-counts code and
+       structured text, so it is a lower-bound estimate: leave budget headroom. A
+       BPE tokenizer for model-exact counts is deferred (CTX-3), behind the same
+       verb and this same element. -->
+  <measurement estimator="chars/4" divisor="4"/>
+
+  <!-- <inputs> — the per-component breakdown (CTX-2, LOAD-BEARING when present).
+       Each <input> names a readable repo-relative path and its measured token
+       cost. The OPTIONAL element keeps CTX-1 envelopes (no <inputs>) valid — they
+       fall back to the declared-vs-budget check only. But WHEN PRESENT, verify
+       re-measures every ref from the live artifact and FAILS unless:
+         (1) every ref resolves and is readable (degrade loudly, R6);
+         (2) each <input tokens> equals its ref's re-measure;
+         (3) the top-level input_tokens equals the sum of the re-measures.
+       This makes input_tokens un-forgeable: the gate recomputes it from the real
+       files, so a hand-authored count cannot pass. `socom context measure` writes
+       these counts; `socom context compress` drops the lowest-relevance inputs
+       (BM25/overlap-ranked vs the promise goal) until the sum fits the budget.
+       In CTX-2.1 ref is a repo-relative PATH; id-only refs are CTX-3. -->
+  <inputs>
+    <input ref="schemas/promise.xml" tokens="1400"/>
+    <input ref="canon/constitution.xml" tokens="1800"/>
+  </inputs>
 
   <!-- Worked example: the readable contract. The live form is the standalone
-       file above (root <context>); this is the schema's documentation copy. -->
+       file above (root <context>); this is the schema's documentation copy. A
+       fully-measured CTX-2 envelope carries <inputs> whose token sum equals
+       input_tokens; a CTX-1 envelope omits <inputs> and declares input_tokens. -->
   <example>
     <context socom="0.1" id="CTX-2026-0620-001" promise="P-2026-0612-001"
              seat="builder" ts="2026-06-20T12:00:00Z"
-             budget_tokens="8000" input_tokens="3200"/>
+             budget_tokens="8000" input_tokens="3200">
+      <inputs>
+        <input ref="schemas/promise.xml" tokens="1400"/>
+        <input ref="canon/constitution.xml" tokens="1800"/>
+      </inputs>
+    </context>
   </example>
 
 </context-schema>

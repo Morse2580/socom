@@ -278,13 +278,15 @@ with tempfile.TemporaryDirectory() as _d:
 # ── context envelope (CTX-1: _load_context_contract / _context_violations) ────
 # The field contract AND the budget invariant are parsed FROM schemas/context.xml
 # (single source) — pin that, then pin the validator's verdicts.
-_creq, _cints, _cinv = socom._load_context_contract()
+_creq, _cints, _cinv, _cdiv = socom._load_context_contract()
 check("_load_context_contract: required fields parsed from the schema",
       set(_creq) == {"id", "promise", "seat", "ts", "budget_tokens", "input_tokens"})
 check("_load_context_contract: int fields parsed from the schema",
       set(_cints) == {"budget_tokens", "input_tokens"})
 check("_load_context_contract: budget invariant parsed (input <= budget)",
       ("input_tokens", "<=", "budget_tokens") in _cinv)
+check("_load_context_contract: measurement divisor parsed from the schema (chars/4)",
+      _cdiv == 4)
 
 
 def _viol(xml):
@@ -329,6 +331,44 @@ with tempfile.TemporaryDirectory() as _d:
     eq("_context_targets: a dir globs its *.xml", len(socom._context_targets(_dd)), 2)
     check("_context_targets: a file -> [file]",
           socom._context_targets(_dd / "a.xml") == [_dd / "a.xml"])
+
+# CTX-2: measurement (chars/divisor) + the honesty re-measure of <inputs>.
+eq("_estimate_tokens: round(len/divisor)", socom._estimate_tokens("a" * 40, 4), 10)
+with tempfile.TemporaryDirectory() as _d:
+    _repo = Path(_d)
+    (_repo / "art.txt").write_text("x" * 40)  # 40 chars -> 10 tokens at chars/4
+    eq("_measure_ref: a live ref measured at the schema divisor",
+       socom._measure_ref(_repo, "art.txt", 4), 10)
+    check("_measure_ref: an absent ref -> None (degrade loudly)",
+          socom._measure_ref(_repo, "nope.txt", 4) is None)
+
+    def _hviol(total, decl):
+        env = _repo / "e.xml"
+        env.write_text(f'<context socom="0.1" id="C" promise="P" seat="s" ts="t" '
+                       f'budget_tokens="1000" input_tokens="{total}">'
+                       f'<inputs><input ref="art.txt" tokens="{decl}"/></inputs></context>')
+        return socom._context_violations(env, _creq, _cints, _cinv, _repo, 4)
+
+    check("honesty: declared == re-measured (per-input AND total) -> no violations",
+          _hviol(10, 10) == [])
+    check("honesty: a forged per-input tokens is flagged",
+          any("re-measured" in v for v in _hviol(10, 99)))
+    check("honesty: a forged input_tokens total is flagged",
+          any("sum of re-measured" in v for v in _hviol(99, 10)))
+    _m = _repo / "m.xml"
+    _m.write_text('<context socom="0.1" id="C" promise="P" seat="s" ts="t" '
+                  'budget_tokens="1000" input_tokens="5">'
+                  '<inputs><input ref="gone.txt" tokens="5"/></inputs></context>')
+    check("honesty: an unreadable input ref is flagged (degrade loudly)",
+          any("does not resolve" in v for v in
+              socom._context_violations(_m, _creq, _cints, _cinv, _repo, 4)))
+    # repo=None skips the re-measure entirely (CTX-1 backward-compat path)
+    (_repo / "e.xml").write_text(
+        '<context socom="0.1" id="C" promise="P" seat="s" ts="t" '
+        'budget_tokens="1000" input_tokens="99">'
+        '<inputs><input ref="art.txt" tokens="10"/></inputs></context>')
+    check("honesty: skipped when repo is None (CTX-1 schema-only, backward-compat)",
+          socom._context_violations(_repo / "e.xml", _creq, _cints, _cinv) == [])
 
 # ── summary ──────────────────────────────────────────────────────────────────
 print(f"unit: {_PASS} passed, {_FAIL} failed")

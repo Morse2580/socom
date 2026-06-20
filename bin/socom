@@ -31,9 +31,11 @@ Commands:
   contract make the contract testable: verify runs a contract's <check> <run>
            commands (PASS/FAIL on exit), flags no-run checks MANUAL; --record
            appends the outcome to the run ledger (cycle data) | show
-  context  context as a first-class artifact (CTX-1): verify a context envelope
-           (or .socom/context/) is schema-valid AND within its declared input
-           budget (input_tokens <= budget_tokens) | show
+  context  context as a first-class artifact: verify a context envelope (or
+           .socom/context/) is schema-valid, within budget, and (CTX-2) its
+           declared input_tokens match a re-measure of the <inputs> refs | show |
+           measure (write counts from the live refs) | compress (drop the
+           lowest-relevance inputs until within budget)
   greet    adoption-ladder greeting — where you are, what's next
   statusline Claude Code statusLine: adoption bar + context-consumption meter
            (reads the host's statusline JSON on stdin; GSD-style ctx meter)
@@ -1761,16 +1763,22 @@ def cmd_contract(args):
         sys.exit(1)
 
 
-# ── context — the CTX-1 context envelope, made a first-class artifact ──────
+# ── context — the CTX-1/CTX-2 context envelope, made a first-class artifact ─
 # Every work unit EMITS a schema-valid context envelope (.socom/context/<id>.xml,
 # schemas/context.xml) declaring the input context it consumed against a declared
 # budget. `socom context verify` IS the gate: exit 0 iff every targeted envelope
 # is schema-valid AND input_tokens <= budget_tokens — fail-OPEN on an absent
 # dir / no envelopes (lazy creation is not corruption), fail-CLOSED on any
-# malformed or over-budget envelope. The field contract AND the invariant are
-# SINGLE-SOURCED from schemas/context.xml (parsed, never hardcoded), exactly as
-# ledgercheck derives the ledger contract from schemas/ledger.xml. The bands run
-# this very verb (the verification tool verifies itself) — no parallel validator.
+# malformed or over-budget envelope. The field contract, the invariant AND the
+# measurement divisor are SINGLE-SOURCED from schemas/context.xml (parsed, never
+# hardcoded), exactly as ledgercheck derives the ledger contract from
+# schemas/ledger.xml. The bands run this very verb (the tool verifies itself).
+#   CTX-2 makes <inputs> load-bearing: `measure` writes per-ref token counts from
+# the live artifacts, `verify` RE-MEASURES them and fails unless declared ==
+# measured (un-forgeable input_tokens), and `compress` drops the lowest-relevance
+# inputs (l0_score-ranked vs the promise goal) until the sum fits the budget.
+# measure/compress MUTATE and are NOT gates (a gate that fixes its own failure is
+# the separation-of-privilege trap); only verify is band-wired.
 CONTEXT_SCHEMA = TOOL_ROOT / "schemas" / "context.xml"
 _INVARIANT_OPS = {"<=": lambda a, b: a <= b, "<": lambda a, b: a < b,
                   ">=": lambda a, b: a >= b, ">": lambda a, b: a > b,
@@ -1778,9 +1786,9 @@ _INVARIANT_OPS = {"<=": lambda a, b: a <= b, "<": lambda a, b: a < b,
 
 
 def _load_context_contract(schema=CONTEXT_SCHEMA):
-    """Parse schemas/context.xml -> (required, int_fields, invariants). The
-    <field> + <invariant> elements ARE the contract; nothing is hardcoded
-    (single source, §least-common-mechanism / open-design)."""
+    """Parse schemas/context.xml -> (required, int_fields, invariants, divisor).
+    The <field> + <invariant> + <measurement> elements ARE the contract; nothing
+    is hardcoded (single source, §least-common-mechanism / open-design)."""
     root = ET.parse(schema).getroot()
     required = [f.get("name") for f in root.find("fields").findall("field")
                 if f.get("required") == "true"]
@@ -1789,11 +1797,45 @@ def _load_context_contract(schema=CONTEXT_SCHEMA):
     inv_block = root.find("invariants")
     invariants = [(i.get("lhs"), i.get("op"), i.get("rhs"))
                   for i in inv_block.findall("invariant")] if inv_block is not None else []
-    return required, ints, invariants
+    m = root.find("measurement")
+    divisor = int(m.get("divisor")) if m is not None and m.get("divisor") else 4
+    return required, ints, invariants, divisor
 
 
-def _context_violations(path, required, ints, invariants):
-    """Return a list of violation strings for one envelope file (empty = ok)."""
+def _estimate_tokens(text, divisor):
+    """Deterministic, offline token ESTIMATE: round(len(text) / divisor) — the
+    OpenAI ~4-chars/token rule, divisor single-sourced from the schema's
+    <measurement>. A lower bound: it UNDER-counts code/structured text, so budgets
+    carry headroom. Not a model-exact tokenizer (BPE is CTX-3, behind this seam)."""
+    return round(len(text) / divisor)
+
+
+def _read_ref(repo, ref):
+    """Read one input ref's live text -> str, or None if it does not resolve / is
+    unreadable. ref is a repo-relative path in CTX-2.1 (id-only refs are CTX-3)."""
+    p = Path(ref)
+    if not p.is_absolute():
+        p = repo / ref
+    try:
+        return p.read_text()
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def _measure_ref(repo, ref, divisor):
+    """Re-measure one input ref from the LIVE artifact -> token estimate, or None
+    if it does not resolve / is unreadable (a violation — degrade loudly, R6)."""
+    text = _read_ref(repo, ref)
+    return None if text is None else _estimate_tokens(text, divisor)
+
+
+def _context_violations(path, required, ints, invariants, repo=None, divisor=4):
+    """Return a list of violation strings for one envelope file (empty = ok).
+    When repo is given and the envelope carries <inputs>, the CTX-2 honesty check
+    RE-MEASURES every ref from the live artifact: each declared <input tokens> and
+    the top-level input_tokens must equal the re-measure, or the gate fails — so a
+    hand-authored input_tokens cannot pass. repo=None skips the re-measure (used by
+    schema-only unit checks); the verify gate always passes it."""
     try:
         root = ET.parse(path).getroot()
     except (ET.ParseError, OSError) as e:
@@ -1824,6 +1866,36 @@ def _context_violations(path, required, ints, invariants):
                 and not _INVARIANT_OPS[op](vals[lhs], vals[rhs]):
             bad.append(f"invariant violated: {lhs}({vals[lhs]}) {op} "
                        f"{rhs}({vals[rhs]}) is false")
+    # CTX-2 honesty check: re-measure the <inputs> refs from the live artifacts and
+    # require declared == measured, per-input AND in total. Only when the envelope
+    # carries <inputs> (a CTX-1 envelope omits it and keeps the declared<=budget
+    # check above — backward compatible).
+    inputs_el = root.find("inputs")
+    if inputs_el is not None and repo is not None:
+        total = 0
+        for inp in inputs_el.findall("input"):
+            ref = inp.get("ref")
+            if not ref:
+                bad.append("an <input> is missing its 'ref' attribute")
+                continue
+            measured = _measure_ref(repo, ref, divisor)
+            if measured is None:
+                bad.append(f"input ref {ref!r} does not resolve or is unreadable")
+                continue
+            total += measured
+            raw = inp.get("tokens")
+            try:
+                declared = int(raw) if raw is not None else None
+            except ValueError:
+                declared = None
+            if declared is None:
+                bad.append(f"input ref {ref!r}: 'tokens' missing or non-int")
+            elif declared != measured:
+                bad.append(f"input ref {ref!r}: declared tokens={declared} "
+                           f"!= re-measured {measured} (stale — run measure)")
+        if "input_tokens" in vals and total != vals["input_tokens"]:
+            bad.append(f"input_tokens={vals['input_tokens']} != sum of re-measured "
+                       f"inputs {total} (run `socom context measure`)")
     return bad
 
 
@@ -1837,10 +1909,41 @@ def _context_targets(target):
     return []
 
 
+def _promise_goal_text(repo, pid):
+    """Best-effort: the referenced promise's goal/intent text, for ranking inputs
+    by relevance in `compress`. Globs .socom/promises and matches on the id attr;
+    returns '' if unresolvable (compress then falls back to drop-largest)."""
+    if not pid:
+        return ""
+    d = repo / SOCOM_DIR / "promises"
+    if not d.is_dir():
+        return ""
+    for f in sorted(d.glob("*.xml")):
+        try:
+            el = ET.parse(f).getroot()
+        except (ET.ParseError, OSError):
+            continue
+        if el.get("id") != pid:
+            continue
+        parts = [e.text for tag in ("goal", "intent", "decoded", "verbatim")
+                 for e in el.iter(tag) if e.text]
+        return " ".join(parts)
+    return ""
+
+
+def _write_envelope(tree, target):
+    """Serialize a mutated envelope back to disk (UTF-8 + xml declaration). ET
+    drops comments and normalizes whitespace — fine for a data envelope, which is
+    measured/compressed output, not hand-tended canon."""
+    tree.write(str(target), encoding="UTF-8", xml_declaration=True)
+
+
 def cmd_context(args):
-    if not args or args[0] not in ("verify", "show"):
-        sys.exit("usage: socom context <verify|show> [<envelope.xml|dir>] "
-                 "(verify defaults to .socom/context)")
+    subs = ("verify", "show", "measure", "compress")
+    if not args or args[0] not in subs:
+        sys.exit("usage: socom context <verify|show|measure|compress> "
+                 "[<envelope.xml|dir>]  (verify defaults to .socom/context; "
+                 "measure/compress need one envelope file)")
     sub = args[0]
     root = repo_root()
     raw = args[1] if len(args) > 1 else f"{SOCOM_DIR}/context"
@@ -1861,10 +1964,111 @@ def cmd_context(args):
         print(f"  promise: {el.get('promise', '?')}  seat: {el.get('seat', '?')}")
         print(f"  budget:  {el.get('input_tokens', '?')} / "
               f"{el.get('budget_tokens', '?')} tokens (consumed / declared)")
+        ins = el.find("inputs")
+        if ins is not None:
+            for inp in ins.findall("input"):
+                print(f"    input {inp.get('ref', '?')} · {inp.get('tokens', '?')} tokens")
         return
 
-    # verify: validate every targeted envelope against schemas/context.xml.
-    required, ints, invariants = _load_context_contract()
+    if sub == "measure":
+        # Writer: refresh per-input + total token counts FROM the live refs so the
+        # author can declare them honestly. Mutates the envelope. No <inputs> ->
+        # nothing to measure (a CTX-1 envelope declares input_tokens by hand).
+        _, _, _, divisor = _load_context_contract()
+        if not target.is_file():
+            sys.exit(f"socom context measure: need one envelope file, not '{raw}' (R6).")
+        try:
+            tree = ET.parse(target)
+        except (ET.ParseError, OSError) as e:
+            sys.exit(f"socom context measure: {target.name} is not readable "
+                     f"well-formed XML — {e}")
+        el = tree.getroot()
+        ins = el.find("inputs")
+        if ins is None or not ins.findall("input"):
+            sys.exit("socom context measure: envelope has no <inputs> to measure "
+                     "(R6: nothing to do).")
+        total = 0
+        for inp in ins.findall("input"):
+            ref = inp.get("ref")
+            m = _measure_ref(root, ref, divisor) if ref else None
+            if m is None:
+                sys.exit(f"socom context measure: input ref {ref!r} does not "
+                         "resolve or is unreadable — cannot measure honestly (R6).")
+            inp.set("tokens", str(m))
+            total += m
+        el.set("input_tokens", str(total))
+        _write_envelope(tree, target)
+        print(f"socom context measure: {target.name} -> input_tokens={total} "
+              f"across {len(ins.findall('input'))} input(s) (chars/{divisor} "
+              "estimate — a lower bound, not a model-exact count).")
+        return
+
+    if sub == "compress":
+        # Remediation: drop the lowest-relevance inputs until the re-measured total
+        # fits budget_tokens. Relevance = l0_score overlap vs the promise goal;
+        # falls back to drop-largest when the promise is unresolvable. Mutates.
+        _, _, _, divisor = _load_context_contract()
+        if not target.is_file():
+            sys.exit(f"socom context compress: need one envelope file, not '{raw}' (R6).")
+        try:
+            tree = ET.parse(target)
+        except (ET.ParseError, OSError) as e:
+            sys.exit(f"socom context compress: {target.name} is not readable "
+                     f"well-formed XML — {e}")
+        el = tree.getroot()
+        ins = el.find("inputs")
+        if ins is None or not ins.findall("input"):
+            sys.exit("socom context compress: envelope has no <inputs> to compress (R6).")
+        try:
+            budget = int(el.get("budget_tokens"))
+        except (TypeError, ValueError):
+            sys.exit("socom context compress: budget_tokens missing or non-int (R6).")
+        inps = ins.findall("input")
+        sized = {}
+        for inp in inps:
+            text = _read_ref(root, inp.get("ref"))
+            if text is None:
+                sys.exit(f"socom context compress: input ref {inp.get('ref')!r} "
+                         "does not resolve or is unreadable (R6).")
+            sized[inp] = (text, _estimate_tokens(text, divisor))
+        total = sum(t for _, t in sized.values())
+        if total <= budget:
+            print(f"socom context compress: already within budget "
+                  f"({total} <= {budget}) — nothing to drop.")
+            return
+        query = _promise_goal_text(root, el.get("promise"))
+        if query:
+            chunks = [{"id": i, "text": sized[inp][0]} for i, inp in enumerate(inps)]
+            ranked = l0_score(query, chunks, k=len(chunks))  # most relevant first
+            order = [inps[i] for i in reversed(ranked)]       # least relevant first
+        else:
+            order = sorted(inps, key=lambda inp: -sized[inp][1])  # largest first
+        kept, dropped, running = list(inps), [], total
+        for victim in order:
+            if running <= budget or len(kept) <= 1:
+                break
+            kept.remove(victim)
+            dropped.append(victim)
+            running -= sized[victim][1]
+        for victim in dropped:
+            ins.remove(victim)
+        el.set("input_tokens", str(running))
+        _write_envelope(tree, target)
+        how = "relevance vs promise goal" if query else "size (no promise goal found)"
+        print(f"socom context compress: {target.name} {total} -> {running} tokens "
+              f"(budget {budget}); dropped {len(dropped)} input(s) by {how}:")
+        for victim in dropped:
+            print(f"    - {victim.get('ref')} ({sized[victim][1]} tokens)")
+        if running > budget:
+            print(f"socom context compress: WARNING — still {running} > {budget}; the "
+                  "single most-relevant input alone exceeds budget. Tail-truncation "
+                  "is CTX-3; raise the budget or split the input.", file=sys.stderr)
+            sys.exit(1)
+        return
+
+    # verify: validate every targeted envelope against schemas/context.xml, and
+    # (CTX-2) re-measure any <inputs> from the live artifacts — pure read-only gate.
+    required, ints, invariants, divisor = _load_context_contract()
     files = _context_targets(target)
     if not files:
         print(f"socom context verify: no envelopes at {raw} — nothing to "
@@ -1872,7 +2076,7 @@ def cmd_context(args):
         return
     bad = 0
     for f in files:
-        viols = _context_violations(f, required, ints, invariants)
+        viols = _context_violations(f, required, ints, invariants, root, divisor)
         if viols:
             bad += 1
             print(f"  {f.name} · FAIL")
