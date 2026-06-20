@@ -547,6 +547,75 @@ check "context verify: an out-of-repo (absolute) ref is refused — path contain
 rm -f .socom/promises/P-CX2.xml
 rm -rf "$CX2D"
 
+# 10d-quinquies. context emit — the PRODUCER (CTX-3 slice). Closes the loop the
+# gate was missing: emit writes a measured, schema-valid envelope from the live
+# refs, so `context verify` has real input instead of fail-opening on emptiness.
+rm -rf .socom/context
+printf 'hello context producer\n' > "$R/emit-a.txt"
+printf 'a second loaded artifact, somewhat longer than the first one here\n' > "$R/emit-b.txt"
+EOUT="$("$SOCOM" context emit --promise P-EMIT --seat builder --budget 100000 \
+        --input emit-a.txt --input emit-b.txt 2>&1)"; ER=$?
+{ [ "$ER" = 0 ] && echo "$EOUT" | grep -q "input_tokens="; } \
+  && ok "context emit writes a measured envelope (exit 0)" || bad "emit failed (rc=$ER): $EOUT"
+EFILE="$(ls .socom/context/CTX-*-001.xml 2>/dev/null | head -1)"
+[ -n "$EFILE" ] && ok "context emit auto-generates a CTX-<date>-001 id" \
+  || bad "emit did not auto-id into .socom/context"
+"$SOCOM" context verify .socom/context >/dev/null 2>&1
+check "context emit -> verify PASSES (producer feeds the gate honestly)" 0 $?
+"$SOCOM" context emit --promise P-EMIT --seat builder --budget 100000 --input emit-a.txt >/dev/null 2>&1
+ls .socom/context/CTX-*-002.xml >/dev/null 2>&1 \
+  && ok "context emit increments the daily sequence (…-002)" || bad "emit did not increment seq"
+# emit RECORDS truth; it is not a gate. An over-budget work unit is written
+# honestly (exit 0, loud warning), and the read-only verify gate is what fails it.
+EOVR="$("$SOCOM" context emit --promise P-EMIT --seat builder --budget 5 \
+        --input emit-b.txt --id CTX-OVER-1 2>&1)"; EOR=$?
+{ [ "$EOR" = 0 ] && echo "$EOVR" | grep -q "WARNING"; } \
+  && ok "context emit: over-budget writes honestly + warns, exit 0 (producer, not gate)" \
+  || bad "emit over-budget wrong (rc=$EOR): $EOVR"
+"$SOCOM" context verify .socom/context/CTX-OVER-1.xml >/dev/null 2>&1
+check "context verify FAILS the over-budget envelope emit recorded" 1 $?
+# degrade loudly: an unreadable input ref is refused, with NO file written (the
+# --out stays in-repo so this exercises the REF refusal, not output containment).
+"$SOCOM" context emit --promise P-EMIT --seat builder --budget 100 \
+   --input no-such.txt --id CTX-BAD-1 >/dev/null 2>&1
+check "context emit: an unreadable input ref is refused (exit nonzero)" 1 $?
+[ -f .socom/context/CTX-BAD-1.xml ] && bad "emit wrote a file despite a bad ref" \
+  || ok "context emit: no envelope written when a ref is refused"
+"$SOCOM" context emit --promise P-EMIT --seat builder --budget 100 \
+   --input /etc/hosts --id CTX-ESC-1 >/dev/null 2>&1
+check "context emit: an out-of-repo (absolute) input ref is refused — containment" 1 $?
+"$SOCOM" context emit --seat builder --budget 100 --input emit-a.txt >/dev/null 2>&1
+check "context emit: a missing required flag (--promise) is refused" 1 $?
+SOCOM_SEAT=reviewer "$SOCOM" context emit --promise P-ENV --budget 100000 \
+   --input emit-a.txt --id CTX-ENV-1 >/dev/null 2>&1
+{ [ -f .socom/context/CTX-ENV-1.xml ] && grep -q 'seat="reviewer"' .socom/context/CTX-ENV-1.xml; } \
+  && ok "context emit: seat falls back to \$SOCOM_SEAT" || bad "emit \$SOCOM_SEAT fallback wrong"
+# OUTPUT path containment — symmetric with the --input checks above. A crafted
+# --id that escapes the repo, or an out-of-repo --out, must be refused with no
+# file written outside the tree (the write-side path-traversal blocker).
+"$SOCOM" context emit --promise P-ESC --seat builder --budget 100 \
+   --input emit-a.txt --id "../../../tmp/socom-escape-$$" >/dev/null 2>&1
+ESCR=$?; [ "$ESCR" != 0 ] && [ ! -f "/tmp/socom-escape-$$.xml" ] \
+  && ok "context emit: a repo-escaping --id is refused, nothing written outside" \
+  || { bad "emit --id escaped containment (rc=$ESCR)"; rm -f "/tmp/socom-escape-$$.xml"; }
+"$SOCOM" context emit --promise P-ESC --seat builder --budget 100 \
+   --input emit-a.txt --out "/tmp/socom-out-escape-$$.xml" >/dev/null 2>&1
+OESR=$?; [ "$OESR" != 0 ] && [ ! -f "/tmp/socom-out-escape-$$.xml" ] \
+  && ok "context emit: an out-of-repo --out is refused, nothing written outside" \
+  || { bad "emit --out escaped containment (rc=$OESR)"; rm -f "/tmp/socom-out-escape-$$.xml"; }
+# Duplicate scalar flag is ambiguous intent — degrade loudly, not last-wins.
+"$SOCOM" context emit --promise P-1 --promise P-2 --seat builder --budget 100 \
+   --input emit-a.txt --id CTX-DUP-1 >/dev/null 2>&1
+check "context emit: a duplicated scalar flag (--promise twice) is refused" 1 $?
+# Zero-input work unit is legal: a CTX-1-style envelope (no <inputs>) that verifies.
+"$SOCOM" context emit --promise P-ZERO --seat builder --budget 100 --id CTX-ZERO-1 >/dev/null 2>&1
+{ [ -f .socom/context/CTX-ZERO-1.xml ] \
+  && ! grep -q "<inputs>" .socom/context/CTX-ZERO-1.xml \
+  && "$SOCOM" context verify .socom/context/CTX-ZERO-1.xml >/dev/null 2>&1; } \
+  && ok "context emit: a zero-input envelope is legal and verifies (CTX-1 style)" \
+  || bad "emit zero-input envelope wrong"
+rm -rf .socom/context
+
 rm -rf .socom/promises
 
 # 10e. precond — velocity-first work-readiness pre-flight (the published gate)

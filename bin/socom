@@ -774,7 +774,10 @@ def cmd_handoff(args):
 </handoff>
 """)
     print(f"socom handoff: skeleton -> {out}\n  Fill the FILL fields before "
-          "closeout; the session-end gate checks freshness, the prompt builds on it.")
+          "closeout; the session-end gate checks freshness, the prompt builds on it."
+          "\n  Context: the seat's `socom context emit` envelope (.socom/context) is "
+          "what `socom context verify` gates — emit it if this session loaded "
+          "context against a budget.")
 
 
 # Claim-verification: every probe-able claim in the generated prompt is
@@ -1953,18 +1956,154 @@ def _promise_goal_text(repo, pid):
 def _write_envelope(tree, target):
     """Serialize a mutated envelope back to disk (UTF-8 + xml declaration). ET
     drops comments and normalizes whitespace — fine for a data envelope, which is
-    measured/compressed output, not hand-tended canon."""
+    measured/compressed/emitted output, not hand-tended canon."""
     tree.write(str(target), encoding="UTF-8", xml_declaration=True)
 
 
+def _next_context_id(root, date):
+    """Next free envelope id CTX-<date>-<NNN> (3-digit seq) in .socom/context —
+    scans existing files for the date so two emits the same day don't collide."""
+    d = root / SOCOM_DIR / "context"
+    prefix = f"CTX-{date}-"
+    seq = 0
+    if d.is_dir():
+        for f in d.glob(f"{prefix}*.xml"):
+            m = re.match(rf"{re.escape(prefix)}(\d+)$", f.stem)
+            if m:
+                seq = max(seq, int(m.group(1)))
+    return f"{prefix}{seq + 1:03d}"
+
+
+def _emit_flags(args):
+    """Parse the emit flag args -> dict. Repeatable --input accumulates; every
+    flag needs a value (degrade loudly on a dangling flag, R6)."""
+    out = {"input": []}
+    flags = {"--promise": "promise", "--seat": "seat", "--budget": "budget",
+             "--id": "id", "--out": "out", "--input": "input"}
+    i = 0
+    while i < len(args):
+        tok = args[i]
+        if tok not in flags:
+            sys.exit(f"socom context emit: unexpected argument {tok!r} — usage: "
+                     "context emit --promise P --seat S --budget N "
+                     "[--input PATH ...] [--id ID] [--out PATH] (R6).")
+        if i + 1 >= len(args):
+            sys.exit(f"socom context emit: {tok} needs a value (R6).")
+        val = args[i + 1]
+        key = flags[tok]
+        if key == "input":
+            out["input"].append(val)
+        else:
+            if key in out:
+                sys.exit(f"socom context emit: {tok} given more than once — "
+                         "ambiguous intent (R6).")
+            out[key] = val
+        i += 2
+    return out
+
+
+def _cmd_context_emit(root, args):
+    """PRODUCER (CTX-3 slice): write a measured, schema-valid envelope so the gate
+    has real input. emit RECORDS the truth — it is NOT a gate: an over-budget work
+    unit is written honestly (warn + point at compress, exit 0), because hiding an
+    over-budget reality defeats the failure CTX exists to catch (separation of
+    privilege; verify judges, compress remediates). A schema-invalid self-build
+    (a tool bug, should never happen) exits nonzero — degrade loudly (R6)."""
+    required, ints, invariants, divisor = _load_context_contract()
+    f = _emit_flags(args)
+    seat = f.get("seat") or os.environ.get("SOCOM_SEAT")
+    missing = [n for n, v in (("--promise", f.get("promise")),
+                              ("--seat", seat),
+                              ("--budget", f.get("budget"))) if not v]
+    if missing:
+        sys.exit(f"socom context emit: {', '.join(missing)} required "
+                 "(seat may come from $SOCOM_SEAT) (R6).")
+    try:
+        budget = int(f["budget"])
+        if budget < 0:
+            raise ValueError
+    except ValueError:
+        sys.exit(f"socom context emit: --budget {f['budget']!r} is not a "
+                 "non-negative int (R6).")
+
+    date = datetime.now(timezone.utc).strftime("%Y-%m%d")
+    cid = f.get("id") or _next_context_id(root, date)
+    out = Path(f["out"]) if f.get("out") else root / SOCOM_DIR / "context" / f"{cid}.xml"
+    if not out.is_absolute():
+        out = root / out
+    # OUTPUT containment — the same hard boundary _read_ref gives inputs, now on the
+    # WRITE side: --id and --out both feed the filename, so a crafted --id
+    # (../../../tmp/x) or absolute --out could write/clobber an arbitrary file
+    # outside the repo. Resolve and refuse anything that escapes the tree (the CTX-2
+    # reviewer caught this class on inputs; it is symmetric on outputs).
+    if not out.resolve().is_relative_to(root.resolve()):
+        sys.exit(f"socom context emit: output path {out} resolves outside the repo "
+                 "tree (--id / --out may not escape) — refusing (R6 path containment).")
+
+    # Measure every input ref from the LIVE artifact (CTX-2 path). A ref that does
+    # not resolve / is unreadable / escapes the repo is refused — no partial write.
+    measured = []
+    total = 0
+    for ref in f["input"]:
+        m = _measure_ref(root, ref, divisor)
+        if m is None:
+            sys.exit(f"socom context emit: input ref {ref!r} does not resolve, is "
+                     "unreadable, or escapes the repo tree — cannot measure "
+                     "honestly (R6).")
+        measured.append((ref, m))
+        total += m
+
+    el = ET.Element("context", {
+        "socom": SOCOM_VERSION, "id": cid, "promise": f["promise"],
+        "seat": seat, "ts": _now_iso(),
+        "budget_tokens": str(budget), "input_tokens": str(total)})
+    if measured:
+        ins = ET.SubElement(el, "inputs")
+        for ref, m in measured:
+            ET.SubElement(ins, "input", {"ref": ref, "tokens": str(m)})
+
+    # Validate-before-publish: write a sibling temp, self-check it against the SAME
+    # contract the gate uses (re-measure included), and only os.replace it into place
+    # if it is publishable. An over-budget envelope IS publishable (emit records
+    # truth; verify judges it) — only a schema-INVALID build (a tool bug, should
+    # never happen) is discarded, so a bad write never lands in .socom/context even
+    # momentarily (R6: no partial/torn artifact). os.replace is atomic on POSIX.
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_name(out.name + ".tmp")
+    _write_envelope(ET.ElementTree(el), tmp)
+    viols = _context_violations(tmp, required, ints, invariants, root, divisor)
+    budget_only = viols and all("invariant violated" in v for v in viols)
+    if viols and not budget_only:
+        tmp.unlink(missing_ok=True)
+        for v in viols:
+            print(f"  {v}", file=sys.stderr)
+        sys.exit("socom context emit: built an envelope that fails its own schema "
+                 "(above) — refusing to publish a bad write (R6).")
+    os.replace(tmp, out)
+
+    rel = out.relative_to(root)
+    print(f"socom context emit: wrote {rel} — promise={f['promise']} seat={seat} "
+          f"input_tokens={total}/{budget} across {len(measured)} input(s) "
+          f"(chars/{divisor} estimate).")
+    if budget_only:
+        print(f"socom context emit: WARNING — input_tokens {total} > budget "
+              f"{budget}; `socom context verify` will FAIL this envelope until you "
+              f"run `socom context compress {rel}`.", file=sys.stderr)
+
+
 def cmd_context(args):
-    subs = ("verify", "show", "measure", "compress")
+    subs = ("verify", "show", "measure", "compress", "emit")
     if not args or args[0] not in subs:
-        sys.exit("usage: socom context <verify|show|measure|compress> "
+        sys.exit("usage: socom context <verify|show|measure|compress|emit> "
                  "[<envelope.xml|dir>]  (verify defaults to .socom/context; "
-                 "measure/compress need one envelope file)")
+                 "measure/compress need one envelope file; emit takes flags — "
+                 "--promise --seat --budget --input ... --id --out)")
     sub = args[0]
     root = repo_root()
+
+    if sub == "emit":
+        return _cmd_context_emit(root, args[1:])
+
     raw = args[1] if len(args) > 1 else f"{SOCOM_DIR}/context"
     target = Path(raw)
     if not target.is_absolute():
