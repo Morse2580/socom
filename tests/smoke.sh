@@ -366,6 +366,30 @@ echo "$RECE" | grep -qi "no auto check ran" && [ "$REC_BEFORE" = "$REC_AFTER" ] 
   || bad "zero-check record not withheld (before=$REC_BEFORE after=$REC_AFTER)"
 "$SOCOM" cycle >/dev/null 2>&1; check "cycle consumes the verify-recorded rows (round-trip)" 0 $?
 
+# 10c-ter. ledger concurrency — the flock (IH-4). _append_ledger_row does
+# read -> compute-attempt -> append; without an exclusive lock two seats
+# recording at once (multi-agent is the stated goal) read the same tail, assign
+# a DUPLICATE attempt (breaking cycle's pass@1/pass@k), and can interleave a torn
+# row. The flock serializes the critical section. 20 concurrent records against
+# ONE promise/contract must yield exactly 20 rows, attempts 1..20 unique, all
+# schema-valid. Proven red->green: the unlocked writer dups attempts, the locked
+# one does not.
+rm -f .socom/ledger/runs.jsonl
+ci=1; while [ "$ci" -le 20 ]; do
+  "$SOCOM" contract verify .socom/promises/contract-rec.xml --record >/dev/null 2>&1 &
+  ci=$((ci+1))
+done
+wait
+LCN=$(wc -l < .socom/ledger/runs.jsonl 2>/dev/null | tr -d ' ')
+[ "$LCN" = "20" ] && ok "ledger flock: 20 concurrent records -> exactly 20 rows (no lost write)" \
+                  || bad "ledger flock: expected 20 rows, got $LCN (lost/interleaved write)"
+python3 -c "import json,sys; a=sorted(json.loads(l)['attempt'] for l in open('.socom/ledger/runs.jsonl') if l.strip()); sys.exit(0 if a==list(range(1,21)) else 1)" \
+  && ok "ledger flock: attempts 1..20 unique + contiguous (no duplicate attempt)" \
+  || bad "ledger flock: attempts not contiguous-unique under concurrency (race)"
+python3 "$ROOT/tests/ledgercheck.py" .socom/ledger/runs.jsonl >/dev/null 2>&1 \
+  && ok "ledger flock: every concurrent row schema-valid (no torn line)" \
+  || bad "ledger flock: a row torn/invalid under concurrency"
+
 # task-completion gate records its assessment BY DEFAULT (#6f-2): the gate an
 # agent already runs to mark done fills the ledger without a manual flag — the
 # canonical "a gate assessed the promise" event. checks.fast is bound (echo

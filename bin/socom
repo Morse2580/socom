@@ -1593,18 +1593,25 @@ def _append_ledger_row(root, promise, seat, contract, summary, duration_s) -> di
     sequence have ONE source of truth (§least-common-mechanism). Callers own the
     fail-closed guards (standalone / manual-pending / no-evidence) — this writes
     unconditionally once a row is warranted."""
-    import json
+    import json, fcntl
     ledger = root / SOCOM_DIR / "ledger" / "runs.jsonl"
     ledger.parent.mkdir(parents=True, exist_ok=True)
-    rows = []
-    if ledger.exists():
-        for ln in ledger.read_text().splitlines():
-            if ln.strip():
-                rows.append(json.loads(ln))
-    attempt = _next_attempt(rows, promise, contract)
-    row = _ledger_row(promise, seat, contract, summary, attempt, _now_iso(),
-                      duration_s)
-    with ledger.open("a") as fh:
+    # Serialize the whole read -> compute-attempt -> append under one exclusive
+    # lock: without it, two seats recording concurrently (multi-agent is the
+    # goal) read the same tail, both compute attempt=K+1, and both write it —
+    # duplicate attempts break cycle's pass@1/pass@k, and interleaved writes can
+    # tear a row. 'a+' creates the file if absent and keeps one fd for both the
+    # read (seek 0) and the append (O_APPEND ignores seek, always tail). flock is
+    # POSIX advisory and same-host — honored because this is the SINGLE writer
+    # for runs.jsonl (all writers cooperate); the ledger is a same-host artifact,
+    # so cross-host/NFS locking is out of scope (unix only: darwin/linux).
+    with ledger.open("a+") as fh:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        fh.seek(0)
+        rows = [json.loads(ln) for ln in fh.read().splitlines() if ln.strip()]
+        attempt = _next_attempt(rows, promise, contract)
+        row = _ledger_row(promise, seat, contract, summary, attempt, _now_iso(),
+                          duration_s)
         fh.write(json.dumps(row) + "\n")
     return row
 
