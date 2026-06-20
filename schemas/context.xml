@@ -60,6 +60,16 @@
       Measured input context must not exceed the declared budget — an
       over-budget work unit is the ungoverned-context failure CTX exists to catch.
     </invariant>
+    <!-- Lower bounds. rhs is an int LITERAL (not a field), evaluated by the same
+         invariant machinery: a negative token count is nonsense and, left
+         unchecked, a negative input_tokens trivially satisfies input <= budget
+         (a false PASS the CTX-1 reviewer flagged). -->
+    <invariant lhs="input_tokens" op="&gt;=" rhs="0">
+      Measured input context cannot be negative.
+    </invariant>
+    <invariant lhs="budget_tokens" op="&gt;=" rhs="0">
+      A declared budget cannot be negative.
+    </invariant>
   </invariants>
 
   <!-- Measurement contract (CTX-2) — how input_tokens is counted, declared in

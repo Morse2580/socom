@@ -1789,10 +1789,14 @@ _INVARIANT_OPS = {"<=": lambda a, b: a <= b, "<": lambda a, b: a < b,
 
 
 def _load_context_contract(schema=CONTEXT_SCHEMA):
-    """Parse schemas/context.xml -> (required, int_fields, invariants, divisor).
-    The <field> + <invariant> + <measurement> elements ARE the contract; nothing
-    is hardcoded (single source, §least-common-mechanism / open-design)."""
+    """Parse schemas/context.xml -> (required, int_fields, invariants, divisor,
+    version). The <field> + <invariant> + <measurement> elements AND the schema's
+    own socom= version ARE the contract; nothing is hardcoded (single source,
+    §least-common-mechanism / open-design). An invariant rhs may name an int field
+    OR be an int literal (so a lower bound like input_tokens >= 0 reuses the same
+    mechanism rather than a bespoke check)."""
     root = ET.parse(schema).getroot()
+    version = root.get("socom")  # the contract version an envelope must declare
     required = [f.get("name") for f in root.find("fields").findall("field")
                 if f.get("required") == "true"]
     ints = [f.get("name") for f in root.find("fields").findall("field")
@@ -1814,7 +1818,7 @@ def _load_context_contract(schema=CONTEXT_SCHEMA):
         sys.exit("socom context: schemas/context.xml has no valid "
                  "<measurement divisor=\"N\"> (positive int) — cannot measure "
                  "honestly (R6: degrade loudly).")
-    return required, ints, invariants, divisor
+    return required, ints, invariants, divisor, version
 
 
 def _estimate_tokens(text, divisor):
@@ -1851,13 +1855,15 @@ def _measure_ref(repo, ref, divisor):
     return None if text is None else _estimate_tokens(text, divisor)
 
 
-def _context_violations(path, required, ints, invariants, repo=None, divisor=4):
+def _context_violations(path, required, ints, invariants, repo=None, divisor=4,
+                        version=None):
     """Return a list of violation strings for one envelope file (empty = ok).
     When repo is given and the envelope carries <inputs>, the CTX-2 honesty check
     RE-MEASURES every ref from the live artifact: each declared <input tokens> and
     the top-level input_tokens must equal the re-measure, or the gate fails — so a
     hand-authored input_tokens cannot pass. repo=None skips the re-measure (used by
-    schema-only unit checks); the verify gate always passes it."""
+    schema-only unit checks); the verify gate always passes it. When version is
+    given, the envelope's socom= must match it (the contract it was written for)."""
     try:
         root = ET.parse(path).getroot()
     except (ET.ParseError, OSError) as e:
@@ -1865,6 +1871,11 @@ def _context_violations(path, required, ints, invariants, repo=None, divisor=4):
     if root.tag != "context":
         return [f"root element is <{root.tag}>, expected <context>"]
     bad, vals = [], {}
+    # Contract version: an envelope written for a different socom= than the schema
+    # declares cannot be trusted against this contract — reject rather than guess.
+    if version is not None and root.get("socom") != version:
+        bad.append(f"socom={root.get('socom')!r} does not match the schema "
+                   f"contract version {version!r}")
     for key in required:
         if root.get(key) is None:
             bad.append(f"missing required attribute {key!r}")
@@ -1884,10 +1895,26 @@ def _context_violations(path, required, ints, invariants, repo=None, divisor=4):
             bad.append(f"schema invariant op {op!r} is not recognized "
                        f"({lhs} {op} {rhs}) — cannot evaluate, failing closed")
             continue
-        if lhs in vals and rhs in vals \
-                and not _INVARIANT_OPS[op](vals[lhs], vals[rhs]):
+        if lhs not in vals:
+            continue  # lhs absent/non-int already reported; nothing to compare
+        # rhs is a populated int field, a declared-but-missing int field (skip —
+        # already reported), or an int literal (e.g. a >= 0 lower bound). Anything
+        # else is an unevaluable schema rule -> fail closed (degrade loudly, R6).
+        if rhs in vals:
+            rval = vals[rhs]
+        elif rhs in ints:
+            continue
+        else:
+            try:
+                rval = int(rhs)
+            except (TypeError, ValueError):
+                bad.append(f"schema invariant rhs {rhs!r} is neither an int field "
+                           f"nor an int literal ({lhs} {op} {rhs}) — cannot "
+                           f"evaluate, failing closed")
+                continue
+        if not _INVARIANT_OPS[op](vals[lhs], rval):
             bad.append(f"invariant violated: {lhs}({vals[lhs]}) {op} "
-                       f"{rhs}({vals[rhs]}) is false")
+                       f"{rhs}({rval}) is false")
     # CTX-2 honesty check: re-measure the <inputs> refs from the live artifacts and
     # require declared == measured, per-input AND in total. Only when the envelope
     # carries <inputs> (a CTX-1 envelope omits it and keeps the declared<=budget
@@ -2009,7 +2036,7 @@ def _cmd_context_emit(root, args):
     over-budget reality defeats the failure CTX exists to catch (separation of
     privilege; verify judges, compress remediates). A schema-invalid self-build
     (a tool bug, should never happen) exits nonzero — degrade loudly (R6)."""
-    required, ints, invariants, divisor = _load_context_contract()
+    required, ints, invariants, divisor, version = _load_context_contract()
     f = _emit_flags(args)
     seat = f.get("seat") or os.environ.get("SOCOM_SEAT")
     missing = [n for n, v in (("--promise", f.get("promise")),
@@ -2071,7 +2098,7 @@ def _cmd_context_emit(root, args):
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_name(out.name + ".tmp")
     _write_envelope(ET.ElementTree(el), tmp)
-    viols = _context_violations(tmp, required, ints, invariants, root, divisor)
+    viols = _context_violations(tmp, required, ints, invariants, root, divisor, version)
     budget_only = viols and all("invariant violated" in v for v in viols)
     if viols and not budget_only:
         tmp.unlink(missing_ok=True)
@@ -2132,7 +2159,7 @@ def cmd_context(args):
         # Writer: refresh per-input + total token counts FROM the live refs so the
         # author can declare them honestly. Mutates the envelope. No <inputs> ->
         # nothing to measure (a CTX-1 envelope declares input_tokens by hand).
-        _, _, _, divisor = _load_context_contract()
+        _, _, _, divisor, _ = _load_context_contract()
         if not target.is_file():
             sys.exit(f"socom context measure: need one envelope file, not '{raw}' (R6).")
         try:
@@ -2165,7 +2192,7 @@ def cmd_context(args):
         # Remediation: drop the lowest-relevance inputs until the re-measured total
         # fits budget_tokens. Relevance = l0_score overlap vs the promise goal;
         # falls back to drop-largest when the promise is unresolvable. Mutates.
-        _, _, _, divisor = _load_context_contract()
+        _, _, _, divisor, _ = _load_context_contract()
         if not target.is_file():
             sys.exit(f"socom context compress: need one envelope file, not '{raw}' (R6).")
         try:
@@ -2229,7 +2256,7 @@ def cmd_context(args):
 
     # verify: validate every targeted envelope against schemas/context.xml, and
     # (CTX-2) re-measure any <inputs> from the live artifacts — pure read-only gate.
-    required, ints, invariants, divisor = _load_context_contract()
+    required, ints, invariants, divisor, version = _load_context_contract()
     files = _context_targets(target)
     if not files:
         print(f"socom context verify: no envelopes at {raw} — nothing to "
@@ -2237,7 +2264,7 @@ def cmd_context(args):
         return
     bad = 0
     for f in files:
-        viols = _context_violations(f, required, ints, invariants, root, divisor)
+        viols = _context_violations(f, required, ints, invariants, root, divisor, version)
         if viols:
             bad += 1
             print(f"  {f.name} · FAIL")
