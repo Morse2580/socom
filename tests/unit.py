@@ -733,6 +733,82 @@ check("_forge_operating_envelope: the tightest budget still keeps the top lesson
 check("_forge_operating_envelope: a trimmed envelope says what it dropped",
       "trimmed to the envelope budget" in _small)
 
+# ── quickstart first-run on-ramp ─────────────────────────────────────────────
+# _detect_checks: the repo test-command heuristic (priority Makefile>npm>pytest>cargo>go).
+_qr = Path(_tf.mkdtemp())
+eq("_detect_checks: empty repo -> None (degrade loudly, never invent)",
+   socom._detect_checks(_qr), None)
+(_qr / "go.mod").write_text("module x\n")
+eq("_detect_checks: go.mod -> go test", socom._detect_checks(_qr), "go test ./...")
+(_qr / "Cargo.toml").write_text("[package]\n")
+eq("_detect_checks: Cargo.toml outranks go.mod", socom._detect_checks(_qr), "cargo test")
+(_qr / "pyproject.toml").write_text("[project]\n")
+eq("_detect_checks: a pytest signal outranks cargo", socom._detect_checks(_qr), "pytest -q")
+(_qr / "package.json").write_text('{"scripts":{"test":"jest"}}')
+eq("_detect_checks: package.json scripts.test outranks pytest",
+   socom._detect_checks(_qr), "npm test")
+(_qr / "Makefile").write_text("build:\n\tcc\ntest:\n\tpytest\n")
+eq("_detect_checks: a Makefile `test:` target wins (most explicit)",
+   socom._detect_checks(_qr), "make test")
+# a package.json without a test script is not a hit on the npm rung
+_qr2 = Path(_tf.mkdtemp())
+(_qr2 / "package.json").write_text('{"name":"x"}')
+eq("_detect_checks: package.json with no scripts.test is not an npm hit",
+   socom._detect_checks(_qr2), None)
+# a Makefile without a `test:` target is not a hit on the make rung
+_qr3 = Path(_tf.mkdtemp())
+(_qr3 / "Makefile").write_text("build:\n\tcc\n")
+eq("_detect_checks: a Makefile with no test target is not a make hit",
+   socom._detect_checks(_qr3), None)
+
+# _bind_checks: writes the detected command into the placeholders, preserving comments,
+# and never clobbers a real binding.
+_qb = Path(_tf.mkdtemp())
+(_qb / "socom.yaml").write_text(
+    'checks:\n  fast: "true"    # runs at task-completion\n'
+    '  medium: "true"\n  full: "true"\n')
+check("_bind_checks: binds when all three are placeholders",
+      socom._bind_checks(_qb, "pytest -q") is True)
+_bound = (_qb / "socom.yaml").read_text()
+check("_bind_checks: wrote the command into fast/medium/full",
+      _bound.count('"pytest -q"') == 3)
+check("_bind_checks: preserved the trailing comment (no yaml round-trip)",
+      "# runs at task-completion" in _bound)
+check("_bind_checks: a second bind is a no-op (already bound, no clobber)",
+      socom._bind_checks(_qb, "make test") is False
+      and '"make test"' not in (_qb / "socom.yaml").read_text())
+# a partially-bound config is also left alone (never clobber a real value)
+_qb2 = Path(_tf.mkdtemp())
+(_qb2 / "socom.yaml").write_text('checks:\n  fast: "make real"\n  medium: "true"\n  full: "true"\n')
+check("_bind_checks: any real binding present -> leave all as-is",
+      socom._bind_checks(_qb2, "pytest -q") is False)
+# section-scoped: a `fast:` key under a DIFFERENT section is never touched (reviewer C1)
+_qb3 = Path(_tf.mkdtemp())
+(_qb3 / "socom.yaml").write_text(
+    'checks:\n  fast: "true"\n  medium: "true"\n  full: "true"\n'
+    'tiers:\n  fast: "true"   # NOT a check — must survive untouched\n')
+check("_bind_checks: binds only within the checks block",
+      socom._bind_checks(_qb3, "pytest -q") is True)
+_b3 = (_qb3 / "socom.yaml").read_text()
+check("_bind_checks: the sibling section's fast: is left untouched (section-scoped)",
+      _b3.count('"pytest -q"') == 3 and "NOT a check — must survive untouched" in _b3)
+# unquoted YAML `true` (bool) is a placeholder AND gets really rewritten (reviewer C2 —
+# no false 'bound' report: returns True only when it actually writes the command)
+_qb4 = Path(_tf.mkdtemp())
+(_qb4 / "socom.yaml").write_text('checks:\n  fast: true\n  medium: true\n  full: true\n')
+check("_bind_checks: unquoted bool `true` is recognized and actually rewritten",
+      socom._bind_checks(_qb4, "go test ./...") is True
+      and (_qb4 / "socom.yaml").read_text().count('"go test ./..."') == 3
+      and "fast: true\n" not in (_qb4 / "socom.yaml").read_text())
+
+# _probe_count: 0 when absent, parses the planted probes.yaml
+_qp = Path(_tf.mkdtemp())
+eq("_probe_count: no probes file -> 0", socom._probe_count(_qp), 0)
+(_qp / ".socom" / "index").mkdir(parents=True)
+(_qp / ".socom" / "index" / "probes.yaml").write_text(
+    "probes:\n  - query: a\n    expect: x\n  - query: b\n    expect: y\n")
+eq("_probe_count: counts the probes on file", socom._probe_count(_qp), 2)
+
 # ── summary ──────────────────────────────────────────────────────────────────
 print(f"unit: {_PASS} passed, {_FAIL} failed")
 raise SystemExit(1 if _FAIL else 0)
