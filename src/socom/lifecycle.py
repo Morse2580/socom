@@ -688,6 +688,14 @@ def cmd_greet(args):
         n = len(list(mem.glob("*.md")))
         if n:
             print(f"   bank: {n} memories on file — the substrate remembers")
+    # value pointer: shown once any signal exists, so the "why" is one command away.
+    sig = [root / SOCOM_DIR / "gates" / "breaches.log",
+           root / SOCOM_DIR / "ledger" / "runs.jsonl",
+           root / SOCOM_DIR / "index" / "chunks.jsonl"]
+    if any(p.exists() and p.read_text().strip() for p in sig) \
+            or list((root / SOCOM_DIR / "context").glob("*.xml")) \
+            or list((root / SOCOM_DIR / "claims").glob("*.claim")):
+        print("   value: what the substrate has bought you — `socom value`")
     print()
 
 
