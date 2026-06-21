@@ -694,6 +694,28 @@ for _bad in (0, -5, "abc", 1.5, True):
     except SystemExit:
         check(f"_seat_budget: invalid {_bad!r} exits loud", True)
 
+# ── context emit per-seat budget default (slice 8) ───────────────────────────
+# _seat_context_budget is the SINGLE validator both spawn and emit share. Unlike
+# _seat_budget it returns None (not the default) when the field is absent, so emit
+# can refuse to invent a recorded budget while spawn falls back to its advisory default.
+eq("_seat_context_budget: a positive int is returned validated",
+   socom._seat_context_budget({"context_budget": 600}, "reviewer"), 600)
+eq("_seat_context_budget: absent -> None (NOT the default — emit distinguishes them)",
+   socom._seat_context_budget({}, "builder"), None)
+eq("_seat_context_budget: explicit YAML null -> None (unset, like absent)",
+   socom._seat_context_budget({"context_budget": None}, "s"), None)
+for _bad in (0, -5, "abc", 1.5, True):
+    try:
+        socom._seat_context_budget({"context_budget": _bad}, "s")
+        check(f"_seat_context_budget: invalid {_bad!r} exits loud", False)
+    except SystemExit:
+        check(f"_seat_context_budget: invalid {_bad!r} exits loud", True)
+# _seat_budget delegates to it: same validation, but None -> the advisory default.
+eq("_seat_budget delegates to _seat_context_budget (declared value passes through)",
+   socom._seat_budget({"context_budget": 42}, "s"), 42)
+eq("_seat_budget: None from the validator -> the advisory default (spawn behavior)",
+   socom._seat_budget({}, "s"), socom.ENVELOPE_DEFAULT_BUDGET_TOKENS)
+
 # the budget actually bounds the envelope's lessons subsection (canon resolves from
 # the embedded resources; lessons from the temp root).
 _broot = Path(_tf.mkdtemp())

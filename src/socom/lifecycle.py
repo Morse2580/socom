@@ -67,7 +67,7 @@ def cmd_init(args):
               full: "true"           # pre-push + CI (red band)
             ci:
               status: "echo 'bind me: cache-free pipeline state query'"
-            seats:                   # context_budget (tokens, optional) caps a seat's spawn brief
+            seats:                   # context_budget (tokens, optional) caps a seat's spawn brief + defaults `context emit --budget`
               builder:  {{ runtime: claude-code, model: default }}
               reviewer: {{ runtime: claude-code, model: different-family-preferred, context_budget: 600 }}
             """))
