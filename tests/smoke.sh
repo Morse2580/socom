@@ -229,6 +229,17 @@ rm .socom/promises/retired-thing.xml && "$SOCOM" embed . >/dev/null
 
 # 10c. cycle — the eval rollup (ledger -> scored cycle: pass@1/pass@k by seat)
 "$SOCOM" cycle >/dev/null 2>&1; check "cycle degrades loudly without ledger" 1 $?
+# value (readout) — C1: never errors, even on a bare substrate (no ledger yet).
+"$SOCOM" value >/dev/null 2>&1; check "value exits 0 on a bare substrate (readout, not a gate)" 0 $?
+"$SOCOM" value | grep -q "runs scored    not yet measured" \
+  && ok "value degrades loudly without a ledger (not a silent zero)" \
+  || bad "value did not report 'not yet measured' for runs"
+# value C1 hardening (regression): a row that is valid JSON but missing the
+# `promise` key (manual edit / partial producer) must NOT crash the readout.
+mkdir -p .socom/ledger
+printf '{"ts":"2026-06-10","seat":"builder","verdict":"kept","attempt":1}\n' > .socom/ledger/runs.jsonl
+"$SOCOM" value >/dev/null 2>&1; check "value tolerates a schema-incomplete ledger row (C1, no crash)" 0 $?
+rm -rf .socom/ledger
 mkdir -p .socom/ledger
 cat > .socom/ledger/runs.jsonl <<EOF
 {"ts":"2026-06-10T01:00:00Z","seat":"builder","promise":"P-A","contract":"C-A","gate_band":"fast","exit_code":0,"duration_s":100,"attempt":1,"verdict":"kept"}
@@ -247,6 +258,14 @@ echo "$CY" | grep -Eq "seat reviewer .*pass@1 0/1 .*pass@k 0/1" \
   && ok "cycle scores reviewer seat (0/1, 0/1)" || bad "reviewer seat numbers wrong"
 echo "$CY" | grep -q "P-B" && echo "$CY" | grep -q "P-C" \
   && ok "cycle surfaces hotspots (P-B, P-C)" || bad "hotspots missing"
+# value C2: with a ledger present, value's pass@1 routes through the SAME
+# _cycle_rollup as cycle — both must read pass@1 33.3% (1 of 3 promises). No
+# parallel math: if these ever disagree, one of them is lying.
+VAL="$("$SOCOM" value)"
+echo "$VAL" | grep -Eq "runs scored    pass@1 33.3% .* 3 promises, 4 runs" \
+  && ok "value pass@1 matches cycle (33.3%, via shared _cycle_rollup)" \
+  || bad "value runs line wrong:
+$VAL"
 # gate tie-in, BOTH directions (contract): bind checks.eval, flip the threshold
 "$SOCOM" gate eval >/dev/null 2>&1; check "gate eval unknown before binding" 1 $?
 python3 - "$SOCOM" <<'PYEOF'

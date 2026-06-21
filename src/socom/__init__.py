@@ -35,6 +35,9 @@ Commands:
            declared input_tokens match a re-measure of the <inputs> refs | show |
            measure (write counts from the live refs) | compress (drop the
            lowest-relevance inputs until within budget)
+  value    first-run value readout: gate catches, scored runs, context
+           adherence, claims, knowledge, adoption rung — signals already on
+           disk, no new instrumentation (the why, made legible)
   greet    adoption-ladder greeting — where you are, what's next
   statusline Claude Code statusLine: adoption bar + context-consumption meter
            (reads the host's statusline JSON on stdin; GSD-style ctx meter)
