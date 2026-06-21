@@ -348,6 +348,39 @@ def main():
         check("a loud budget error writes no run record",
               not list((repo / ".socom" / "runs").glob("R-*.json")))
 
+        # ── per-seat trust weighting (slice 7): equal relevance -> trusted seat first ──
+        # two eligible dead runs of EQUAL relevance under different seats; a ledger makes
+        # builder mostly-kept and reviewer mostly-broken. The LOW-trust seat gets the
+        # alphabetically-FIRST promise id, so ranking the builder run first proves TRUST
+        # reordered it (not the run-id tie-break).
+        for f in (repo / ".socom" / "runs").glob("R-*"):
+            f.unlink()
+        for pid, seat in (("P-TRA", "reviewer"), ("P-TRZ", "builder")):
+            (proms / f"{pid}.xml").write_text(
+                f'<promise id="{pid}" domain="cli">'
+                f'<promiser seat="{seat}" participant="x"/>'
+                f'<intent><verbatim>flock the ledger writers serialize</verbatim></intent>'
+                f'<contract ref="C-{pid}" state="ratified"><goal>flock ledger writers</goal>'
+                f'</contract></promise>')
+            (repo / ".socom" / "runs" / f"R-{pid}.json").write_text(json.dumps({
+                "run_id": f"R-{pid}", "seat": seat, "promise": pid,
+                "contract": f"C-{pid}", "runtime": "claude-code", "model": "default",
+                "status": "dead", "ts_started": "2026-06-21T12:00:00+00:00",
+                "pid": None, "brief_path": "b",
+                "promise_path": f".socom/promises/{pid}.xml",
+                "ts_ended": "2026-06-21T12:01:00+00:00", "exit_code": 137}))
+        ledger = repo / ".socom" / "ledger"
+        ledger.mkdir(exist_ok=True)
+        rows = ([{"promise": "hist-b", "seat": "builder", "verdict": "kept", "attempt": 1}] * 3
+                + [{"promise": "hist-r", "seat": "reviewer", "verdict": "broken", "attempt": 1}] * 3)
+        (ledger / "runs.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+        rc, out = run(["monarch", "triage", "flock"], env, repo)
+        check("triage exits 0 with a ledger present", rc == 0)
+        check("triage shows a trust column and names trust in the basis",
+              "trust" in out and "trust" in out.splitlines()[0])
+        check("equal relevance -> the higher-trust seat's run ranks first (trust beats run-id)",
+              "P-TRZ" in out and "P-TRA" in out and out.index("P-TRZ") < out.index("P-TRA"))
+
     finally:
         if killed_pid:
             try:
