@@ -3741,35 +3741,70 @@ def _active_lessons_text(root: Path) -> str:
     return " ".join(out)
 
 
+def _seat_trust(ledger_rows: list) -> dict:
+    """Per-seat trust = the LAPLACE-SMOOTHED kept-rate over the ledger's verdicts:
+    (kept + 1) / (kept + broken + 2) (the rule of succession). Small samples are damped
+    (one kept of one -> 2/3, not 1.0); a seat absent here resolves to the 1/2 prior via
+    `_trust_of`. The denominator counts ONLY kept/broken verdicts (the verdicts of record);
+    any other verdict on a torn/hand-edited row is ignored, never counted as a failure — so
+    a stray value can't silently penalize a seat below the neutral prior. Reuses the ledger
+    — no new store (slice 7)."""
+    kept, seen = {}, {}  # seen = kept + broken only; the contract denominator
+    for r in ledger_rows:
+        s, v = r.get("seat"), r.get("verdict")
+        if not s or v not in ("kept", "broken"):
+            continue
+        seen[s] = seen.get(s, 0) + 1
+        if v == "kept":
+            kept[s] = kept.get(s, 0) + 1
+    return {s: (kept.get(s, 0) + 1) / (seen[s] + 2) for s in seen}
+
+
+def _trust_of(trust_map: dict, seat) -> float:
+    """The seat's trust, or the neutral 1/2 no-history prior (unproven is not failed —
+    the Laplace limit of zero verdicts)."""
+    return trust_map.get(seat, 0.5)
+
+
 def _triage_rank(root: Path, eligible: list, focus=None):
-    """Rank the eligible bucket by recovery-worth, highest first. Worth = relevance of
-    each promise's meaningful intent to a FOCUS (an explicit query, else the active-lesson
-    corpus), computed by REUSING l0_score (the query keyword floor — no new scorer). The
-    tie-break (fewer attempts, more-recent death, run-id) is applied as a STABLE pre-sort,
-    so equal-worth promises keep that order. Degrades LOUDLY: when no candidate overlaps
-    the focus at all, returns the tie-break order with a 'recency' basis rather than a
-    silently arbitrary one. Returns (ranked_entries_with_worth, basis_string)."""
+    """Rank the eligible bucket by recovery-worth, highest first — a COMPOSITE of
+    relevance (PRIMARY) and per-seat trust (SECONDARY), then the tie-break. Relevance =
+    overlap of each promise's meaningful intent with a FOCUS (explicit query, else the
+    active-lesson corpus) — the SAME l0 keyword-overlap count the query floor uses (slice
+    5). Trust = the Laplace-smoothed kept-rate of the run's SEAT (slice 7): a likely-to-
+    succeed seat ranks higher, but only among EQUALLY-relevant runs (relevance stays
+    dominant). The sort key is (−worth, −trust, then the tie-break pre-sort: fewer attempts,
+    more-recent death, run-id) — a single stable sort over a tie-break-ordered list, so
+    equal (worth, trust) keep the tie-break order, and trust becomes the effective primary
+    only when no relevance signal exists. Returns (ranked_entries_with_worth_and_trust,
+    basis_string)."""
     # tie-break pre-sort: least-significant key first (stable sort composes them).
     pre = sorted(eligible, key=lambda e: e["dead"].get("run_id", ""))
     pre = sorted(pre, key=lambda e: e["dead"].get("ts_started", ""), reverse=True)
     pre = sorted(pre, key=lambda e: e["attempts"])
     if focus:
-        focus_text, basis = focus, f"focus: {focus}"
+        focus_text, relbasis = focus, f"focus: {focus}"
     else:
-        focus_text, basis = _active_lessons_text(root), "earned lessons"
+        focus_text, relbasis = _active_lessons_text(root), "earned lessons"
     qwords = set(re.findall(r"\w+", (focus_text or "").lower()))
+    trust = _seat_trust(_read_ledger(root))
     enriched = []
     for e in pre:
         itext = _run_intent(root, e["dead"])
         worth = len(qwords & set(re.findall(r"\w+", itext.lower()))) if qwords else 0
-        enriched.append({**e, "worth": worth, "_intent": itext})
-    if not any(x["worth"] for x in enriched):
-        # no relevance signal — fall back to the tie-break order, and SAY so (R6).
-        return enriched, "recency (no relevance signal)"
-    ranked_ids = l0_score(focus_text, [{"id": x["promise"], "text": x["_intent"]}
-                                       for x in enriched], len(enriched))
-    by = {x["promise"]: x for x in enriched}
-    return [by[i] for i in ranked_ids], basis
+        enriched.append({**e, "worth": worth, "_intent": itext,
+                         "trust": _trust_of(trust, e["dead"].get("seat"))})
+    # composite, relevance PRIMARY then trust; the pre-sort tie-break survives equal keys.
+    ranked = sorted(enriched, key=lambda x: (-x["worth"], -x["trust"]))
+    relevance_active = any(x["worth"] for x in ranked)
+    trust_active = len({round(x["trust"], 6) for x in ranked}) > 1
+    if relevance_active:
+        basis = relbasis + (" + seat trust" if trust_active else "")
+    elif trust_active:
+        basis = "seat trust (no relevance signal)"
+    else:
+        basis = "recency (no relevance or trust signal)"
+    return ranked, basis
 
 
 def _focus_arg(args: list):
@@ -3816,10 +3851,13 @@ def _cmd_triage(root: Path, args: list):
     print(f"socom monarch triage: {len(ranked)} eligible run(s) ranked by "
           f"recovery-worth [{basis}].")
     now = datetime.now(timezone.utc)
-    print(f"  {'#':<3} {'promise':<16} {'worth':<6} {'attempts':<9} {'age':<7} run-id")
+    print(f"  {'#':<3} {'promise':<16} {'worth':<6} {'trust':<6} {'seat':<10} "
+          f"{'attempts':<9} {'age':<7} run-id")
     for n, x in enumerate(ranked, 1):
         d = x["dead"]
-        print(f"  {n:<3} {x['promise']:<16} {x['worth']:<6} "
+        trust = f"{x['trust']:.2f}"
+        print(f"  {n:<3} {x['promise']:<16} {x['worth']:<6} {trust:<6} "
+              f"{d.get('seat', ''):<10} "
               f"{str(x['attempts']) + '/' + str(RECOVER_MAX_ATTEMPTS):<9} "
               f"{_uptime(d, now):<7} {d.get('run_id', '')}")
     print("  recover in this order with `socom monarch recover"

@@ -622,6 +622,64 @@ try:
 except SystemExit:
     check("_parse_top: non-positive exits loud", True)
 
+# ── per-seat trust weighting of recovery-worth (slice 7) ─────────────────────
+_trows = ([{"promise": "h1", "seat": "builder", "verdict": "kept"}] * 3
+          + [{"promise": "h2", "seat": "reviewer", "verdict": "broken"}] * 3)
+_tmap = socom._seat_trust(_trows)
+eq("_seat_trust: a mostly-kept seat -> Laplace rate (3+1)/(3+2)", round(_tmap["builder"], 3), 0.8)
+eq("_seat_trust: a mostly-broken seat -> (0+1)/(3+2)", round(_tmap["reviewer"], 3), 0.2)
+eq("_seat_trust: one kept of one is damped to 2/3 (small sample)",
+   round(socom._seat_trust([{"seat": "x", "verdict": "kept"}])["x"], 3), 0.667)
+eq("_trust_of: a seat with no history -> the neutral 1/2 prior",
+   socom._trust_of(_tmap, "neverseen"), 0.5)
+eq("_seat_trust: a non-kept/broken verdict is ignored, not counted as failure",
+   socom._seat_trust([{"seat": "z", "verdict": "kept"},
+                      {"seat": "z", "verdict": "amber"}]).get("z"),
+   socom._seat_trust([{"seat": "z", "verdict": "kept"}])["z"])
+check("_seat_trust: a seat with ONLY non-kept/broken verdicts is absent (-> 1/2 prior)",
+      "q" not in socom._seat_trust([{"seat": "q", "verdict": "skipped"}]))
+
+# composite ranking: relevance PRIMARY, trust SECONDARY (slice 7)
+_xroot = Path(_tf.mkdtemp())
+(_xroot / ".socom" / "runs").mkdir(parents=True)
+(_xroot / ".socom" / "promises").mkdir(parents=True)
+(_xroot / ".socom" / "ledger").mkdir(parents=True)
+# NOTE: the LOW-trust seat (reviewer) gets the alphabetically-FIRST promise id, so a
+# pass that ranks the builder run first proves TRUST reordered it — not the run-id tie-break.
+for _pid, _seat, _intent in (("PT-A", "reviewer", "alpha alpha"),
+                             ("PT-B", "builder", "beta beta")):
+    (_xroot / ".socom" / "promises" / f"{_pid}.xml").write_text(
+        f'<promise id="{_pid}" domain="cli"><intent><verbatim>{_intent}</verbatim></intent>'
+        f'<contract ref="C"><goal>{_intent}</goal></contract></promise>')
+    (_xroot / ".socom" / "runs" / f"R-{_pid}.json").write_text(_json.dumps({
+        "run_id": f"R-{_pid}", "seat": _seat, "promise": _pid, "contract": "C",
+        "runtime": "claude-code", "model": "default", "status": "dead",
+        "ts_started": _mnow.isoformat(), "pid": None, "brief_path": "b",
+        "promise_path": f".socom/promises/{_pid}.xml", "ts_ended": None, "exit_code": 137}))
+# builder mostly-kept, reviewer mostly-broken (for OTHER promises -> PT-* stay unkept)
+(_xroot / ".socom" / "ledger" / "runs.jsonl").write_text("\n".join(_json.dumps(r) for r in _trows) + "\n")
+_xelig, _ = socom.recoverable(_xroot)
+eq("trust fixture: both runs are eligible", {e["promise"] for e in _xelig}, {"PT-A", "PT-B"})
+# equal relevance (focus hits both once) -> the higher-trust seat (builder/PT-B) ranks first,
+# overriding the run-id tie-break that would otherwise put PT-A first
+_eqrank, _eqbasis = socom._triage_rank(_xroot, _xelig, "alpha beta")
+eq("_triage_rank: equal relevance -> higher-trust seat ranks first", _eqrank[0]["promise"], "PT-B")
+check("_triage_rank: basis names trust when it is an active signal", "trust" in _eqbasis)
+# relevance stays PRIMARY: PT-A is strictly more relevant to 'alpha' and outranks despite LOW trust
+_relrank, _ = socom._triage_rank(_xroot, _xelig, "alpha")
+eq("_triage_rank: a strictly-more-relevant run outranks a higher-trust one",
+   _relrank[0]["promise"], "PT-A")
+# no relevance signal -> trust becomes the effective primary (builder/PT-B first)
+_trrank, _trbasis = socom._triage_rank(_xroot, _xelig, "gamma")
+eq("_triage_rank: no relevance -> trust decides (builder/PT-B first)",
+   _trrank[0]["promise"], "PT-B")
+check("_triage_rank: no relevance but trust varies -> trust basis", "trust" in _trbasis)
+# slice-5 invariant: an empty ledger (uniform 1/2 trust) reproduces the relevance-only order
+(_xroot / ".socom" / "ledger" / "runs.jsonl").write_text("")
+_flat, _flatbasis = socom._triage_rank(_xroot, _xelig, "gamma")
+check("_triage_rank: empty ledger + no relevance -> recency basis (slice-5 preserved)",
+      "recency" in _flatbasis)
+
 # ── per-seat envelope budget (slice 6) ───────────────────────────────────────
 eq("_seat_budget: a positive int is used",
    socom._seat_budget({"context_budget": 600}, "reviewer"), 600)
