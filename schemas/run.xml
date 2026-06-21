@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  socom run — a launched worker, made a first-class, reapable artifact. One
+  record per SPAWN: a seat was dispatched into a promise against a contract,
+  with a brief forged in verbatim-protocol order. spawn WRITES the record;
+  monarch RECONCILES it (tally by liveness, reap a dead-but-running record into
+  a single amber breach). The split mirrors a track/supervise daemon lifecycle:
+  launch is one command, supervision another.
+
+  LOAD-BEARING BOUNDARY — a run record carries LIVENESS and PROVENANCE, never
+  JUDGMENT. spawn and the spawned worker never write a kept-or-broken verdict;
+  only the gate, contract verify with record, or a monarch reap may (verify-
+  never-claim, separation-of-privilege). status here is lifecycle, not outcome.
+
+  STORAGE — each run is its own JSON object on disk under the runs directory
+  (.socom/runs), named by the run id with a .json suffix; the forged brief sits
+  beside it with a .brief.md suffix, and a captured launch log with a .log
+  suffix when exec-launched. One file per run (not an append-only log) because a
+  run is mutated in place by reconcile: status flips materialized to running to
+  done-or-dead, and pid plus the ended fields fill in. Writes are atomic — a
+  sibling temp file is renamed over the target — and serialized across spawners
+  by one advisory lock in the runs directory, the same POSIX locking the run
+  ledger uses. In-repo and git-propagated, so a teammate sees open runs.
+
+  IDENTITY — the run id is content-addressed off the brief bytes:
+  R-YEAR-MONTHDAY-SEAT-HASH8, where HASH8 is the first 8 hex of the SHA-256 of
+  the brief. The brief excludes any timestamp or id, so identical intent yields
+  identical bytes and therefore an idempotent id: re-spawning the same promise
+  into the same seat resolves the same record. This mirrors the content-address
+  the next-session prompt id already uses.
+
+  Example record (the on-disk JSON object, one per run; keys exactly the field
+  names below):
+  {"run_id":"R-2026-0621-builder-1a2b3c4d","seat":"builder","promise":"P-2026-0612-001","contract":"C-2026-0612-001","runtime":"claude-code","model":"default","status":"running","ts_started":"2026-06-21T12:00:00+00:00","pid":48217,"brief_path":".socom/runs/R-2026-0621-builder-1a2b3c4d.brief.md","ts_ended":null,"exit_code":null}
+-->
+<run socom="0.1">
+
+  <!-- Field contract — these key names ARE the JSON keys. -->
+  <fields>
+    <field name="run_id"     type="id"       required="true">Content-addressed run identity (R-YEAR-MONTHDAY-SEAT-HASH8). Idempotent on identical brief bytes.</field>
+    <field name="seat"       type="string"   required="true">The dispatched seat — builder, reviewer, validator, scout, … (schemas/role.xml). Resolved from socom.yaml seats plus canon roles.</field>
+    <field name="promise"    type="id"       required="true">The promise the worker was launched against (P-…). The unit of work agreement.</field>
+    <field name="contract"   type="id"       required="false">The ratified contract assessed against (C-…). Empty when the promise embeds none.</field>
+    <field name="runtime"    type="string"   required="true">The bound runtime that launches the worker (claude-code today). Resolved from the seat binding in socom.yaml.</field>
+    <field name="model"      type="string"   required="false">The model for the seat — a concrete id, or the literal default to defer to the runtime, or a seat-level preference hint.</field>
+    <field name="status"     type="enum"     required="true" values="materialized|running|done|dead">Lifecycle, NOT outcome. materialized = brief plus record written, not launched; running = exec-launched with a live pid; done = exited cleanly; dead = pid gone while still marked running (a monarch reap sets this and logs one amber breach).</field>
+    <field name="ts_started" type="iso-8601" required="true">When the record was forged (UTC). Uptime is now minus this; the staleness horizon for cross-host liveness reads from it.</field>
+    <field name="pid"        type="int"      required="false">The launched child process id under exec; null for a materialized-only record. Probed for liveness with signal zero.</field>
+    <field name="brief_path" type="path"     required="true">Repo-relative path to the forged dispatch brief. The brief carries the literal user verbatim (the reviewer blind-spot defense depends on it).</field>
+    <field name="ts_ended"   type="iso-8601" required="false">When the run ended (UTC); null while open. Set by reconcile, never self-asserted by the worker.</field>
+    <field name="exit_code"  type="int"      required="false">Process exit code once ended (0 ok; nonzero error); null while open.</field>
+  </fields>
+
+  <!-- Worked example: a materialized run (printed launch command, not yet
+       launched) and the same run after exec (a live pid). The live form is the
+       JSON object above, one file per run; this is the readable contract. -->
+  <example>
+    <run run_id="R-2026-0621-builder-1a2b3c4d" seat="builder" promise="P-2026-0612-001" contract="C-2026-0612-001" runtime="claude-code" model="default" status="materialized" ts_started="2026-06-21T11:59:00+00:00" pid="" brief_path=".socom/runs/R-2026-0621-builder-1a2b3c4d.brief.md" ts_ended="" exit_code=""/>
+    <run run_id="R-2026-0621-builder-1a2b3c4d" seat="builder" promise="P-2026-0612-001" contract="C-2026-0612-001" runtime="claude-code" model="default" status="running" ts_started="2026-06-21T12:00:00+00:00" pid="48217" brief_path=".socom/runs/R-2026-0621-builder-1a2b3c4d.brief.md" ts_ended="" exit_code=""/>
+  </example>
+
+</run>

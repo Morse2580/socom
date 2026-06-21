@@ -810,6 +810,79 @@ grep -q "not socom" "$T/foreign/socom" && ok "foreign file left untouched" \
 [ -e "$BIN/socom" ] && bad "uninstall left the symlink" \
                     || ok "uninstall cleaned the symlink"
 
+# 14b. spawn — record-first worker launch (orchestration slice 1). spawn makes a
+# RUN a first-class artifact: it resolves the seat (reusing render_agent), forges
+# a dispatch brief in verbatim-protocol order, content-addresses the run-id off
+# the brief bytes (idempotent on identical intent), and writes an atomic run
+# record. Default materializes + prints the launch command; --exec background-
+# launches the bound runtime. The load-bearing boundary: spawn NEVER writes a
+# verdict (no ledger row). $R is init'd+compiled, so .socom/canon/roles.xml and
+# the builder seat exist.
+cd "$R"; rm -rf .socom/runs .socom/ledger
+mkdir -p .socom/promises
+cat > .socom/promises/spawn-p.xml <<'EOF'
+<promise id="P-SPN" state="open" domain="cli"><promiser seat="builder" participant="x"/>
+  <intent><verbatim from="human:moses" date="2026-06-21">add teh freshness widget rite now</verbatim>
+  <decoded>Record run freshness with a timestamp.</decoded></intent>
+  <contract ref="C-SPN" state="ratified"><goal>a failed run is visible before the exception</goal>
+  <check id="1" assessor="gate:task-completion"><run>true</run><expect>rows exist</expect></check>
+  <check id="2" assessor="reviewer"><expect>idempotent on retry</expect></check></contract></promise>
+EOF
+"$SOCOM" spawn >/dev/null 2>&1;                         check "spawn usage without args" 1 $?
+"$SOCOM" spawn --seat builder >/dev/null 2>&1;          check "spawn usage without --promise" 1 $?
+"$SOCOM" spawn --seat nosuch --promise .socom/promises/spawn-p.xml >/dev/null 2>&1
+check "spawn unknown seat RED (loud)" 1 $?
+"$SOCOM" spawn --seat builder --promise no-such.xml >/dev/null 2>&1
+check "spawn missing promise file RED (loud)" 1 $?
+SPN="$("$SOCOM" spawn --seat builder --promise .socom/promises/spawn-p.xml 2>&1)"; SPNR=$?
+check "spawn default materializes (rc=0)" 0 $SPNR
+echo "$SPN" | grep -q "materialized" && echo "$SPN" | grep -q 'claude -p' \
+  && ok "spawn default prints the launch command" || bad "spawn default output wrong:
+$SPN"
+RJSON="$(ls .socom/runs/R-*.json 2>/dev/null | head -1)"
+[ -n "$RJSON" ] && grep -q '"status": "materialized"' "$RJSON" \
+  && grep -q '"pid": null' "$RJSON" \
+  && ok "spawn writes a materialized run record (status, null pid)" \
+  || bad "spawn record missing/wrong: $(cat "$RJSON" 2>&1)"
+RBRIEF="$(ls .socom/runs/R-*.brief.md 2>/dev/null | head -1)"
+grep -q "add teh freshness widget rite now" "$RBRIEF" \
+  && ok "brief carries the literal user verbatim (reviewer blind-spot defense)" \
+  || bad "brief is missing the verbatim block"
+grep -q "occupy the .*builder.* seat" "$RBRIEF" && grep -q "You promise" "$RBRIEF" \
+  && ok "brief embeds the seat envelope (reused render_agent)" || bad "brief lacks the seat envelope"
+RID1="$(basename "$RJSON" .json)"
+"$SOCOM" spawn --seat builder --promise .socom/promises/spawn-p.xml >/dev/null 2>&1
+[ "$(ls .socom/runs/R-*.json | wc -l | tr -d ' ')" = "1" ] \
+  && [ -f ".socom/runs/$RID1.json" ] \
+  && ok "spawn id is content-addressed + idempotent (re-spawn resolves the same run)" \
+  || bad "spawn id not idempotent ($(ls .socom/runs/R-*.json))"
+[ ! -f .socom/ledger/runs.jsonl ] \
+  && ok "spawn writes NO verdict (verify-never-claim: no ledger row)" \
+  || bad "spawn wrote a ledger row (verdict boundary violated)"
+"$SOCOM" spawn --seat builder --promise .socom/promises/spawn-p.xml --out /tmp/socom-spawn-outside >/dev/null 2>&1
+check "spawn refuses --out outside the repo tree (containment)" 1 $?
+[ ! -e /tmp/socom-spawn-outside ] && ok "spawn made no partial write outside the tree" \
+                                  || { bad "spawn wrote outside the tree"; rm -rf /tmp/socom-spawn-outside; }
+# --exec happy path: a stub `claude` on PATH; the record flips to running with a pid.
+SPB="$T/spawnbin"; mkdir -p "$SPB"
+printf '#!/bin/sh\nsleep 0.3\n' > "$SPB/claude"; chmod +x "$SPB/claude"
+rm -rf .socom/runs
+PATH="$SPB:$PATH" "$SOCOM" spawn --seat builder --promise .socom/promises/spawn-p.xml --exec >/dev/null 2>&1
+check "spawn --exec launches (rc=0)" 0 $?
+EJSON="$(ls .socom/runs/R-*.json 2>/dev/null | head -1)"
+python3 -c "import json,sys; r=json.load(open(sys.argv[1])); sys.exit(0 if r['status']=='running' and isinstance(r['pid'],int) else 1)" "$EJSON" \
+  && ok "spawn --exec record reads running with a live pid" \
+  || bad "spawn --exec record wrong: $(cat "$EJSON" 2>&1)"
+# --exec missing binary: keep python's dir on PATH, drop claude -> loud, no record.
+rm -rf .socom/runs
+PYDIR="$(dirname "$(command -v python3)")"; mkdir -p "$T/spawn-nobin"
+PATH="$T/spawn-nobin:$PYDIR" "$SOCOM" spawn --seat builder --promise .socom/promises/spawn-p.xml --exec >/dev/null 2>&1
+check "spawn --exec with the runtime binary absent RED (loud)" 1 $?
+[ ! -f "$(ls .socom/runs/R-*.json 2>/dev/null | head -1)" ] \
+  && ok "spawn --exec writes no running record when the binary is absent" \
+  || bad "spawn --exec left a running record without launching"
+rm -rf .socom/runs .socom/ledger .socom/promises/spawn-p.xml
+
 # 15. white-box unit tests on the pure core — complements the black-box checks
 #     above. Chained here so every check that runs smoke (fast/medium/full + CI)
 #     also pins the scoring/hash/regex/template contracts. ROOT is absolute, so
