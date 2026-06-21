@@ -13,9 +13,12 @@ import textwrap
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
+from socom.context import _estimate_tokens, _load_context_contract
 from socom.core import SOCOM_DIR, _now_iso, load_cfg, repo_root, resource
 from socom.ledger import _contract_checks, _contract_el
+from socom.lesson import _lesson_attr, _lesson_files, _lesson_statement
 from socom.lifecycle import render_agent
+from socom.retrieval import l0_score
 
 # === BODY ===
 
@@ -36,6 +39,13 @@ from socom.lifecycle import render_agent
 # and serialized under the SAME fcntl idiom as the run ledger.
 
 RUNS_DIR = "runs"  # under .socom/ — the run registry monarch reconciles
+
+# The heuristic envelope's earned-lessons subsection is bounded so the brief never
+# grows without limit as the lesson corpus does — at most this many lessons, and
+# the running token estimate (reusing context.py's single-sourced divisor) caps the
+# subsection. Doctrine/residuality are fixed canon, not the unbounded-growth risk.
+ENVELOPE_MAX_LESSONS = 5
+ENVELOPE_BUDGET_TOKENS = 1200
 
 
 # runtime: value in socom.yaml -> (binary, argv-builder). The binary is what must
@@ -94,12 +104,15 @@ def _block_text(el) -> str:
     return textwrap.dedent(el.text).strip()
 
 
-def _forge_brief(verbatim, decoded, envelope, goal, checks, contract_ref) -> str:
+def _forge_brief(verbatim, decoded, envelope, goal, checks, contract_ref,
+                 op_env="") -> str:
     """Pure: assemble the dispatch brief in verbatim-protocol order (canon/session.xml,
     schemas/memory.xml): USER VERBATIM -> DECODED -> seat envelope -> contract goal +
-    checks -> pointer to constitution and gates. The literal verbatim block is
-    REQUIRED (the reviewer's blind-spot defense reads it). No timestamp or run-id
-    inside, so identical intent yields identical bytes -> an idempotent content hash."""
+    checks -> [Operating envelope] -> pointer to constitution and gates. The literal
+    verbatim block is REQUIRED (the reviewer's blind-spot defense reads it). The CORE
+    (everything but op_env) carries no timestamp or run-id, so identical intent yields
+    identical core bytes -> an idempotent content hash; op_env is appended UNHASHED so
+    the growing lesson corpus never perturbs the run-id."""
     out = ["# Dispatch brief", "",
            "## USER VERBATIM (the originating intent, human words — do not paraphrase)",
            "", "> " + (verbatim or "(no verbatim recorded)").replace("\n", "\n> "), ""]
@@ -115,12 +128,88 @@ def _forge_brief(verbatim, decoded, envelope, goal, checks, contract_ref) -> str
             how = f"run: {c['run']}" if c["auto"] else "MANUAL (assessor judges)"
             out.append(f"- [{c['id']}] {c['assessor']} — {how}; expect: {c['expect']}")
         out.append("")
+    if op_env:
+        out += [op_env.rstrip(), ""]
     out += ["## Authority",
             "Constitution and gates: see CLAUDE.md. Run `socom gate task-completion "
             "<promise>` to record your verdict — you never mark your own promise kept; "
             "assessors do. Verify, never claim: evidence is replayable commands + exit "
             "codes.", ""]
     return "\n".join(out)
+
+
+def _canon_doc(root: Path, name: str):
+    """A canon document element: adopted repos carry .socom/canon/<name>; the tool's
+    own checkout (and the embedded distribution) resolve via resource() — the same
+    on-disk-then-embedded fallback _resolve_role uses for roles."""
+    local = root / SOCOM_DIR / "canon" / name
+    return (ET.parse(local).getroot() if local.exists()
+            else ET.fromstring(resource("canon/" + name)))
+
+
+def _envelope_lessons(root: Path, domain, goal) -> list:
+    """Active domain lessons ranked against the promise goal by REUSING l0_score (the
+    query verb's keyword floor — the lesson set is small and domain-pre-filtered, so
+    the BM25 index is not required and spawn stays index-free). Lifecycle-honest: only
+    state=active surfaces; a retired/provisional lesson never does. Domain-filtered
+    when the promise carries a domain. Returns ranked lesson dicts (id + statement)."""
+    cands = []
+    for f in _lesson_files(root):
+        t = f.read_text()
+        if _lesson_attr(t, "state") != "active":
+            continue
+        if domain and _lesson_attr(t, "domain") != domain:
+            continue
+        cands.append({"id": f.stem, "text": _lesson_statement(t), "metadata": {}})
+    if not cands:
+        return []
+    by_id = {c["id"]: c for c in cands}
+    return [by_id[i] for i in l0_score(goal, cands, len(cands))]
+
+
+def _forge_operating_envelope(root: Path, domain, goal, signal) -> str:
+    """The heuristic envelope: earned domain lessons (ranked, lifecycle-honest,
+    budget-bounded) + doctrine thinking-devices + residuality stressors (only when a
+    residuality contract applies). Advisory, cited by id — it informs HOW, the contract
+    still decides DONE. Degrades LOUDLY to an explicit 'none on record yet' for lessons
+    rather than a silent empty section (R6)."""
+    divisor = _load_context_contract()[3]
+    devices = ["Thinking devices (reach for one when its trigger fires):"]
+    for c in _canon_doc(root, "doctrine.xml").findall("concept"):
+        if c.get("state") == "active":
+            devices.append(f"- **{c.get('id')}** ({c.findtext('title')}) — "
+                           f"{' '.join((c.findtext('fires-when') or '').split())}")
+    stressors = []
+    if "residual" in (signal or "").lower():
+        stressors = ["Residuality stressors (a 'yes' to any is a STOP — rework or leash):"]
+        for r in _canon_doc(root, "residuality.xml").findall("gate/rule"):
+            first = " ".join((r.text or "").split()).split(". ")[0]
+            stressors.append(f"- **{r.get('id')}** — {first}.")
+    header = ["## Operating envelope (heuristics — advisory; the contract still "
+              "decides DONE)", ""]
+    label = "Earned lessons" + (f" for `{domain}`" if domain else "") + ":"
+    fixed_cost = _estimate_tokens(
+        "\n".join(header + [label, ""] + devices + [""] + stressors), divisor)
+    lessons = _envelope_lessons(root, domain, goal)
+    lines = [label]
+    if not lessons:
+        lines.append("- none on record yet — lessons are earned from cycle hotspots"
+                     + (f"; none active for `{domain}` yet." if domain else "."))
+    else:
+        shown = 0
+        for c in lessons[:ENVELOPE_MAX_LESSONS]:
+            line = f"- **{c['id']}** — {c['text']}"
+            over = fixed_cost + _estimate_tokens("\n".join(lines + [line]),
+                                                 divisor) > ENVELOPE_BUDGET_TOKENS
+            if shown and over:  # always keep the top lesson; drop lowest-relevance first
+                break
+            lines.append(line)
+            shown += 1
+        if shown < len(lessons):
+            lines.append(f"- (+{len(lessons) - shown} lower-relevance lesson(s) "
+                         "trimmed to the envelope budget)")
+    parts = header + lines + [""] + devices + ([""] + stressors if stressors else [])
+    return "\n".join(parts).rstrip() + "\n"
 
 
 def _atomic_write_locked(path: Path, data: str, lock: Path):
@@ -146,8 +235,9 @@ def cmd_spawn(args):
     promise_arg = _opt(args, "--promise")
     if not seat or not promise_arg:
         sys.exit("usage: socom spawn --seat S --promise P [--contract C] "
-                 "[--exec] [--model M] [--out PATH]")
+                 "[--exec] [--model M] [--out PATH] [--no-envelope]")
     exec_ = "--exec" in args
+    no_envelope = "--no-envelope" in args
     contract_override = _opt(args, "--contract")
     model_override = _opt(args, "--model")
     out_arg = _opt(args, "--out")
@@ -182,6 +272,7 @@ def cmd_spawn(args):
     except (ET.ParseError, OSError) as e:
         sys.exit(f"socom spawn: {pf.name} is not readable well-formed XML — {e}")
     promise_id = proot.get("id") or pf.stem
+    domain = proot.get("domain")
     verbatim = _block_text(proot.find("intent/verbatim"))
     decoded = _block_text(proot.find("intent/decoded"))
     cel = _contract_el(proot)
@@ -189,12 +280,25 @@ def cmd_spawn(args):
     checks = _contract_checks(cel) if cel is not None else []
     contract_ref = contract_override or (cel.get("ref") if cel is not None else None)
 
-    # 3-5. render envelope, forge brief, content-address the run-id off brief bytes.
-    envelope = render_agent(role)
-    brief = _forge_brief(verbatim, decoded, envelope, goal, checks, contract_ref)
-    hash8 = hashlib.sha256(brief.encode()).hexdigest()[:8]
+    # 3-5. render the seat envelope, forge the STABLE CORE brief, and content-address
+    # the run-id off the CORE bytes ONLY (not the heuristic envelope) — so identity is
+    # idempotent on intent even as the lesson corpus grows.
+    seat_env = render_agent(role)
+    core = _forge_brief(verbatim, decoded, seat_env, goal, checks, contract_ref)
+    hash8 = hashlib.sha256(core.encode()).hexdigest()[:8]
     day = datetime.now(timezone.utc).strftime("%Y-%m%d")
     run_id = f"R-{day}-{seat}-{hash8}"
+    # the heuristic envelope (default-on; --no-envelope suppresses) — earned lessons +
+    # doctrine + residuality, APPENDED to the brief but NOT hashed, so it never
+    # perturbs the run-id (the --no-envelope brief and the default brief share an id).
+    # the residuality trigger reads the promise's MEANINGFUL intent (verbatim +
+    # decoded + goal + contract ref), never the raw file — so a stray "residual"
+    # in an XML comment cannot fire the stressors (reviewer MINOR, slice 3).
+    signal = " ".join(x for x in (verbatim, decoded, goal, contract_ref) if x)
+    op_env = "" if no_envelope else _forge_operating_envelope(
+        root, domain, goal, signal)
+    brief = core if not op_env else _forge_brief(
+        verbatim, decoded, seat_env, goal, checks, contract_ref, op_env)
 
     # 6. containment: default out is .socom/runs; an --out outside the repo is refused.
     out_dir = (Path(out_arg) if out_arg else root / SOCOM_DIR / RUNS_DIR)
