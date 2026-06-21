@@ -503,6 +503,62 @@ eq("_uptime: hours", socom._uptime(_rec(ts_started=(_mnow - timedelta(hours=2)).
 eq("_uptime: days", socom._uptime(_rec(ts_started=(_mnow - timedelta(days=4)).isoformat()), _mnow), "4d")
 eq("_uptime: unparseable -> ?", socom._uptime(_rec(ts_started="x"), _mnow), "?")
 
+# ── monarch recover — kept-check + attempt-count + recoverable bucketing ──────
+eq("_promise_kept: a kept verdict for the promise is seen",
+   socom._promise_kept([{"promise": "P", "verdict": "kept"}], "P"), True)
+eq("_promise_kept: only broken verdicts -> not kept",
+   socom._promise_kept([{"promise": "P", "verdict": "broken"}], "P"), False)
+eq("_promise_kept: a kept verdict for ANOTHER promise does not count",
+   socom._promise_kept([{"promise": "Q", "verdict": "kept"}], "P"), False)
+eq("_attempts_on_file: max of run-record count and ledger attempt (records win)",
+   socom._attempts_on_file([("x", {"promise": "P"}), ("y", {"promise": "P"})],
+                           [{"promise": "P", "attempt": 1}], "P"), 2)
+eq("_attempts_on_file: max of run-record count and ledger attempt (ledger wins)",
+   socom._attempts_on_file([("x", {"promise": "P"})],
+                           [{"promise": "P", "attempt": 4}], "P"), 4)
+
+import json as _json
+import tempfile as _tf
+_recroot = Path(_tf.mkdtemp())
+_recdir = _recroot / ".socom" / "runs"
+_recdir.mkdir(parents=True)
+_ledf = _recroot / ".socom" / "ledger" / "runs.jsonl"
+_ledf.parent.mkdir(parents=True)
+
+
+def _wrun(rid, promise, **kw):
+    base = {"run_id": rid, "seat": "builder", "promise": promise, "contract": "C",
+            "runtime": "claude-code", "model": "default", "status": "dead",
+            "ts_started": _mnow.isoformat(), "pid": None, "brief_path": "b",
+            "promise_path": "p.xml", "ts_ended": None, "exit_code": 137}
+    base.update(kw)
+    (_recdir / f"{rid}.json").write_text(_json.dumps(base))
+
+
+_freshnow = datetime.now(timezone.utc).isoformat()
+# PA: one dead, unkept            -> ELIGIBLE
+_wrun("R-PA-1", "PA")
+# PB: dead but a kept ledger row  -> not eligible (already kept)
+_wrun("R-PB-1", "PB")
+# PC: three dead, unkept          -> ABANDONED (at the cap)
+_wrun("R-PC-1", "PC"); _wrun("R-PC-2", "PC"); _wrun("R-PC-3", "PC")
+# PD: dead + a LIVE running sibling -> not eligible (never double-dispatch)
+_wrun("R-PD-1", "PD")
+_wrun("R-PD-2", "PD", status="running", pid=_os.getpid(), ts_started=_freshnow)
+# PE: dead + a materialized sibling -> not eligible (a launch is pending)
+_wrun("R-PE-1", "PE"); _wrun("R-PE-2", "PE", status="materialized")
+_ledf.write_text(_json.dumps({"promise": "PB", "verdict": "kept", "attempt": 1}) + "\n")
+
+_elig, _aband = socom.recoverable(_recroot)
+_eset = {e["promise"] for e in _elig}
+_aset = {e["promise"] for e in _aband}
+eq("recoverable: only the dead+unkept+under-cap promise is eligible", _eset, {"PA"})
+eq("recoverable: the at-cap promise is abandoned, not eligible", _aset, {"PC"})
+check("recoverable: a kept promise is never offered", "PB" not in _eset and "PB" not in _aset)
+check("recoverable: a promise with a live run is never double-dispatched", "PD" not in _eset)
+check("recoverable: a promise with a materialized launch is not re-dispatched", "PE" not in _eset)
+eq("RECOVER_MAX_ATTEMPTS default is 3", socom.RECOVER_MAX_ATTEMPTS, 3)
+
 # ── summary ──────────────────────────────────────────────────────────────────
 print(f"unit: {_PASS} passed, {_FAIL} failed")
 raise SystemExit(1 if _FAIL else 0)

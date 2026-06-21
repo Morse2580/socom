@@ -105,20 +105,25 @@ def _block_text(el) -> str:
 
 
 def _forge_brief(verbatim, decoded, envelope, goal, checks, contract_ref,
-                 op_env="") -> str:
+                 op_env="", lineage="") -> str:
     """Pure: assemble the dispatch brief in verbatim-protocol order (canon/session.xml,
-    schemas/memory.xml): USER VERBATIM -> DECODED -> seat envelope -> contract goal +
-    checks -> [Operating envelope] -> pointer to constitution and gates. The literal
-    verbatim block is REQUIRED (the reviewer's blind-spot defense reads it). The CORE
-    (everything but op_env) carries no timestamp or run-id, so identical intent yields
-    identical core bytes -> an idempotent content hash; op_env is appended UNHASHED so
-    the growing lesson corpus never perturbs the run-id."""
+    schemas/memory.xml): USER VERBATIM -> DECODED -> [recovery lineage] -> seat envelope
+    -> contract goal + checks -> [Operating envelope] -> pointer to constitution and gates.
+    The literal verbatim block is REQUIRED (the reviewer's blind-spot defense reads it).
+    The CORE (everything but op_env) carries no timestamp or run-id, so identical intent
+    yields identical core bytes -> an idempotent content hash; op_env is appended UNHASHED
+    so the growing lesson corpus never perturbs the run-id. `lineage`, when set, marks a
+    re-dispatch — it lives in the CORE (hashed) so a recovery run earns its OWN id, distinct
+    from the dead run it replaces and from a fresh spawn (monarch recover, slice 4)."""
     out = ["# Dispatch brief", "",
            "## USER VERBATIM (the originating intent, human words — do not paraphrase)",
            "", "> " + (verbatim or "(no verbatim recorded)").replace("\n", "\n> "), ""]
     if decoded:
         out += ["## DECODED (labeled interpretation, separate from the verbatim)",
                 "", decoded, ""]
+    if lineage:
+        out += ["## Recovery lineage (this is a re-dispatch — the prior attempt died unkept)",
+                "", lineage, ""]
     out += ["## Your seat", "", envelope.strip(), ""]
     out += [f"## Contract {contract_ref or '(none)'} — what done means", ""]
     out += [f"Goal: {goal}" if goal else "Goal: (no goal recorded)", ""]
@@ -230,22 +235,12 @@ def _atomic_write_locked(path: Path, data: str, lock: Path):
         os.replace(tmp, path)
 
 
-def cmd_spawn(args):
-    seat = _opt(args, "--seat")
-    promise_arg = _opt(args, "--promise")
-    if not seat or not promise_arg:
-        sys.exit("usage: socom spawn --seat S --promise P [--contract C] "
-                 "[--exec] [--model M] [--out PATH] [--no-envelope]")
-    exec_ = "--exec" in args
-    no_envelope = "--no-envelope" in args
-    contract_override = _opt(args, "--contract")
-    model_override = _opt(args, "--model")
-    out_arg = _opt(args, "--out")
-
-    root = repo_root()
-    cfg = load_cfg(root)
-
-    # 1. resolve the seat: binding (runtime/model) from socom.yaml, role from canon.
+def _resolve_seat(root: Path, cfg: dict, seat: str, model_override=None):
+    """Resolve a seat to its launch binding: returns (runtime, model, role). The
+    binding (runtime + default model) comes from socom.yaml seats; the role envelope
+    from canon. Exits LOUDLY (R6) on an unbound seat, an unknown runtime, or a seat
+    with no role. Factored from cmd_spawn so monarch recover re-dispatches through the
+    SAME resolution (§least-common-mechanism — no second seat-resolver to drift)."""
     seats = cfg.get("seats", {}) or {}
     if seat not in seats:
         sys.exit(f"socom spawn: seat '{seat}' not bound in socom.yaml seats "
@@ -260,8 +255,14 @@ def cmd_spawn(args):
     if runtime not in RUNTIMES:
         sys.exit(f"socom spawn: runtime '{runtime}' for seat '{seat}' is unknown "
                  f"(bound runtimes: {sorted(RUNTIMES)}) (R6: degrade loudly).")
+    return runtime, model, role
 
-    # 2. read the promise: verbatim + decoded + contract goal/checks (reuse ledger).
+
+def _resolve_promise(root: Path, promise_arg: str) -> dict:
+    """Read a promise file into the resolved fields a brief needs: verbatim, decoded,
+    goal + checks (reuse ledger), domain, id, and the repo-relative promise_path so a
+    recovery run can re-resolve the SAME source. Exits LOUDLY on a missing or malformed
+    promise. Factored from cmd_spawn so recover re-reads the promise identically."""
     pf = Path(promise_arg)
     if not pf.is_absolute():
         pf = root / promise_arg
@@ -271,36 +272,58 @@ def cmd_spawn(args):
         proot = ET.parse(pf).getroot()
     except (ET.ParseError, OSError) as e:
         sys.exit(f"socom spawn: {pf.name} is not readable well-formed XML — {e}")
-    promise_id = proot.get("id") or pf.stem
-    domain = proot.get("domain")
-    verbatim = _block_text(proot.find("intent/verbatim"))
-    decoded = _block_text(proot.find("intent/decoded"))
     cel = _contract_el(proot)
-    goal = _block_text(cel.find("goal")) if cel is not None else ""
-    checks = _contract_checks(cel) if cel is not None else []
-    contract_ref = contract_override or (cel.get("ref") if cel is not None else None)
+    rp = pf.resolve()
+    rr = root.resolve()
+    promise_path = str(rp.relative_to(rr)) if rp.is_relative_to(rr) else str(rp)
+    return {
+        "promise_path": promise_path,
+        "promise_id": proot.get("id") or pf.stem,
+        "domain": proot.get("domain"),
+        "verbatim": _block_text(proot.find("intent/verbatim")),
+        "decoded": _block_text(proot.find("intent/decoded")),
+        "goal": _block_text(cel.find("goal")) if cel is not None else "",
+        "checks": _contract_checks(cel) if cel is not None else [],
+        "contract_ref": cel.get("ref") if cel is not None else None,
+    }
 
-    # 3-5. render the seat envelope, forge the STABLE CORE brief, and content-address
-    # the run-id off the CORE bytes ONLY (not the heuristic envelope) — so identity is
-    # idempotent on intent even as the lesson corpus grows.
+
+def _spawn_run(root: Path, seat: str, runtime: str, model, role, pr: dict, *,
+               contract_override=None, exec_=False, no_envelope=False,
+               out_arg=None, lineage="") -> dict:
+    """The shared launch core for `spawn` and `monarch recover` (§least-common-mechanism):
+    forge the dispatch brief from a resolved seat + promise (pr from _resolve_promise),
+    content-address the run-id off the STABLE CORE only, write the run record + brief
+    atomically (locked), and EITHER leave it materialized (default) OR background-launch
+    the bound runtime (--exec). NEVER writes a verdict — the record carries liveness +
+    provenance, never judgment. `lineage`, when set, enters the hashed core so a recovery
+    run gets its own id (distinct from the dead run). Returns a result dict for the caller
+    to report; printing is the caller's, so spawn and recover phrase their own output."""
+    verbatim, decoded = pr["verbatim"], pr["decoded"]
+    goal, checks, domain = pr["goal"], pr["checks"], pr["domain"]
+    contract_ref = contract_override or pr["contract_ref"]
+
+    # render the seat envelope, forge the STABLE CORE brief, and content-address the
+    # run-id off the CORE bytes ONLY (not the heuristic envelope) — so identity is
+    # idempotent on intent even as the lesson corpus grows. A recovery lineage line
+    # lives in the core, so a re-dispatch earns its own distinct id.
     seat_env = render_agent(role)
-    core = _forge_brief(verbatim, decoded, seat_env, goal, checks, contract_ref)
+    core = _forge_brief(verbatim, decoded, seat_env, goal, checks, contract_ref,
+                        lineage=lineage)
     hash8 = hashlib.sha256(core.encode()).hexdigest()[:8]
     day = datetime.now(timezone.utc).strftime("%Y-%m%d")
     run_id = f"R-{day}-{seat}-{hash8}"
     # the heuristic envelope (default-on; --no-envelope suppresses) — earned lessons +
     # doctrine + residuality, APPENDED to the brief but NOT hashed, so it never
-    # perturbs the run-id (the --no-envelope brief and the default brief share an id).
-    # the residuality trigger reads the promise's MEANINGFUL intent (verbatim +
-    # decoded + goal + contract ref), never the raw file — so a stray "residual"
-    # in an XML comment cannot fire the stressors (reviewer MINOR, slice 3).
+    # perturbs the run-id. the residuality trigger reads the promise's MEANINGFUL intent
+    # (verbatim + decoded + goal + contract ref), never the raw file.
     signal = " ".join(x for x in (verbatim, decoded, goal, contract_ref) if x)
     op_env = "" if no_envelope else _forge_operating_envelope(
         root, domain, goal, signal)
     brief = core if not op_env else _forge_brief(
-        verbatim, decoded, seat_env, goal, checks, contract_ref, op_env)
+        verbatim, decoded, seat_env, goal, checks, contract_ref, op_env, lineage)
 
-    # 6. containment: default out is .socom/runs; an --out outside the repo is refused.
+    # containment: default out is .socom/runs; an --out outside the repo is refused.
     out_dir = (Path(out_arg) if out_arg else root / SOCOM_DIR / RUNS_DIR)
     if not out_dir.is_absolute():
         out_dir = root / out_dir
@@ -315,25 +338,23 @@ def cmd_spawn(args):
     rel_brief = brief_path.relative_to(root.resolve()) if brief_path.is_relative_to(root.resolve()) else brief_path
 
     record = {
-        "run_id": run_id, "seat": seat, "promise": promise_id,
+        "run_id": run_id, "seat": seat, "promise": pr["promise_id"],
         "contract": contract_ref, "runtime": runtime, "model": model,
         "status": "materialized", "ts_started": _now_iso(), "pid": None,
-        "brief_path": str(rel_brief), "ts_ended": None, "exit_code": None,
+        "brief_path": str(rel_brief), "promise_path": pr["promise_path"],
+        "ts_ended": None, "exit_code": None,
     }
+    result = {"run_id": run_id, "record": record, "record_path": record_path,
+              "brief_path": brief_path, "rel_brief": rel_brief, "log_path": log_path,
+              "launched": False, "pid": None,
+              "cmd": RUNTIMES[runtime]["cmd"](model, rel_brief)}
 
-    # 7. write the brief (atomic, locked). The record follows once status is known.
+    # write the brief (atomic, locked). The record follows once status is known.
     _atomic_write_locked(brief_path, brief, lock)
 
     if not exec_:
-        # default: materialized; print the EXACT launch command for the operator.
         _atomic_write_locked(record_path, json.dumps(record, indent=2) + "\n", lock)
-        cmd = RUNTIMES[runtime]["cmd"](model, rel_brief)
-        print(f"socom spawn: materialized {run_id} (seat {seat}, promise "
-              f"{promise_id}) -> {rel_brief}")
-        print(f"  record: {record_path.relative_to(root.resolve())}  [status=materialized]")
-        print("  launch (paste to dispatch, or re-run with --exec):")
-        print(f"    {cmd}")
-        return
+        return result
 
     # --exec: the bound runtime must be on PATH, else loud (no running record).
     binary = RUNTIMES[runtime]["binary"]
@@ -349,8 +370,43 @@ def cmd_spawn(args):
     record["status"] = "running"
     record["pid"] = proc.pid
     _atomic_write_locked(record_path, json.dumps(record, indent=2) + "\n", lock)
-    print(f"socom spawn --exec: launched {run_id} (seat {seat}, promise "
-          f"{promise_id}) as pid {proc.pid} [status=running]")
-    print(f"  brief: {rel_brief}  log: {log_path.relative_to(root.resolve())}")
-    print(f"  record: {record_path.relative_to(root.resolve())}")
+    result["launched"] = True
+    result["pid"] = proc.pid
+    return result
+
+
+def cmd_spawn(args):
+    seat = _opt(args, "--seat")
+    promise_arg = _opt(args, "--promise")
+    if not seat or not promise_arg:
+        sys.exit("usage: socom spawn --seat S --promise P [--contract C] "
+                 "[--exec] [--model M] [--out PATH] [--no-envelope]")
+    exec_ = "--exec" in args
+    no_envelope = "--no-envelope" in args
+    contract_override = _opt(args, "--contract")
+    model_override = _opt(args, "--model")
+    out_arg = _opt(args, "--out")
+
+    root = repo_root()
+    cfg = load_cfg(root)
+    runtime, model, role = _resolve_seat(root, cfg, seat, model_override)
+    pr = _resolve_promise(root, promise_arg)
+    r = _spawn_run(root, seat, runtime, model, role, pr,
+                   contract_override=contract_override, exec_=exec_,
+                   no_envelope=no_envelope, out_arg=out_arg)
+
+    promise_id = pr["promise_id"]
+    rel_brief, rel_rec = r["rel_brief"], r["record_path"].relative_to(root.resolve())
+    if not r["launched"]:
+        # default: materialized; print the EXACT launch command for the operator.
+        print(f"socom spawn: materialized {r['run_id']} (seat {seat}, promise "
+              f"{promise_id}) -> {rel_brief}")
+        print(f"  record: {rel_rec}  [status=materialized]")
+        print("  launch (paste to dispatch, or re-run with --exec):")
+        print(f"    {r['cmd']}")
+        return
+    print(f"socom spawn --exec: launched {r['run_id']} (seat {seat}, promise "
+          f"{promise_id}) as pid {r['pid']} [status=running]")
+    print(f"  brief: {rel_brief}  log: {r['log_path'].relative_to(root.resolve())}")
+    print(f"  record: {rel_rec}")
     print("  monarch tallies + reaps this run; spawn never writes its verdict.")

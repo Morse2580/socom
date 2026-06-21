@@ -103,7 +103,8 @@ def main():
               rec and rec["status"] == "materialized" and rec["pid"] is None)
         check("record carries exactly the schema fields", rec and set(rec) == {
             "run_id", "seat", "promise", "contract", "runtime", "model",
-            "status", "ts_started", "pid", "brief_path", "ts_ended", "exit_code"})
+            "status", "ts_started", "pid", "brief_path", "promise_path",
+            "ts_ended", "exit_code"})
         brief = (repo / rec["brief_path"]).read_text()
         check("brief carries the literal user verbatim",
               "spin up teh worker and watch it" in brief)
@@ -195,6 +196,68 @@ def main():
               "reaped dead run" in out and the_record(repo)["status"] == "dead")
         check("gate session-start reap logged one more amber breach",
               len(breach_lines(repo)) == before + 1)
+
+        # ── monarch recover (slice 4): re-dispatch a dead, unkept promise ──
+        # the session-start above left exactly one dead, unkept run for the promise.
+        # session-start should also POINT at the recovery debt (read-only, not acting).
+        check("session-start points at the recoverable run (read-only debt)",
+              "eligible for `socom monarch recover`" in out)
+        dead = the_record(repo)
+
+        # recover --exec: a NEW running record, a DISTINCT id, recovery lineage in the
+        # brief, the dead record left intact (death history stays on disk).
+        rc, out = run(["monarch", "recover", "--exec"], env_with_stub, repo)
+        check("monarch recover --exec exits 0", rc == 0)
+        check("recover reports one eligible promise", "1 promise(s) eligible" in out)
+        recs = [json.loads(p.read_text())
+                for p in sorted((repo / ".socom" / "runs").glob("R-*.json"))]
+        live = [r for r in recs if r["status"] == "running"]
+        deads = [r for r in recs if r["status"] == "dead"]
+        recovered_pid = live[0]["pid"] if live else None
+        check("recover --exec yields a NEW running record, dead one intact",
+              len(recs) == 2 and len(live) == 1 and len(deads) == 1)
+        check("the recovery run has a distinct id from the dead run",
+              live and live[0]["run_id"] != dead["run_id"])
+        if live:
+            rbrief = (repo / live[0]["brief_path"]).read_text()
+            check("the recovery brief carries the recovery-lineage line (traceable)",
+                  "Recovery lineage" in rbrief and dead["run_id"] in rbrief)
+
+        # idempotent within a session: a promise with a live run is never re-dispatched
+        # (the second recover sees the running worker and offers nothing).
+        rc, out = run(["monarch", "recover"], env, repo)
+        check("recover never double-dispatches a promise with a live run",
+              "no promises eligible" in out)
+        if recovered_pid:
+            os.kill(recovered_pid, signal.SIGKILL)
+
+        # ── recover attempt cap: a promise at the cap is abandoned, not re-spawned ──
+        # clean slate, then fabricate three dead, unkept runs for one synthetic promise
+        # (3 == RECOVER_MAX_ATTEMPTS default). recover must refuse to spawn and log ONE
+        # abandon breach — idempotently (the backstop against a flapping worker).
+        for f in (repo / ".socom" / "runs").glob("R-*"):
+            f.unlink()
+        capdir = repo / ".socom" / "runs"
+        for i in range(3):
+            (capdir / f"R-CAP-{i}.json").write_text(json.dumps({
+                "run_id": f"R-CAP-{i}", "seat": "builder", "promise": "P-CAP",
+                "contract": "C-CAP", "runtime": "claude-code", "model": "default",
+                "status": "dead", "ts_started": "2026-06-21T12:00:00+00:00",
+                "pid": None, "brief_path": "b", "promise_path": ppath,
+                "ts_ended": "2026-06-21T12:01:00+00:00", "exit_code": 137}))
+        before = len(breach_lines(repo))
+        rc, out = run(["monarch", "recover"], env, repo)
+        check("recover abandons a promise at the attempt cap (no re-spawn)",
+              "abandoned" in out and "P-CAP" in out)
+        check("abandon logs exactly one amber breach",
+              len(breach_lines(repo)) == before + 1)
+        check("recover spawns nothing for an abandoned promise (records unchanged)",
+              len(list(capdir.glob("R-CAP-*.json"))) == 3
+              and not list(capdir.glob("R-2*.json")))
+        before2 = len(breach_lines(repo))
+        run(["monarch", "recover"], env, repo)
+        check("re-recover is idempotent (no second abandon breach)",
+              len(breach_lines(repo)) == before2)
 
     finally:
         if killed_pid:

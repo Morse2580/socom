@@ -14,7 +14,7 @@ from pathlib import Path
 from socom.claims import claim_expired, reap_orphans
 from socom.core import SOCOM_DIR, _now_iso, canonical_hash, load_cfg, log_breach, repo_root
 from socom.ledger import _append_ledger_row, _promise_ref
-from socom.monarch import reap_dead_runs
+from socom.monarch import reap_dead_runs, recoverable
 
 # === BODY ===
 
@@ -149,6 +149,14 @@ def cmd_gate(args):
         # every session, so dead runs never linger.
         for ln in reap_dead_runs(root):
             print(f"  {ln}")
+        # surface the recovery debt WITHOUT acting on it: recover is a deliberate
+        # act, never auto-run every session (auto-relaunching is too aggressive).
+        # A read-only pointer so the debt is visible; `monarch recover` re-dispatches.
+        elig, _aband = recoverable(root)
+        if elig:
+            print(f"  {len(elig)} promise(s) eligible for `socom monarch recover` "
+                  "(dead + unkept, under the attempt cap) — recovery is deliberate, "
+                  "not run here.")
         wt = subprocess.run(["git", "worktree", "list"], cwd=root,
                             capture_output=True, text=True).stdout
         # HR3: amber closes a loop — every session opens by seeing its debt.

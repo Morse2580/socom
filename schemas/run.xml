@@ -31,7 +31,7 @@
 
   Example record (the on-disk JSON object, one per run; keys exactly the field
   names below):
-  {"run_id":"R-2026-0621-builder-1a2b3c4d","seat":"builder","promise":"P-2026-0612-001","contract":"C-2026-0612-001","runtime":"claude-code","model":"default","status":"running","ts_started":"2026-06-21T12:00:00+00:00","pid":48217,"brief_path":".socom/runs/R-2026-0621-builder-1a2b3c4d.brief.md","ts_ended":null,"exit_code":null}
+  {"run_id":"R-2026-0621-builder-1a2b3c4d","seat":"builder","promise":"P-2026-0612-001","contract":"C-2026-0612-001","runtime":"claude-code","model":"default","status":"running","ts_started":"2026-06-21T12:00:00+00:00","pid":48217,"brief_path":".socom/runs/R-2026-0621-builder-1a2b3c4d.brief.md","promise_path":".socom/promises/P-2026-0612-001.xml","ts_ended":null,"exit_code":null}
 -->
 <run socom="0.1">
 
@@ -47,6 +47,7 @@
     <field name="ts_started" type="iso-8601" required="true">When the record was forged (UTC). Uptime is now minus this; the staleness horizon for cross-host liveness reads from it.</field>
     <field name="pid"        type="int"      required="false">The launched child process id under exec; null for a materialized-only record. Probed for liveness with signal zero.</field>
     <field name="brief_path" type="path"     required="true">Repo-relative path to the forged dispatch brief. The brief carries the literal user verbatim (the reviewer blind-spot defense depends on it).</field>
+    <field name="promise_path" type="path"   required="true">Repo-relative path to the SOURCE promise file the run was forged from. Lets a monarch recover re-resolve the same promise and re-dispatch a fresh attempt without guessing where the promise lives.</field>
     <field name="ts_ended"   type="iso-8601" required="false">When the run ended (UTC); null while open. Set by reconcile, never self-asserted by the worker.</field>
     <field name="exit_code"  type="int"      required="false">Process exit code once ended (0 ok; nonzero error); null while open.</field>
   </fields>
@@ -55,8 +56,8 @@
        launched) and the same run after exec (a live pid). The live form is the
        JSON object above, one file per run; this is the readable contract. -->
   <example>
-    <run run_id="R-2026-0621-builder-1a2b3c4d" seat="builder" promise="P-2026-0612-001" contract="C-2026-0612-001" runtime="claude-code" model="default" status="materialized" ts_started="2026-06-21T11:59:00+00:00" pid="" brief_path=".socom/runs/R-2026-0621-builder-1a2b3c4d.brief.md" ts_ended="" exit_code=""/>
-    <run run_id="R-2026-0621-builder-1a2b3c4d" seat="builder" promise="P-2026-0612-001" contract="C-2026-0612-001" runtime="claude-code" model="default" status="running" ts_started="2026-06-21T12:00:00+00:00" pid="48217" brief_path=".socom/runs/R-2026-0621-builder-1a2b3c4d.brief.md" ts_ended="" exit_code=""/>
+    <run run_id="R-2026-0621-builder-1a2b3c4d" seat="builder" promise="P-2026-0612-001" contract="C-2026-0612-001" runtime="claude-code" model="default" status="materialized" ts_started="2026-06-21T11:59:00+00:00" pid="" brief_path=".socom/runs/R-2026-0621-builder-1a2b3c4d.brief.md" promise_path=".socom/promises/P-2026-0612-001.xml" ts_ended="" exit_code=""/>
+    <run run_id="R-2026-0621-builder-1a2b3c4d" seat="builder" promise="P-2026-0612-001" contract="C-2026-0612-001" runtime="claude-code" model="default" status="running" ts_started="2026-06-21T12:00:00+00:00" pid="48217" brief_path=".socom/runs/R-2026-0621-builder-1a2b3c4d.brief.md" promise_path=".socom/promises/P-2026-0612-001.xml" ts_ended="" exit_code=""/>
   </example>
 
 </run>
