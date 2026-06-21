@@ -445,6 +445,8 @@ def main():
               "≥12 probes" in out or ">=12 probes" in out)
         check("quickstart ends on a value readout with knowledge live",
               "what the substrate has bought you" in out and "chunks retrievable" in out)
+        check("quickstart demonstrates retrieval live (a query answered from canon)",
+              "[try it]" in out and "socom query [" in out)
         check("quickstart reaches T6 (vectors.json built = the ladder's operational gate)",
               "T6" in out)
         # idempotent: a second run rebinds nothing and reports the same top rung

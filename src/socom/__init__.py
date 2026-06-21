@@ -38,6 +38,14 @@ Commands:
   value    first-run value readout: gate catches, scored runs, context
            adherence, claims, knowledge, adoption rung — signals already on
            disk, no new instrumentation (the why, made legible)
+  spawn    launch a worker into a seat against a promise: forge the dispatch
+           brief (verbatim -> envelope -> contract) + a run record; default
+           prints the launch cmd, --exec background-launches. Never writes a verdict
+  monarch  reconcile-and-reap supervisor over run records (no daemon): tally
+           liveness | reap dead-but-running (one amber breach) | recover
+           re-dispatches dead-but-unkept under a cap | triage ranks by recovery-worth
+  forge    domain verbs (canon forge.xml) bound to this repo's commands —
+           `forge list` shows verbs + bindings (the repo-specific action layer)
   greet    adoption-ladder greeting — where you are, what's next
   statusline Claude Code statusLine: adoption bar + context-consumption meter
            (reads the host's statusline JSON on stdin; GSD-style ctx meter)

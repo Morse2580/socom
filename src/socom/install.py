@@ -18,7 +18,7 @@ from pathlib import Path
 import yaml
 from socom.core import SOCOM_DIR, load_cfg, repo_root
 from socom.lifecycle import adoption_bar, adoption_rung, cmd_adopt, cmd_compile
-from socom.retrieval import cmd_baseline, cmd_embed, cmd_eval
+from socom.retrieval import cmd_baseline, cmd_embed, cmd_eval, cmd_query
 from socom.spawn import RUNTIMES
 from socom.value import cmd_value
 # === BODY ===
@@ -251,6 +251,15 @@ def cmd_quickstart(args):
                 cmd_eval([str(root)])
             except SystemExit as e:  # eval exits RED on a miss — report, never crash
                 print(f"  · L1 not yet certified: {e}")
+
+    # a LIVE demonstration, not a number: the substrate answering a real question
+    # from its own canon, so the new user SEES retrieval work (best-effort — the demo
+    # never decides the climb; it reads cwd's index, the common in-repo case).
+    print("\n[try it] the substrate answering a question from its own canon:")
+    try:
+        cmd_query(["how do I prove a task is done"])
+    except (SystemExit, OSError) as e:
+        print(f"  · query demo skipped ({e}); run `socom query \"...\"` yourself.")
 
     # Wall 3: the orchestration runtime verdict, surfaced now (not at first --exec).
     print("\n[runtime] orchestration readiness…")
