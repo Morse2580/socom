@@ -881,6 +881,61 @@ check "spawn --exec with the runtime binary absent RED (loud)" 1 $?
 [ ! -f "$(ls .socom/runs/R-*.json 2>/dev/null | head -1)" ] \
   && ok "spawn --exec writes no running record when the binary is absent" \
   || bad "spawn --exec left a running record without launching"
+
+# 14c. heuristic envelope (slice 3): spawn renders an "Operating envelope" brief
+# section — earned domain lessons (ranked, lifecycle-honest) + doctrine devices +
+# residuality stressors (on a residuality trigger) — appended but NOT hashed, so the
+# run-id is idempotent on intent even as the lesson corpus grows. Default-on;
+# --no-envelope suppresses. $R has canon (doctrine/residuality) from init.
+rm -rf .socom/runs .socom/lessons
+cat > .socom/promises/env-p.xml <<'EOF'
+<promise id="P-ENVS" state="open" domain="cli"><promiser seat="builder" participant="x"/>
+<intent><verbatim>make the ledger flock serialize concurrent writers</verbatim></intent>
+<contract ref="C-ENVS" state="ratified"><goal>concurrent ledger writers never tear a row or duplicate an attempt</goal></contract></promise>
+EOF
+EID1="$("$SOCOM" spawn --seat builder --promise .socom/promises/env-p.xml | grep -o 'R-[0-9-]*-builder-[0-9a-f]*' | head -1)"
+EB=".socom/runs/$EID1.brief.md"
+grep -q "Operating envelope" "$EB" && ok "spawn brief carries the Operating envelope section (default-on)" \
+                                   || bad "spawn brief lacks the Operating envelope"
+grep -q "none on record yet" "$EB" && ok "envelope degrades loudly with no lessons (not a silent empty section)" \
+                                   || bad "envelope did not degrade loudly"
+grep -q "capability-ladder" "$EB" && ok "envelope lists doctrine thinking-devices (cited by id)" \
+                                  || bad "envelope missing doctrine devices"
+# an active cli-domain lesson now surfaces, and the run-id is UNCHANGED (core-only hash)
+mkdir -p .socom/lessons
+cat > .socom/lessons/L-ENVS.xml <<'EOF'
+<lesson id="L-ENVS" domain="cli" state="active" source="cycle"><statement embed="true">concurrent ledger writers must hold an exclusive flock around read-compute-append or attempts duplicate and rows tear</statement></lesson>
+EOF
+EID2="$("$SOCOM" spawn --seat builder --promise .socom/promises/env-p.xml | grep -o 'R-[0-9-]*-builder-[0-9a-f]*' | head -1)"
+grep -q "L-ENVS" ".socom/runs/$EID2.brief.md" \
+  && ok "an active domain lesson surfaces in the envelope (ranked, cited by id)" \
+  || bad "active lesson not injected into envelope"
+[ "$EID1" = "$EID2" ] \
+  && ok "a new lesson does NOT change the run-id (id hashes the stable core, not the envelope)" \
+  || bad "run-id changed when the lesson corpus grew ($EID1 -> $EID2)"
+# a retired lesson must never surface (lifecycle-honest)
+printf '<lesson id="L-RET" domain="cli" state="retired" source="cycle"><statement embed="true">zzz retired concurrent flock guard</statement></lesson>' > .socom/lessons/L-RET.xml
+"$SOCOM" spawn --seat builder --promise .socom/promises/env-p.xml >/dev/null
+grep -rq "L-RET" .socom/runs/*.brief.md && bad "retired lesson surfaced in envelope (lifecycle filter)" \
+                                        || ok "retired lessons never surface in the envelope (lifecycle-honest)"
+# --no-envelope omits the section AND keeps the same id (core hash unchanged)
+EID3="$("$SOCOM" spawn --seat builder --promise .socom/promises/env-p.xml --no-envelope | grep -o 'R-[0-9-]*-builder-[0-9a-f]*' | head -1)"
+grep -q "Operating envelope" ".socom/runs/$EID3.brief.md" \
+  && bad "--no-envelope still rendered the envelope" \
+  || ok "--no-envelope omits the section"
+[ "$EID3" = "$EID1" ] && ok "--no-envelope keeps the same run-id (advisory section is unhashed)" \
+                      || bad "--no-envelope changed the run-id ($EID1 -> $EID3)"
+# residuality stressors appear only on a residuality trigger
+cat > .socom/promises/env-r.xml <<'EOF'
+<promise id="P-ENVR" state="open" domain="cli"><promiser seat="builder" participant="x"/>
+<intent><verbatim>this fix may relocate the residual stress rather than remove it</verbatim></intent>
+<contract ref="C-ENVR" state="ratified"><goal>the stress is removed at source, not hidden</goal></contract></promise>
+EOF
+"$SOCOM" spawn --seat builder --promise .socom/promises/env-r.xml >/dev/null
+grep -rq "relocate-not-remove" .socom/runs/*.brief.md \
+  && ok "residuality stressors injected when a residuality contract applies" \
+  || bad "residuality stressors missing on a residuality trigger"
+rm -rf .socom/runs .socom/lessons .socom/promises/env-p.xml .socom/promises/env-r.xml
 rm -rf .socom/runs .socom/ledger .socom/promises/spawn-p.xml
 
 # 15. white-box unit tests on the pure core — complements the black-box checks
