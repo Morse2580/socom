@@ -381,6 +381,49 @@ def main():
         check("equal relevance -> the higher-trust seat's run ranks first (trust beats run-id)",
               "P-TRZ" in out and "P-TRA" in out and out.index("P-TRZ") < out.index("P-TRA"))
 
+        # ── context emit per-seat budget default (slice 8): the seat's context_budget
+        #    fills in for an omitted --budget; the recorded envelope is identical to an
+        #    explicit flag; a budgetless seat exits loud; the flag overrides the seat. ──
+        # init plants the reviewer with context_budget: 600; the builder declares none.
+        # slice 6's block left the builder with an INVALID budget — restore it to
+        # budgetless so the "no declared budget" path below is what gets exercised.
+        (repo / "socom.yaml").write_text((repo / "socom.yaml").read_text().replace(
+            "{ runtime: claude-code, model: default, context_budget: abc }",
+            "{ runtime: claude-code, model: default }"))
+        (repo / ".socom" / "in.txt").write_text("a modest input for the emit budget test\n")
+        emit = lambda extra: run(
+            ["context", "emit", "--promise", "P-CTX", "--seat"] + extra
+            + ["--input", ".socom/in.txt", "--out", ".socom/context/e.xml"], env, repo)
+        # (a) reviewer, NO --budget -> defaults to the seat's 600, readout names the seat
+        import re as _re
+        norm = lambda s: _re.sub(r' ts="[^"]*"', "", s)  # drop the wall-clock ts attr
+        rc, out = emit(["reviewer"])
+        env_xml = (repo / ".socom" / "context" / "e.xml").read_text()
+        check("emit with no --budget defaults to the seat's context_budget (600)",
+              rc == 0 and 'budget_tokens="600"' in env_xml)
+        check("a defaulted budget names its source in the readout (no silent default)",
+              "from seat reviewer" in out)
+        # (b) the SAME with an explicit --budget 600 -> identical recorded envelope
+        #     (modulo the wall-clock ts attribute)
+        rc, _ = emit(["reviewer", "--budget", "600"])
+        check("explicit --budget 600 records the same envelope as the seat default",
+              norm((repo / ".socom" / "context" / "e.xml").read_text()) == norm(env_xml))
+        # (c) builder (no context_budget), NO --budget -> loud, no envelope written
+        (repo / ".socom" / "context" / "e.xml").unlink()
+        rc, out = emit(["builder"])
+        check("emit on a budgetless seat with no --budget exits loud",
+              rc != 0 and "context_budget" in out)
+        check("the loud no-budget error writes no envelope",
+              not (repo / ".socom" / "context" / "e.xml").exists())
+        # (d) explicit --budget overrides the seat budget (flag wins)
+        rc, _ = emit(["reviewer", "--budget", "800"])
+        check("an explicit --budget overrides the seat's context_budget",
+              'budget_tokens="800"' in (repo / ".socom" / "context" / "e.xml").read_text())
+        # (e) spawn brief for the reviewer is unchanged by the delegation (1200/declared)
+        rc, _ = run(["spawn", "--seat", "reviewer", "--promise", ppath], env, repo)
+        check("spawn still resolves the reviewer's declared budget after delegation",
+              rc == 0)
+
     finally:
         if killed_pid:
             try:

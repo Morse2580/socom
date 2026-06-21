@@ -11,7 +11,7 @@ import textwrap
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
-from socom.core import SOCOM_DIR, SOCOM_VERSION, _now_iso, repo_root, resource
+from socom.core import SOCOM_DIR, SOCOM_VERSION, _now_iso, load_cfg, repo_root, resource
 from socom.retrieval import l0_score
 
 # === BODY ===
@@ -253,6 +253,26 @@ def _next_context_id(root, date):
     return f"{prefix}{seq + 1:03d}"
 
 
+def _seat_context_budget(binding: dict, seat: str):
+    """The SINGLE validator of a seat's declared `context_budget` (slice 6, relocated
+    here in slice 8 so BOTH consumers share it — spawn's heuristic envelope and
+    `context emit` — without an import cycle, since context is built before spawn and
+    spawn already imports from context; §least-common-mechanism). Returns the validated
+    POSITIVE int when the seat declares one, or None when the field is absent / an
+    explicit YAML null (unset == absent, same meaning). A declared-but-invalid value
+    (bool / float / string / zero / negative) exits LOUDLY (R6) — a budget that silently
+    reverts to a default is the rule-that-evaporates the context contract forbids. The
+    callers decide what None means: spawn falls back to its advisory default; emit, whose
+    budget is the RECORDED contract verify judges, refuses to invent one."""
+    raw = binding.get("context_budget")
+    if raw is None:
+        return None
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw <= 0:
+        sys.exit(f"socom: seat '{seat}' context_budget {raw!r} is not a positive "
+                 "integer (tokens) — fix socom.yaml or remove it (R6: degrade loudly).")
+    return raw
+
+
 def _emit_flags(args):
     """Parse the emit flag args -> dict. Repeatable --input accumulates; every
     flag needs a value (degrade loudly on a dangling flag, R6)."""
@@ -264,8 +284,9 @@ def _emit_flags(args):
         tok = args[i]
         if tok not in flags:
             sys.exit(f"socom context emit: unexpected argument {tok!r} — usage: "
-                     "context emit --promise P --seat S --budget N "
-                     "[--input PATH ...] [--id ID] [--out PATH] (R6).")
+                     "context emit --promise P --seat S [--budget N] "
+                     "[--input PATH ...] [--id ID] [--out PATH] "
+                     "(--budget defaults to the seat's context_budget) (R6).")
         if i + 1 >= len(args):
             sys.exit(f"socom context emit: {tok} needs a value (R6).")
         val = args[i + 1]
@@ -296,18 +317,37 @@ def _cmd_context_emit(root, args):
     seat = f.get("seat") or os.environ.get("SOCOM_SEAT")
     promise = f.get("promise") or os.environ.get("SOCOM_PROMISE")
     missing = [n for n, v in (("--promise", promise),
-                              ("--seat", seat),
-                              ("--budget", f.get("budget"))) if not v]
+                              ("--seat", seat)) if not v]
     if missing:
         sys.exit(f"socom context emit: {', '.join(missing)} required "
                  "(promise/seat may come from $SOCOM_PROMISE / $SOCOM_SEAT) (R6).")
-    try:
-        budget = int(f["budget"])
-        if budget < 0:
-            raise ValueError
-    except ValueError:
-        sys.exit(f"socom context emit: --budget {f['budget']!r} is not a "
-                 "non-negative int (R6).")
+
+    # Budget by precedence: explicit --budget > the seat's declared context_budget >
+    # loud error (slice 8). The flag is validated as a NON-negative int (an explicit
+    # `--budget 0` is a deliberate zero-context declaration). When --budget is OMITTED,
+    # the seat's POSITIVE-int context_budget (slice 6) fills in — the field was named
+    # for the seat precisely so this producer reuses it. A recorded budget is the
+    # contract `verify` judges, so it must be CHOSEN (flag or seat), NEVER a hidden
+    # constant: an omitted flag on a seat that declares no budget exits loud (unlike
+    # spawn's advisory envelope, which may fall back to its default).
+    budget_source = "flag"
+    if f.get("budget") is not None:
+        try:
+            budget = int(f["budget"])
+            if budget < 0:
+                raise ValueError
+        except ValueError:
+            sys.exit(f"socom context emit: --budget {f['budget']!r} is not a "
+                     "non-negative int (R6).")
+    else:
+        binding = (load_cfg(root).get("seats", {}) or {}).get(seat) or {}
+        budget = _seat_context_budget(binding, seat)
+        if budget is None:
+            sys.exit(f"socom context emit: no --budget given and seat {seat!r} declares "
+                     "no context_budget in socom.yaml — provide --budget N or declare a "
+                     "context_budget on the seat (R6: a recorded budget must be chosen, "
+                     "never assumed).")
+        budget_source = f"seat {seat}"
 
     date = datetime.now(timezone.utc).strftime("%Y-%m%d")
     cid = f.get("id") or _next_context_id(root, date)
@@ -372,8 +412,9 @@ def _cmd_context_emit(root, args):
     os.replace(tmp, out)
 
     rel = out.relative_to(root)
+    src = "" if budget_source == "flag" else f" (from {budget_source})"
     print(f"socom context emit: wrote {rel} — promise={promise} seat={seat} "
-          f"input_tokens={total}/{budget} across {len(measured)} input(s) "
+          f"input_tokens={total}/{budget}{src} across {len(measured)} input(s) "
           f"(chars/{divisor} estimate).")
     if budget_only:
         print(f"socom context emit: WARNING — input_tokens {total} > budget "
@@ -465,8 +506,8 @@ def cmd_context(args):
         sys.exit("usage: socom context <verify|show|measure|compress|emit> "
                  "[<envelope.xml|dir>]  (verify defaults to .socom/context and "
                  "takes --require P-id[,P-id…]; measure/compress need one envelope "
-                 "file; emit takes flags — --promise --seat --budget --input ... "
-                 "--id --out)")
+                 "file; emit takes flags — --promise --seat [--budget] --input ... "
+                 "--id --out  (--budget defaults to the seat's context_budget))")
     sub = args[0]
     root = repo_root()
 

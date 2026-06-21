@@ -13,7 +13,7 @@ import textwrap
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
-from socom.context import _estimate_tokens, _load_context_contract
+from socom.context import _estimate_tokens, _load_context_contract, _seat_context_budget
 from socom.core import SOCOM_DIR, _now_iso, load_cfg, repo_root, resource
 from socom.ledger import _contract_checks, _contract_el
 from socom.lesson import _lesson_attr, _lesson_files, _lesson_statement
@@ -243,17 +243,14 @@ def _atomic_write_locked(path: Path, data: str, lock: Path):
 
 
 def _seat_budget(binding: dict, seat: str) -> int:
-    """The seat's envelope token budget: its `context_budget` if declared (a positive
-    int), else the default. A declared-but-invalid value (non-int / <= 0) exits LOUDLY
-    (R6) — a budget that silently reverts to a default is the rule-that-evaporates the
-    context contract forbids (slice 6)."""
-    raw = binding.get("context_budget")
-    if raw is None:
-        return ENVELOPE_DEFAULT_BUDGET_TOKENS
-    if isinstance(raw, bool) or not isinstance(raw, int) or raw <= 0:
-        sys.exit(f"socom spawn: seat '{seat}' context_budget {raw!r} is not a positive "
-                 "integer (tokens) — fix socom.yaml or remove it (R6: degrade loudly).")
-    return raw
+    """The seat's heuristic-envelope token budget: its declared `context_budget` (a
+    positive int), else the advisory default. The positive-int VALIDATION is single-
+    sourced in `_seat_context_budget` (context.py, slice 8) so spawn and `context emit`
+    never drift; here a None (absent / YAML-null) falls back to the default — the
+    envelope is advisory, so an unstated budget is harmless (slice 6). A declared-but-
+    invalid value still exits LOUDLY inside the shared validator (R6)."""
+    declared = _seat_context_budget(binding, seat)
+    return declared if declared is not None else ENVELOPE_DEFAULT_BUDGET_TOKENS
 
 
 def _resolve_seat(root: Path, cfg: dict, seat: str, model_override=None):
