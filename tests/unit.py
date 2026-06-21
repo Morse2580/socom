@@ -622,6 +622,37 @@ try:
 except SystemExit:
     check("_parse_top: non-positive exits loud", True)
 
+# ── per-seat envelope budget (slice 6) ───────────────────────────────────────
+eq("_seat_budget: a positive int is used",
+   socom._seat_budget({"context_budget": 600}, "reviewer"), 600)
+eq("_seat_budget: absent -> the default",
+   socom._seat_budget({}, "builder"), socom.ENVELOPE_DEFAULT_BUDGET_TOKENS)
+eq("_seat_budget: explicit YAML null -> the default (unset, like absent)",
+   socom._seat_budget({"context_budget": None}, "s"), socom.ENVELOPE_DEFAULT_BUDGET_TOKENS)
+for _bad in (0, -5, "abc", 1.5, True):
+    try:
+        socom._seat_budget({"context_budget": _bad}, "s")
+        check(f"_seat_budget: invalid {_bad!r} exits loud", False)
+    except SystemExit:
+        check(f"_seat_budget: invalid {_bad!r} exits loud", True)
+
+# the budget actually bounds the envelope's lessons subsection (canon resolves from
+# the embedded resources; lessons from the temp root).
+_broot = Path(_tf.mkdtemp())
+(_broot / ".socom" / "lessons").mkdir(parents=True)
+for _i in range(4):
+    (_broot / ".socom" / "lessons" / f"L-Q{_i}.xml").write_text(
+        f'<lesson id="L-Q{_i}" domain="cli" state="active"><statement embed="true">'
+        f'flock ledger writers serialize lesson {_i} ' + ("y" * 60) + "</statement></lesson>")
+_big = socom._forge_operating_envelope(_broot, "cli", "flock ledger", "", 5000)
+_small = socom._forge_operating_envelope(_broot, "cli", "flock ledger", "", 20)
+check("_forge_operating_envelope: a larger budget carries more lessons",
+      _big.count("**L-Q") > _small.count("**L-Q"))
+check("_forge_operating_envelope: the tightest budget still keeps the top lesson",
+      _small.count("**L-Q") >= 1)
+check("_forge_operating_envelope: a trimmed envelope says what it dropped",
+      "trimmed to the envelope budget" in _small)
+
 # ── summary ──────────────────────────────────────────────────────────────────
 print(f"unit: {_PASS} passed, {_FAIL} failed")
 raise SystemExit(1 if _FAIL else 0)

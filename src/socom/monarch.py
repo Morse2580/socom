@@ -272,14 +272,15 @@ def _recover_one(root: Path, cfg: dict, entry: dict, exec_: bool):
         print(f"  skip {entry['promise']}: promise source '{promise_path}' is gone — "
               "cannot re-dispatch (degrade loudly).", file=sys.stderr)
         return None
-    runtime, model, role = _resolve_seat(root, cfg, seat, model_override=dead.get("model"))
+    runtime, model, role, budget = _resolve_seat(root, cfg, seat,
+                                                 model_override=dead.get("model"))
     pr = _resolve_promise(root, promise_path)
     attempt_n = entry["attempts"] + 1
     lineage = (f"recovery attempt {attempt_n} of {dead.get('run_id')} — the prior "
                "attempt died unkept; this is a fresh, independently-judged run.")
     return _spawn_run(root, seat, runtime, model, role, pr,
                       contract_override=dead.get("contract"), exec_=exec_,
-                      lineage=lineage)
+                      lineage=lineage, budget=budget)
 
 
 # ── monarch triage — heuristic relevance over which dead runs to recover (slice 5)

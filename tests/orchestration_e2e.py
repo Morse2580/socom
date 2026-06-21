@@ -304,6 +304,50 @@ def main():
         rc, out = run(["monarch", "recover", "--top", "0"], env, repo)
         check("recover --top 0 exits nonzero (loud)", rc != 0)
 
+        # ── per-seat envelope budget (slice 6): the seat's context_budget caps the brief ──
+        for f in (repo / ".socom" / "runs").glob("R-*"):
+            f.unlink()
+        lessons = repo / ".socom" / "lessons"
+        lessons.mkdir(exist_ok=True)
+        for i in range(4):
+            (lessons / f"L-B{i}.xml").write_text(
+                f'<lesson id="L-B{i}" domain="cli" state="active"><statement embed="true">'
+                f'supervise the spawned worker to completion lesson {i} '
+                + ("x" * 60) + "</statement></lesson>")
+        # default-budget spawn (the builder declares no context_budget -> 1200)
+        run(["spawn", "--seat", "builder", "--promise", ppath], env, repo)
+        rec0 = the_record(repo)
+        brief0 = (repo / rec0["brief_path"]).read_text()
+        n_default = brief0.count("**L-B")
+        rid_default = rec0["run_id"]
+        # tighten the builder's budget; the brief must carry FEWER lessons
+        cfg = (repo / "socom.yaml").read_text().replace(
+            "{ runtime: claude-code, model: default }",
+            "{ runtime: claude-code, model: default, context_budget: 30 }")
+        (repo / "socom.yaml").write_text(cfg)
+        for f in (repo / ".socom" / "runs").glob("R-*"):
+            f.unlink()
+        run(["spawn", "--seat", "builder", "--promise", ppath], env, repo)
+        rec1 = the_record(repo)
+        brief1 = (repo / rec1["brief_path"]).read_text()
+        n_tight = brief1.count("**L-B")
+        check("a tight context_budget trims the envelope to fewer lessons",
+              1 <= n_tight < n_default)
+        check("a tight budget does NOT perturb the run-id (envelope is unhashed)",
+              rec1["run_id"] == rid_default)
+        check("a trimmed brief still says what it dropped (no silent truncation)",
+              "trimmed to the envelope budget" in brief1)
+        # an invalid context_budget exits loud, no record written
+        (repo / "socom.yaml").write_text((repo / "socom.yaml").read_text().replace(
+            "context_budget: 30", "context_budget: abc"))
+        for f in (repo / ".socom" / "runs").glob("R-*"):
+            f.unlink()
+        rc, out = run(["spawn", "--seat", "builder", "--promise", ppath], env, repo)
+        check("a non-integer context_budget exits loud",
+              rc != 0 and "context_budget" in out)
+        check("a loud budget error writes no run record",
+              not list((repo / ".socom" / "runs").glob("R-*.json")))
+
     finally:
         if killed_pid:
             try:
