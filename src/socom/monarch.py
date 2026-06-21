@@ -143,8 +143,10 @@ def reap_dead_runs(root: Path) -> list:
         # requirement contract verify --record enforces (a row needs an owner).
         promise, seat = rec.get("promise"), rec.get("seat")
         if promise and seat:
+            # the dying run carries its own model — record it so per-(seat,model)
+            # trust (slice 9) attributes this death to the model that produced it.
             _append_ledger_row(root, promise, seat, rec.get("contract"),
-                               {"ok": False}, 0)
+                               {"ok": False}, 0, rec.get("model"))
     return report
 
 
@@ -330,28 +332,33 @@ def _active_lessons_text(root: Path) -> str:
 
 
 def _seat_trust(ledger_rows: list) -> dict:
-    """Per-seat trust = the LAPLACE-SMOOTHED kept-rate over the ledger's verdicts:
+    """Per-(seat, model) trust = the LAPLACE-SMOOTHED kept-rate over the ledger's verdicts:
     (kept + 1) / (kept + broken + 2) (the rule of succession). Small samples are damped
-    (one kept of one -> 2/3, not 1.0); a seat absent here resolves to the 1/2 prior via
-    `_trust_of`. The denominator counts ONLY kept/broken verdicts (the verdicts of record);
-    any other verdict on a torn/hand-edited row is ignored, never counted as a failure — so
-    a stray value can't silently penalize a seat below the neutral prior. Reuses the ledger
-    — no new store (slice 7)."""
-    kept, seen = {}, {}  # seen = kept + broken only; the contract denominator
+    (one kept of one -> 2/3, not 1.0); an unseen (seat, model) pair resolves to the 1/2 prior
+    via `_trust_of`. The KEY is the (seat, model) pair (slice 9): trust is scoped to the model
+    that produced the verdicts, so a model UPGRADE starts the seat at the neutral prior under
+    the new model rather than inheriting the old model's reputation. A row's model is
+    `r.get("model")` (None for legacy/manual rows -> an inert (seat, None) bucket no live dead
+    run consumes, since run records always carry a model). The denominator counts ONLY
+    kept/broken verdicts (the verdicts of record); any other verdict on a torn/hand-edited row
+    is ignored, never counted as a failure. Reuses the ledger — no new store (slice 7)."""
+    kept, seen = {}, {}  # keyed by (seat, model); seen = kept + broken (the denominator)
     for r in ledger_rows:
         s, v = r.get("seat"), r.get("verdict")
         if not s or v not in ("kept", "broken"):
             continue
-        seen[s] = seen.get(s, 0) + 1
+        key = (s, r.get("model"))
+        seen[key] = seen.get(key, 0) + 1
         if v == "kept":
-            kept[s] = kept.get(s, 0) + 1
-    return {s: (kept.get(s, 0) + 1) / (seen[s] + 2) for s in seen}
+            kept[key] = kept.get(key, 0) + 1
+    return {k: (kept.get(k, 0) + 1) / (seen[k] + 2) for k in seen}
 
 
-def _trust_of(trust_map: dict, seat) -> float:
-    """The seat's trust, or the neutral 1/2 no-history prior (unproven is not failed —
-    the Laplace limit of zero verdicts)."""
-    return trust_map.get(seat, 0.5)
+def _trust_of(trust_map: dict, seat, model) -> float:
+    """The (seat, model) pair's trust, or the neutral 1/2 no-history prior (unproven is not
+    failed — the Laplace limit of zero verdicts). An upgraded model is unseen for the seat, so
+    it resolves to 1/2: reset, not inherited (slice 9)."""
+    return trust_map.get((seat, model), 0.5)
 
 
 def _triage_rank(root: Path, eligible: list, focus=None):
@@ -359,9 +366,12 @@ def _triage_rank(root: Path, eligible: list, focus=None):
     relevance (PRIMARY) and per-seat trust (SECONDARY), then the tie-break. Relevance =
     overlap of each promise's meaningful intent with a FOCUS (explicit query, else the
     active-lesson corpus) — the SAME l0 keyword-overlap count the query floor uses (slice
-    5). Trust = the Laplace-smoothed kept-rate of the run's SEAT (slice 7): a likely-to-
-    succeed seat ranks higher, but only among EQUALLY-relevant runs (relevance stays
-    dominant). The sort key is (−worth, −trust, then the tie-break pre-sort: fewer attempts,
+    5). Trust = the Laplace-smoothed kept-rate of the run's (SEAT, MODEL) (slice 7/9): scoped
+    to the model recover will re-run it with (`_recover_one` preserves the dead run's model),
+    so an upgraded model starts at the neutral prior rather than inheriting the old model's
+    reputation. A likely-to-succeed (seat, model) ranks higher, but only among EQUALLY-relevant
+    runs (relevance stays dominant). The sort key is (−worth, −trust, then the tie-break
+    pre-sort: fewer attempts,
     more-recent death, run-id) — a single stable sort over a tie-break-ordered list, so
     equal (worth, trust) keep the tie-break order, and trust becomes the effective primary
     only when no relevance signal exists. Returns (ranked_entries_with_worth_and_trust,
@@ -381,7 +391,8 @@ def _triage_rank(root: Path, eligible: list, focus=None):
         itext = _run_intent(root, e["dead"])
         worth = len(qwords & set(re.findall(r"\w+", itext.lower()))) if qwords else 0
         enriched.append({**e, "worth": worth, "_intent": itext,
-                         "trust": _trust_of(trust, e["dead"].get("seat"))})
+                         "trust": _trust_of(trust, e["dead"].get("seat"),
+                                            e["dead"].get("model"))})
     # composite, relevance PRIMARY then trust; the pre-sort tie-break survives equal keys.
     ranked = sorted(enriched, key=lambda x: (-x["worth"], -x["trust"]))
     relevance_active = any(x["worth"] for x in ranked)

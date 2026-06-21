@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from socom.claims import claim_expired, reap_orphans
 from socom.core import SOCOM_DIR, _now_iso, canonical_hash, load_cfg, log_breach, repo_root
-from socom.ledger import _append_ledger_row, _promise_ref
+from socom.ledger import _append_ledger_row, _promise_model, _promise_ref
 from socom.monarch import reap_dead_runs, recoverable
 
 # === BODY ===
@@ -91,7 +91,7 @@ def _gate_record(root, promise_arg, rc, duration_s):
               "executing seat to attribute).", file=sys.stderr)
         return
     row = _append_ledger_row(root, promise_id, seat, cref, {"ok": rc == 0},
-                             duration_s)
+                             duration_s, _promise_model(root, promise_id))
     print(f"socom gate task-completion: recorded ledger row — {seat} "
           f"{promise_id} attempt {row['attempt']} verdict {row['verdict']} "
           "(.socom/ledger/runs.jsonl).")

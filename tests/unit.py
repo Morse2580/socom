@@ -622,22 +622,65 @@ try:
 except SystemExit:
     check("_parse_top: non-positive exits loud", True)
 
-# ── per-seat trust weighting of recovery-worth (slice 7) ─────────────────────
-_trows = ([{"promise": "h1", "seat": "builder", "verdict": "kept"}] * 3
-          + [{"promise": "h2", "seat": "reviewer", "verdict": "broken"}] * 3)
+# ── per-seat trust weighting of recovery-worth (slice 7), keyed by (seat, model) (slice 9) ──
+_trows = ([{"promise": "h1", "seat": "builder", "verdict": "kept", "model": "default"}] * 3
+          + [{"promise": "h2", "seat": "reviewer", "verdict": "broken", "model": "default"}] * 3)
 _tmap = socom._seat_trust(_trows)
-eq("_seat_trust: a mostly-kept seat -> Laplace rate (3+1)/(3+2)", round(_tmap["builder"], 3), 0.8)
-eq("_seat_trust: a mostly-broken seat -> (0+1)/(3+2)", round(_tmap["reviewer"], 3), 0.2)
+eq("_seat_trust: a mostly-kept seat -> Laplace rate (3+1)/(3+2)",
+   round(_tmap[("builder", "default")], 3), 0.8)
+eq("_seat_trust: a mostly-broken seat -> (0+1)/(3+2)",
+   round(_tmap[("reviewer", "default")], 3), 0.2)
 eq("_seat_trust: one kept of one is damped to 2/3 (small sample)",
-   round(socom._seat_trust([{"seat": "x", "verdict": "kept"}])["x"], 3), 0.667)
-eq("_trust_of: a seat with no history -> the neutral 1/2 prior",
-   socom._trust_of(_tmap, "neverseen"), 0.5)
+   round(socom._seat_trust([{"seat": "x", "verdict": "kept"}])[("x", None)], 3), 0.667)
+eq("_trust_of: an unseen (seat, model) -> the neutral 1/2 prior",
+   socom._trust_of(_tmap, "neverseen", "default"), 0.5)
 eq("_seat_trust: a non-kept/broken verdict is ignored, not counted as failure",
    socom._seat_trust([{"seat": "z", "verdict": "kept"},
-                      {"seat": "z", "verdict": "amber"}]).get("z"),
-   socom._seat_trust([{"seat": "z", "verdict": "kept"}])["z"])
+                      {"seat": "z", "verdict": "amber"}]).get(("z", None)),
+   socom._seat_trust([{"seat": "z", "verdict": "kept"}])[("z", None)])
 check("_seat_trust: a seat with ONLY non-kept/broken verdicts is absent (-> 1/2 prior)",
-      "q" not in socom._seat_trust([{"seat": "q", "verdict": "skipped"}]))
+      ("q", None) not in socom._seat_trust([{"seat": "q", "verdict": "skipped"}]))
+
+# slice 9 — trust is scoped to (seat, model): a model UPGRADE resets to the neutral prior.
+_mvrows = [{"seat": "builder", "verdict": "kept", "model": "modelA"}] * 3
+_mvmap = socom._seat_trust(_mvrows)
+eq("_seat_trust: trust is keyed by (seat, model)", round(_mvmap[("builder", "modelA")], 3), 0.8)
+eq("_trust_of: the SAME seat under an UPGRADED model -> neutral 1/2 (reset, not inherited)",
+   socom._trust_of(_mvmap, "builder", "modelB"), 0.5)
+eq("_trust_of: the seat under its EARNED model keeps its earned trust",
+   round(socom._trust_of(_mvmap, "builder", "modelA"), 3), 0.8)
+eq("_seat_trust: the same seat under two models forms two independent buckets",
+   sorted(socom._seat_trust(
+       [{"seat": "b", "verdict": "kept", "model": "m1"},
+        {"seat": "b", "verdict": "broken", "model": "m2"}]).keys()),
+   [("b", "m1"), ("b", "m2")])
+eq("_seat_trust: a legacy row (no model) buckets under (seat, None), inert for live runs",
+   list(socom._seat_trust([{"seat": "b", "verdict": "kept"}]).keys()), [("b", None)])
+
+# _promise_model: the verdict inherits the model of the promise's LATEST run record (slice 9)
+_pmroot = Path(_tf.mkdtemp())
+eq("_promise_model: no runs dir -> None (a manual verify has no model)",
+   socom._promise_model(_pmroot, "P-1"), None)
+(_pmroot / ".socom" / "runs").mkdir(parents=True)
+(_pmroot / ".socom" / "runs" / "R-old.json").write_text(_json.dumps(
+    {"promise": "P-1", "model": "m-old", "ts_started": "2026-06-20T10:00:00+00:00"}))
+(_pmroot / ".socom" / "runs" / "R-new.json").write_text(_json.dumps(
+    {"promise": "P-1", "model": "m-new", "ts_started": "2026-06-21T10:00:00+00:00"}))
+(_pmroot / ".socom" / "runs" / "R-other.json").write_text(_json.dumps(
+    {"promise": "P-2", "model": "m-x", "ts_started": "2026-06-22T10:00:00+00:00"}))
+eq("_promise_model: returns the LATEST run's model for the promise (not another promise's)",
+   socom._promise_model(_pmroot, "P-1"), "m-new")
+eq("_promise_model: a promise with no run record -> None",
+   socom._promise_model(_pmroot, "P-never"), None)
+# tied ts_started -> deterministic by run-id (never let glob order decide the model)
+_pmtie = Path(_tf.mkdtemp())
+(_pmtie / ".socom" / "runs").mkdir(parents=True)
+for _rid, _m in (("R-aaa", "m-lo"), ("R-zzz", "m-hi")):
+    (_pmtie / ".socom" / "runs" / f"{_rid}.json").write_text(_json.dumps(
+        {"run_id": _rid, "promise": "P-T", "model": _m,
+         "ts_started": "2026-06-21T10:00:00+00:00"}))
+eq("_promise_model: a ts tie is broken deterministically by run-id (higher wins)",
+   socom._promise_model(_pmtie, "P-T"), "m-hi")
 
 # composite ranking: relevance PRIMARY, trust SECONDARY (slice 7)
 _xroot = Path(_tf.mkdtemp())
@@ -679,6 +722,33 @@ check("_triage_rank: no relevance but trust varies -> trust basis", "trust" in _
 _flat, _flatbasis = socom._triage_rank(_xroot, _xelig, "gamma")
 check("_triage_rank: empty ledger + no relevance -> recency basis (slice-5 preserved)",
       "recency" in _flatbasis)
+
+# slice 9 — triage ranks by (seat, model): a dead run under the EARNED model outranks the
+# same seat's dead run under an UPGRADED (unseen) model, equal relevance. The earned-model
+# run gets the alphabetically-LATER run-id, so ranking it first proves TRUST (not tie-break).
+_mvroot = Path(_tf.mkdtemp())
+(_mvroot / ".socom" / "runs").mkdir(parents=True)
+(_mvroot / ".socom" / "promises").mkdir(parents=True)
+(_mvroot / ".socom" / "ledger").mkdir(parents=True)
+for _pid, _model in (("PM-NEW", "modelB"), ("PM-OLD", "modelA")):  # OLD = later run-id
+    (_mvroot / ".socom" / "promises" / f"{_pid}.xml").write_text(
+        f'<promise id="{_pid}" domain="cli"><intent><verbatim>delta delta</verbatim></intent>'
+        f'<contract ref="C"><goal>delta delta</goal></contract></promise>')
+    (_mvroot / ".socom" / "runs" / f"R-{_pid}.json").write_text(_json.dumps({
+        "run_id": f"R-{_pid}", "seat": "builder", "promise": _pid, "contract": "C",
+        "runtime": "claude-code", "model": _model, "status": "dead",
+        "ts_started": _mnow.isoformat(), "pid": None, "brief_path": "b",
+        "promise_path": f".socom/promises/{_pid}.xml", "ts_ended": None, "exit_code": 137}))
+# builder is 3-kept ONLY under modelA -> high trust for the modelA run, neutral for modelB
+(_mvroot / ".socom" / "ledger" / "runs.jsonl").write_text("\n".join(_json.dumps(
+    {"promise": "hx", "seat": "builder", "verdict": "kept", "model": "modelA"})
+    for _ in range(3)) + "\n")
+_mvelig, _ = socom.recoverable(_mvroot)
+_mvrank, _ = socom._triage_rank(_mvroot, _mvelig, "delta")
+eq("_triage_rank: the earned-model dead run outranks the upgraded-model one (trust is per-model)",
+   _mvrank[0]["promise"], "PM-OLD")
+eq("_triage_rank: the upgraded-model run resolves to the neutral prior (reset, not inherited)",
+   next(r["trust"] for r in _mvrank if r["promise"] == "PM-NEW"), 0.5)
 
 # ── per-seat envelope budget (slice 6) ───────────────────────────────────────
 eq("_seat_budget: a positive int is used",

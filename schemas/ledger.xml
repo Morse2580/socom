@@ -32,6 +32,7 @@
     <field name="duration_s" type="int"      required="true">Wall-clock seconds. 0 marks a pre-flight skip.</field>
     <field name="attempt"   type="int"       required="true">Attempt number for this promise, 1-based. Attempt 1's verdict decides pass@1.</field>
     <field name="verdict"   type="enum"      required="true" values="kept|broken">The promise outcome (schemas/promise.xml vocabulary). kept = success.</field>
+    <field name="model"     type="string"    required="false">The model that produced the judged run (the bound model string, e.g. a concrete id or an alias). Optional: legacy rows and purely-manual verifies omit it. Scopes per-seat trust to a model so an upgrade does not inherit the old model's reputation (monarch triage). Versioning is as granular as the binding.</field>
   </fields>
 
   <!-- Worked example: the canonical view of three rows (two attempts of one

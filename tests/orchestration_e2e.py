@@ -371,8 +371,12 @@ def main():
                 "ts_ended": "2026-06-21T12:01:00+00:00", "exit_code": 137}))
         ledger = repo / ".socom" / "ledger"
         ledger.mkdir(exist_ok=True)
-        rows = ([{"promise": "hist-b", "seat": "builder", "verdict": "kept", "attempt": 1}] * 3
-                + [{"promise": "hist-r", "seat": "reviewer", "verdict": "broken", "attempt": 1}] * 3)
+        # history tagged with the SAME model the dead runs carry ("default"), so per-(seat,
+        # model) trust (slice 9) attributes it to those runs.
+        rows = ([{"promise": "hist-b", "seat": "builder", "verdict": "kept",
+                  "attempt": 1, "model": "default"}] * 3
+                + [{"promise": "hist-r", "seat": "reviewer", "verdict": "broken",
+                    "attempt": 1, "model": "default"}] * 3)
         (ledger / "runs.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
         rc, out = run(["monarch", "triage", "flock"], env, repo)
         check("triage exits 0 with a ledger present", rc == 0)
@@ -380,6 +384,22 @@ def main():
               "trust" in out and "trust" in out.splitlines()[0])
         check("equal relevance -> the higher-trust seat's run ranks first (trust beats run-id)",
               "P-TRZ" in out and "P-TRA" in out and out.index("P-TRZ") < out.index("P-TRA"))
+
+        # ── model-versioned trust (slice 9): the builder's kept history is under "default",
+        #    so its dead run (P-TRZ) shows trust 0.80. Re-tag that run to an UPGRADED model
+        #    the builder has NO history under — its trust must RESET to the neutral 0.50
+        #    (not inherit 0.80). ──
+        trz_before = next(ln for ln in out.splitlines() if "P-TRZ" in ln)
+        check("the earned-model builder run shows its earned trust (0.80)",
+              "0.80" in trz_before)
+        builder_run = repo / ".socom" / "runs" / "R-P-TRZ.json"
+        rec = json.loads(builder_run.read_text())
+        rec["model"] = "upgraded-model"          # builder has NO history under this model
+        builder_run.write_text(json.dumps(rec))
+        rc, out2 = run(["monarch", "triage", "flock"], env, repo)
+        trz_after = next((ln for ln in out2.splitlines() if "P-TRZ" in ln), "")
+        check("an upgraded-model run RESETS to the neutral prior (0.50), not inheriting 0.80",
+              rc == 0 and "0.50" in trz_after and "0.80" not in trz_after)
 
         # ── context emit per-seat budget default (slice 8): the seat's context_budget
         #    fills in for an omitted --budget; the recorded envelope is identical to an

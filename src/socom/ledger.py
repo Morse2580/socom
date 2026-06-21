@@ -65,14 +65,43 @@ def _next_attempt(rows: list, promise: str, contract: str) -> int:
     return (max(prior) + 1) if prior else 1
 
 
-def _append_ledger_row(root, promise, seat, contract, summary, duration_s) -> dict:
+def _promise_model(root, promise):
+    """The model that ran a promise: the `model` of its LATEST run record in
+    .socom/runs (by ts_started), or None when the promise was never spawned (a
+    purely-manual verify has no model — honestly). Lets a recorded verdict carry
+    the model that produced it, so per-seat trust can be scoped to a model
+    (monarch triage, slice 9). Tolerant: a torn/unreadable record is skipped, never
+    crashes the verdict write."""
+    import json
+    runs = root / SOCOM_DIR / "runs"
+    if not runs.is_dir():
+        return None
+    # latest by ts_started, tie-broken by run-id so the pick is DETERMINISTIC (glob
+    # order is filesystem-dependent — never let it decide which model a verdict inherits).
+    best_key, best_model = ("", ""), None
+    for f in runs.glob("R-*.json"):
+        try:
+            rec = json.loads(f.read_text())
+        except (ValueError, OSError):
+            continue
+        if rec.get("promise") == promise:
+            key = (rec.get("ts_started") or "", rec.get("run_id") or f.stem)
+            if key > best_key:
+                best_key, best_model = key, rec.get("model")
+    return best_model
+
+
+def _append_ledger_row(root, promise, seat, contract, summary, duration_s,
+                       model=None) -> dict:
     """The single writer for .socom/ledger/runs.jsonl: read the ledger, compute
     the next attempt for (promise, contract), append one row for this
     assessment, and return it. Both `contract verify --record` and the
     task-completion gate record through here, so the wire format and the attempt
-    sequence have ONE source of truth (§least-common-mechanism). Callers own the
-    fail-closed guards (standalone / manual-pending / no-evidence) — this writes
-    unconditionally once a row is warranted."""
+    sequence have ONE source of truth (§least-common-mechanism). `model` (the model
+    that produced the judged run) is recorded for per-(seat,model) trust (slice 9);
+    None when unknown. Callers own the fail-closed guards (standalone /
+    manual-pending / no-evidence) — this writes unconditionally once a row is
+    warranted."""
     import json
     try:
         import fcntl
@@ -99,20 +128,24 @@ def _append_ledger_row(root, promise, seat, contract, summary, duration_s) -> di
         rows = [json.loads(ln) for ln in fh.read().splitlines() if ln.strip()]
         attempt = _next_attempt(rows, promise, contract)
         row = _ledger_row(promise, seat, contract, summary, attempt, _now_iso(),
-                          duration_s)
+                          duration_s, model)
         fh.write(json.dumps(row) + "\n")
     return row
 
 
-def _ledger_row(promise, seat, contract, summary, attempt, ts, duration_s) -> dict:
+def _ledger_row(promise, seat, contract, summary, attempt, ts, duration_s,
+                model=None) -> dict:
     """Pure: a verify outcome -> one ledger JSONL row (the schemas/ledger.xml
     field contract — these keys ARE the wire keys). verdict 'kept' iff no auto
     check failed; gate_band 'red' because a contract verify is the
-    task-completion-band assessment that decides done. Only ever called for a
-    fully-mechanical verify (manual==0) — the manual-pending guard lives in the
-    caller so the mechanical assessor never records a verdict it cannot make
+    task-completion-band assessment that decides done. `model` (optional) records
+    the model that produced the judged run, scoping per-seat trust to a model
+    (slice 9); omitted from the row when None so legacy/manual rows stay byte-
+    identical and ledgercheck (model required=false) stays green. Only ever called
+    for a fully-mechanical verify (manual==0) — the manual-pending guard lives in
+    the caller so the mechanical assessor never records a verdict it cannot make
     (constitution §context-economy / §separation-of-privilege)."""
-    return {
+    row = {
         "ts": ts,
         "seat": seat,
         "promise": promise,
@@ -123,6 +156,9 @@ def _ledger_row(promise, seat, contract, summary, attempt, ts, duration_s) -> di
         "attempt": attempt,
         "verdict": "kept" if summary["ok"] else "broken",
     }
+    if model is not None:
+        row["model"] = model
+    return row
 
 
 def _promise_ref(root_el):
@@ -237,7 +273,7 @@ def cmd_contract(args):
                   file=sys.stderr)
         else:
             row = _append_ledger_row(root, promise_id, seat, cref, s,
-                                     duration_s)
+                                     duration_s, _promise_model(root, promise_id))
             print(f"socom contract verify: recorded ledger row — {seat} "
                   f"{promise_id} attempt {row['attempt']} verdict "
                   f"{row['verdict']} (.socom/ledger/runs.jsonl).")
