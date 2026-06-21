@@ -82,11 +82,14 @@ def cmd_prompt(args):
     unfilled = body.count("FILL")
     claims = verify_claims(root, body)
     verified = sum(1 for c in claims if c.startswith("VERIFIED"))
-    # Prompt identity: id derived from the source handoff (the single ordering
-    # authority — H-<date>-<branch>), plus an in-file generation timestamp so the
-    # session-start drift scan has a write-time it can read without git mtime.
-    pid = "P" + latest.stem[1:]
+    # Prompt identity: UNIQUE per session, content-addressed like a memory. The
+    # source handoff (H-<date>-<branch>) gives ordering, but two sessions on the
+    # same branch+day would collide on that alone — so the id also carries a short
+    # CONTENT HASH (over the handoff body + the generation timestamp) plus the UTC
+    # generation stamp. Same shape memories use: a hash + a unique time.
     gen_ts = _now_iso()
+    phash = hashlib.sha256((body + gen_ts).encode()).hexdigest()[:12]
+    pid = f"P{latest.stem[1:]}-{phash}"
     src_date_m = re.search(r'date="([^"]+)"', body)
     src_date = src_date_m.group(1) if src_date_m else "unknown"
     out = root / SOCOM_DIR / "prompts" / "next-session.md"
