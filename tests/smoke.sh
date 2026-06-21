@@ -891,6 +891,14 @@ U="$(python3 "$ROOT/tests/unit.py" 2>&1)"; UR=$?
 [ "$UR" = 0 ] && ok "unit: pure core ($(printf '%s' "$U" | tail -1))" \
              || { bad "unit tests on pure core"; printf '%s\n' "$U"; }
 
+# 15b. orchestration end-to-end (Python harness): drives the real bin/socom
+#      through spawn --exec -> kill -> monarch tally/reap -> session-start wiring,
+#      in its own throwaway repos. Chained here so the full launch/supervise/reap
+#      lifecycle is part of fast/medium/full + CI, not just a standalone tool.
+E2E="$(python3 "$ROOT/tests/orchestration_e2e.py" 2>&1)"; E2ER=$?
+[ "$E2ER" = 0 ] && ok "e2e: orchestration ($(printf '%s' "$E2E" | tail -1))" \
+               || { bad "orchestration e2e (spawn+monarch lifecycle)"; printf '%s\n' "$E2E"; }
+
 rm -rf "$T"
 if [ "$FAIL" -gt 0 ]; then echo "smoke: $FAIL FAILURE(S)"; exit 1; fi
 echo "smoke: all checks passed"

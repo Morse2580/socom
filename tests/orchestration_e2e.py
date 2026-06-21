@@ -1,0 +1,215 @@
+#!/usr/bin/env python3
+"""socom orchestration end-to-end — spawn launches, monarch reaps.
+
+Drives the REAL bin/socom through the full lifecycle a user would exercise:
+launch (spawn --exec) -> record -> kill the worker -> reconcile (monarch tally)
+-> reap (monarch reap) -> amber breach + broken ledger row -> idempotent re-reap
+-> the same reap firing inside `gate session-start`. Black-box, via subprocess,
+in throwaway git repos with an isolated HOME — so it proves the assembled tool
+RUNS, not just that the pure core is correct. Complements tests/smoke.sh's
+black-box checks and tests/unit.py's white-box checks with a Python harness the
+operator can run standalone:
+
+    python3 tests/orchestration_e2e.py
+
+Chained into checks.fast via tests/smoke.sh, so fast/medium/full + CI run it too.
+"""
+import json
+import os
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+SOCOM = ROOT / "bin" / "socom"
+
+PROMISE = """<promise id="P-E2E" state="open" domain="cli">
+  <promiser seat="builder" participant="claude-code:default"/>
+  <intent><verbatim from="human:moses" date="2026-06-21">spin up teh worker and watch it</verbatim>
+  <decoded>Launch a builder and supervise it to completion.</decoded></intent>
+  <contract ref="C-E2E" state="ratified"><goal>the run is supervised end to end</goal>
+  <check id="1" assessor="gate:task-completion"><run>true</run><expect>record exists</expect></check>
+</contract></promise>
+"""
+
+_fail = 0
+
+
+def ok(msg):
+    print(f"  ✓ {msg}")
+
+
+def bad(msg):
+    global _fail
+    _fail += 1
+    print(f"  ✗ {msg}")
+
+
+def check(desc, cond):
+    ok(desc) if cond else bad(desc)
+
+
+def run(args, env, cwd):
+    """Run bin/socom <args> in cwd with env; return (rc, stdout+stderr)."""
+    cp = subprocess.run([str(SOCOM), *args], cwd=cwd, env=env,
+                        capture_output=True, text=True)
+    return cp.returncode, cp.stdout + cp.stderr
+
+
+def the_record(repo):
+    js = sorted((repo / ".socom" / "runs").glob("R-*.json"))
+    return json.loads(js[0].read_text()) if js else None
+
+
+def breach_lines(repo):
+    log = repo / ".socom" / "gates" / "breaches.log"
+    return [ln for ln in log.read_text().splitlines() if ln.strip()] if log.exists() else []
+
+
+def main():
+    tmp = Path(tempfile.mkdtemp())
+    home = tmp / "home"
+    home.mkdir()
+    env = {**os.environ, "HOME": str(home), "SOCOM_SESSION": "e2e"}
+
+    # a stub `claude` that stays alive until killed (exec sleep -> pid IS sleep).
+    bindir = tmp / "bin"
+    bindir.mkdir()
+    stub = bindir / "claude"
+    stub.write_text("#!/bin/sh\nexec sleep 600\n")
+    stub.chmod(0o755)
+    env_with_stub = {**env, "PATH": f"{bindir}{os.pathsep}{env['PATH']}"}
+
+    repo = tmp / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main", "."], cwd=repo, check=True)
+    rc, _ = run(["init", "."], env, repo)
+    check("init a fresh repo (seats + canon planted)", rc == 0)
+    (repo / ".socom" / "promises").mkdir(parents=True, exist_ok=True)
+    (repo / ".socom" / "promises" / "p.xml").write_text(PROMISE)
+    ppath = ".socom/promises/p.xml"
+
+    killed_pid = None
+    try:
+        # ── spawn (default): materialize + print launch command, no verdict ──
+        rc, out = run(["spawn", "--seat", "builder", "--promise", ppath], env, repo)
+        check("spawn default exits 0", rc == 0)
+        check("spawn default prints a launch command", 'claude -p' in out)
+        rec = the_record(repo)
+        check("spawn writes a materialized record (null pid)",
+              rec and rec["status"] == "materialized" and rec["pid"] is None)
+        check("record carries exactly the schema fields", rec and set(rec) == {
+            "run_id", "seat", "promise", "contract", "runtime", "model",
+            "status", "ts_started", "pid", "brief_path", "ts_ended", "exit_code"})
+        brief = (repo / rec["brief_path"]).read_text()
+        check("brief carries the literal user verbatim",
+              "spin up teh worker and watch it" in brief)
+        check("brief embeds the reused seat envelope",
+              "builder" in brief and "You promise" in brief)
+        rid1 = rec["run_id"]
+
+        # idempotent id (same intent -> same content hash -> same run)
+        run(["spawn", "--seat", "builder", "--promise", ppath], env, repo)
+        runs = list((repo / ".socom" / "runs").glob("R-*.json"))
+        check("spawn id is content-addressed + idempotent (one record)",
+              len(runs) == 1 and runs[0].stem == rid1)
+
+        # spawn never writes a verdict
+        check("spawn writes NO ledger row (verdict boundary)",
+              not (repo / ".socom" / "ledger" / "runs.jsonl").exists())
+
+        # ── spawn --exec: launch the stub, capture a live pid ──
+        for f in (repo / ".socom" / "runs").glob("R-*"):
+            f.unlink()
+        rc, out = run(["spawn", "--seat", "builder", "--promise", ppath, "--exec"],
+                      env_with_stub, repo)
+        check("spawn --exec exits 0", rc == 0)
+        rec = the_record(repo)
+        check("spawn --exec record is running with an int pid",
+              rec and rec["status"] == "running" and isinstance(rec["pid"], int))
+        killed_pid = rec["pid"]
+
+        # ── monarch tally: the live run reads running ──
+        rc, out = run(["monarch"], env, repo)
+        check("monarch tally exits 0 (read-only)", rc == 0)
+        check("monarch tally reports the live run as running",
+              "1 running, 0 dead" in out and "running" in out.splitlines()[-1])
+
+        # ── kill the worker: tally now classifies it dead (status still running) ──
+        os.kill(killed_pid, signal.SIGKILL)
+        for _ in range(50):
+            try:
+                os.kill(killed_pid, 0)
+                time.sleep(0.05)
+            except OSError:
+                break
+        rc, out = run(["monarch"], env, repo)
+        check("monarch tally reconciles a killed worker to dead",
+              "0 running, 1 dead" in out)
+        check("tally is non-mutating (record still says running)",
+              the_record(repo)["status"] == "running")
+
+        # ── monarch reap: flip status, one amber breach, one broken ledger row ──
+        rc, out = run(["monarch", "reap"], env, repo)
+        check("monarch reap exits 0", rc == 0)
+        check("monarch reap reports one reaped run", "1 dead run(s) reaped" in out)
+        rec = the_record(repo)
+        check("reap flips status to dead with an end stamp + exit code",
+              rec["status"] == "dead" and rec["ts_ended"] and rec["exit_code"] == 137)
+        breaches = breach_lines(repo)
+        check("reap logs exactly ONE amber breach",
+              len(breaches) == 1 and "died without verdict" in breaches[0]
+              and rid1 in breaches[0])
+        ledger = repo / ".socom" / "ledger" / "runs.jsonl"
+        rows = [json.loads(x) for x in ledger.read_text().splitlines() if x.strip()] \
+            if ledger.exists() else []
+        check("reap appends one broken ledger row (cycle sees the failure)",
+              len(rows) == 1 and rows[0]["verdict"] == "broken"
+              and rows[0]["seat"] == "builder")
+
+        # ── idempotent: a re-reap of the same dead run does nothing ──
+        rc, out = run(["monarch", "reap"], env, repo)
+        check("re-reap is idempotent (nothing to reap)",
+              "no dead-but-running runs to reap" in out)
+        check("re-reap logs no second breach", len(breach_lines(repo)) == 1)
+
+        # ── wiring: gate session-start reaps dead runs beside the claim reaper ──
+        for f in (repo / ".socom" / "runs").glob("R-*"):
+            f.unlink()
+        rc, out = run(["spawn", "--seat", "builder", "--promise", ppath, "--exec"],
+                      env_with_stub, repo)
+        pid2 = the_record(repo)["pid"]
+        os.kill(pid2, signal.SIGKILL)
+        for _ in range(50):
+            try:
+                os.kill(pid2, 0)
+                time.sleep(0.05)
+            except OSError:
+                break
+        before = len(breach_lines(repo))
+        rc, out = run(["gate", "session-start"], env, repo)
+        check("gate session-start reaps the dead run (wiring)",
+              "reaped dead run" in out and the_record(repo)["status"] == "dead")
+        check("gate session-start reap logged one more amber breach",
+              len(breach_lines(repo)) == before + 1)
+
+    finally:
+        if killed_pid:
+            try:
+                os.kill(killed_pid, signal.SIGKILL)
+            except OSError:
+                pass
+        subprocess.run(["rm", "-rf", str(tmp)])
+
+    if _fail:
+        print(f"orchestration-e2e: {_fail} FAILURE(S)")
+        return 1
+    print("orchestration-e2e: all checks passed")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
