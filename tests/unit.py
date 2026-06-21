@@ -559,6 +559,69 @@ check("recoverable: a promise with a live run is never double-dispatched", "PD" 
 check("recoverable: a promise with a materialized launch is not re-dispatched", "PE" not in _eset)
 eq("RECOVER_MAX_ATTEMPTS default is 3", socom.RECOVER_MAX_ATTEMPTS, 3)
 
+# ── monarch triage — rank eligible dead runs by recovery-worth (reuse l0_score) ─
+_troot = Path(_tf.mkdtemp())
+(_troot / ".socom" / "runs").mkdir(parents=True)
+(_troot / ".socom" / "promises").mkdir(parents=True)
+
+
+def _wpromise(pid, intent):
+    (_troot / ".socom" / "promises" / f"{pid}.xml").write_text(
+        f'<promise id="{pid}" domain="cli"><intent><verbatim>{intent}</verbatim>'
+        f'</intent><contract ref="C-{pid}"><goal>{intent}</goal></contract></promise>')
+
+
+def _wdead(rid, pid):
+    (_troot / ".socom" / "runs" / f"{rid}.json").write_text(_json.dumps({
+        "run_id": rid, "seat": "builder", "promise": pid, "contract": f"C-{pid}",
+        "runtime": "claude-code", "model": "default", "status": "dead",
+        "ts_started": _mnow.isoformat(), "pid": None, "brief_path": "b",
+        "promise_path": f".socom/promises/{pid}.xml", "ts_ended": None,
+        "exit_code": 137}))
+
+
+_wpromise("PX", "make the ledger flock serialize concurrent writers")
+_wpromise("PY", "restyle the frontend widget colour palette")
+_wdead("R-PX-1", "PX")
+_wdead("R-PY-1", "PY")
+_telig, _ = socom.recoverable(_troot)
+eq("triage fixture: both promises are eligible", {e["promise"] for e in _telig}, {"PX", "PY"})
+
+_tranked, _tbasis = socom._triage_rank(_troot, _telig, "flock")
+eq("_triage_rank: a focus-matching promise ranks first", _tranked[0]["promise"], "PX")
+check("_triage_rank: the basis names the focus", "focus" in _tbasis)
+eq("_triage_rank: the matching promise carries a positive worth", _tranked[0]["worth"] >= 1, True)
+eq("_triage_rank: the non-matching promise carries zero worth",
+   [x for x in _tranked if x["promise"] == "PY"][0]["worth"], 0)
+
+_nranked, _nbasis = socom._triage_rank(_troot, _telig, "zzz qqq nomatch")
+check("_triage_rank: no overlap -> loud recency fallback", "recency" in _nbasis)
+
+# no focus -> rank by the active-lesson corpus (lifecycle-honest)
+(_troot / ".socom" / "lessons").mkdir(parents=True)
+(_troot / ".socom" / "lessons" / "L-1.xml").write_text(
+    '<lesson id="L-1" domain="cli" state="active"><statement embed="true">'
+    'flock around the ledger read-compute-append or attempts duplicate</statement></lesson>')
+_lranked, _lbasis = socom._triage_rank(_troot, _telig, None)
+eq("_triage_rank: no focus ranks by active-lesson overlap", _lranked[0]["promise"], "PX")
+check("_triage_rank: lesson basis", "lesson" in _lbasis.lower())
+check("_active_lessons_text: gathers the active statement",
+      "flock" in socom._active_lessons_text(_troot))
+eq("_run_intent: reads verbatim + goal from the promise",
+   "flock" in socom._run_intent(_troot, {"promise_path": ".socom/promises/PX.xml"}), True)
+eq("_run_intent: a missing promise_path is tolerant ('')",
+   socom._run_intent(_troot, {}), "")
+eq("_focus_arg: skips flags and --top's value, returns the positional",
+   socom._focus_arg(["flock", "--top", "2", "--exec"]), "flock")
+eq("_focus_arg: only flags -> None", socom._focus_arg(["--exec", "--top", "1"]), None)
+eq("_parse_top: a positive int parses", socom._parse_top(["--top", "2"]), 2)
+eq("_parse_top: absent -> None", socom._parse_top(["--exec"]), None)
+try:
+    socom._parse_top(["--top", "0"])
+    check("_parse_top: non-positive exits loud", False)
+except SystemExit:
+    check("_parse_top: non-positive exits loud", True)
+
 # ── summary ──────────────────────────────────────────────────────────────────
 print(f"unit: {_PASS} passed, {_FAIL} failed")
 raise SystemExit(1 if _FAIL else 0)

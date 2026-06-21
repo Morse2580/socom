@@ -3669,12 +3669,148 @@ def _recover_one(root: Path, cfg: dict, entry: dict, exec_: bool):
                       lineage=lineage)
 
 
+# ── monarch triage — heuristic relevance over which dead runs to recover (slice 5)
+# recover is MECHANICAL: it offers every eligible dead-but-unkept run in dict order.
+# triage makes it SMART — it RANKS the already-eligible promises by recovery-worth,
+# retrieved the SAME way `socom query` ranks (l0 keyword overlap, the stdlib floor), so
+# the most-relevant dead runs surface first and a pass can be bounded to the top. triage
+# NEVER widens eligibility (recoverable() still decides WHO is eligible); it only ORDERS
+# and BOUNDS. The triage/recover split mirrors tally/reap: triage is the read-only ranked
+# view, recover is the act — now ordered by triage instead of by filesystem iteration.
+
+
+def _run_intent(root: Path, dead: dict) -> str:
+    """The MEANINGFUL intent of a dead run's promise (verbatim + decoded + goal — the
+    same signal spawn's residuality trigger reads), for ranking. TOLERANT by design: a
+    missing promise_path, a gone source, or a torn promise yields "" (it ranks low),
+    never an abort — ranking is best-effort, unlike the strict _resolve_promise recover
+    uses to actually dispatch (which SHOULD be loud)."""
+    pp = dead.get("promise_path")
+    if not pp:
+        return ""
+    f = root / pp
+    if not f.exists():
+        return ""
+    try:
+        proot = ET.parse(f).getroot()
+    except (ET.ParseError, OSError):
+        return ""
+    parts = []
+    for path in ("intent/verbatim", "intent/decoded", "contract/goal"):
+        el = proot.find(path)
+        if el is not None and el.text:
+            parts.append(" ".join(el.text.split()))
+    return " ".join(parts)
+
+
+def _active_lessons_text(root: Path) -> str:
+    """The concatenated statements of the ACTIVE domain lessons — the repo's earned
+    wisdom, used as the relevance focus when triage gets no explicit FOCUS. Lifecycle-
+    honest: only state=active counts (the SAME filter spawn's envelope applies); a
+    retired/provisional lesson never colours the ranking."""
+    out = []
+    for f in _lesson_files(root):
+        t = f.read_text()
+        if _lesson_attr(t, "state") == "active":
+            out.append(_lesson_statement(t))
+    return " ".join(out)
+
+
+def _triage_rank(root: Path, eligible: list, focus=None):
+    """Rank the eligible bucket by recovery-worth, highest first. Worth = relevance of
+    each promise's meaningful intent to a FOCUS (an explicit query, else the active-lesson
+    corpus), computed by REUSING l0_score (the query keyword floor — no new scorer). The
+    tie-break (fewer attempts, more-recent death, run-id) is applied as a STABLE pre-sort,
+    so equal-worth promises keep that order. Degrades LOUDLY: when no candidate overlaps
+    the focus at all, returns the tie-break order with a 'recency' basis rather than a
+    silently arbitrary one. Returns (ranked_entries_with_worth, basis_string)."""
+    # tie-break pre-sort: least-significant key first (stable sort composes them).
+    pre = sorted(eligible, key=lambda e: e["dead"].get("run_id", ""))
+    pre = sorted(pre, key=lambda e: e["dead"].get("ts_started", ""), reverse=True)
+    pre = sorted(pre, key=lambda e: e["attempts"])
+    if focus:
+        focus_text, basis = focus, f"focus: {focus}"
+    else:
+        focus_text, basis = _active_lessons_text(root), "earned lessons"
+    qwords = set(re.findall(r"\w+", (focus_text or "").lower()))
+    enriched = []
+    for e in pre:
+        itext = _run_intent(root, e["dead"])
+        worth = len(qwords & set(re.findall(r"\w+", itext.lower()))) if qwords else 0
+        enriched.append({**e, "worth": worth, "_intent": itext})
+    if not any(x["worth"] for x in enriched):
+        # no relevance signal — fall back to the tie-break order, and SAY so (R6).
+        return enriched, "recency (no relevance signal)"
+    ranked_ids = l0_score(focus_text, [{"id": x["promise"], "text": x["_intent"]}
+                                       for x in enriched], len(enriched))
+    by = {x["promise"]: x for x in enriched}
+    return [by[i] for i in ranked_ids], basis
+
+
+def _focus_arg(args: list):
+    """The first positional (non-flag) token in args, skipping --top's value — the
+    optional FOCUS query for triage/recover. None when only flags are present."""
+    out, i = [], 0
+    while i < len(args):
+        a = args[i]
+        if a == "--top":
+            i += 2
+            continue
+        if a.startswith("--"):
+            i += 1
+            continue
+        out.append(a)
+        i += 1
+    return out[0] if out else None
+
+
+def _parse_top(args: list):
+    """The --top N bound (a positive int) or None. A missing/non-positive/non-integer
+    value exits nonzero, loud (R6) — a silent reinterpretation would mask operator error."""
+    if "--top" not in args:
+        return None
+    i = args.index("--top")
+    val = args[i + 1] if i + 1 < len(args) else None
+    if val is None or not val.isdigit() or int(val) <= 0:
+        sys.exit("socom monarch recover: --top needs a positive integer "
+                 "(R6: degrade loudly).")
+    return int(val)
+
+
+def _cmd_triage(root: Path, args: list):
+    """`socom monarch triage [FOCUS]` — read-only: rank the eligible dead-but-unkept runs
+    by recovery-worth and print the plan, highest-worth first. Ranks ONLY what recover
+    would already accept; mutates nothing; exits 0 (the tally posture)."""
+    focus = _focus_arg(args)
+    eligible, abandoned = recoverable(root)
+    if not eligible:
+        print("socom monarch triage: no eligible runs to rank "
+              f"({len(abandoned)} at/over the cap, needs a human).")
+        return
+    ranked, basis = _triage_rank(root, eligible, focus)
+    print(f"socom monarch triage: {len(ranked)} eligible run(s) ranked by "
+          f"recovery-worth [{basis}].")
+    now = datetime.now(timezone.utc)
+    print(f"  {'#':<3} {'promise':<16} {'worth':<6} {'attempts':<9} {'age':<7} run-id")
+    for n, x in enumerate(ranked, 1):
+        d = x["dead"]
+        print(f"  {n:<3} {x['promise']:<16} {x['worth']:<6} "
+              f"{str(x['attempts']) + '/' + str(RECOVER_MAX_ATTEMPTS):<9} "
+              f"{_uptime(d, now):<7} {d.get('run_id', '')}")
+    print("  recover in this order with `socom monarch recover"
+          + (f" {focus!r}" if focus else "") + " [--top N] [--exec]`.")
+
+
 def _cmd_recover(root: Path, args: list):
-    """`socom monarch recover [--exec]` — re-dispatch dead-but-unkept promises under the
-    attempt cap. Default prints the re-spawn command(s) and exits 0 (record-first, no
-    process launched); --exec background-launches each through spawn's own --exec path.
+    """`socom monarch recover [FOCUS] [--top N] [--exec]` — re-dispatch dead-but-unkept
+    promises under the attempt cap, in TRIAGE order (most recovery-worth first). Default
+    prints the re-spawn command(s) and exits 0 (record-first); --exec background-launches
+    each through spawn's own --exec path. --top N bounds the pass to the N highest-worth;
+    the remainder stay eligible for a later pass (reported, never silently dropped).
     Promises at/over the cap log one abandon breach (idempotent) and are NOT re-spawned."""
     exec_ = "--exec" in args
+    top = _parse_top(args)
+    focus = _focus_arg(args)
     cfg = load_cfg(root)
     eligible, abandoned = recoverable(root)
 
@@ -3691,9 +3827,17 @@ def _cmd_recover(root: Path, args: list):
               "(dead + unkept + under the cap).")
         return
 
-    print(f"socom monarch recover: {len(eligible)} promise(s) eligible "
-          f"({'launching' if exec_ else 'printing re-spawn command(s)'}):")
-    for e in eligible:
+    ranked, basis = _triage_rank(root, eligible, focus)
+    deferred = 0
+    if top is not None and top < len(ranked):
+        deferred = len(ranked) - top
+        ranked = ranked[:top]
+
+    print(f"socom monarch recover: {len(eligible)} eligible promise(s); recovering "
+          f"{len(ranked)} in triage order [{basis}]"
+          + (f"; {deferred} lower-worth deferred to a later pass." if deferred
+             else "") + (":" if not deferred else ""))
+    for e in ranked:
         r = _recover_one(root, cfg, e, exec_)
         if r is None:
             continue
@@ -3716,6 +3860,9 @@ def cmd_monarch(args):
     if args and args[0] == "recover":
         return _cmd_recover(root, args[1:])
 
+    if args and args[0] == "triage":
+        return _cmd_triage(root, args[1:])
+
     if args and args[0] == "reap":
         lines = reap_dead_runs(root)
         for ln in lines:
@@ -3729,7 +3876,8 @@ def cmd_monarch(args):
 
     if args and args[0] not in ("tally",):
         sys.exit("usage: socom monarch [tally] | socom monarch reap | "
-                 "socom monarch recover [--exec]")
+                 "socom monarch triage [FOCUS] | "
+                 "socom monarch recover [FOCUS] [--top N] [--exec]")
 
     # tally (default) — read-only liveness reconcile over every open run.
     now = datetime.now(timezone.utc)
