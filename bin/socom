@@ -39,6 +39,14 @@ Commands:
   value    first-run value readout: gate catches, scored runs, context
            adherence, claims, knowledge, adoption rung — signals already on
            disk, no new instrumentation (the why, made legible)
+  spawn    launch a worker into a seat against a promise: forge the dispatch
+           brief (verbatim -> envelope -> contract) + a run record; default
+           prints the launch cmd, --exec background-launches. Never writes a verdict
+  monarch  reconcile-and-reap supervisor over run records (no daemon): tally
+           liveness | reap dead-but-running (one amber breach) | recover
+           re-dispatches dead-but-unkept under a cap | triage ranks by recovery-worth
+  forge    domain verbs (canon forge.xml) bound to this repo's commands —
+           `forge list` shows verbs + bindings (the repo-specific action layer)
   greet    adoption-ladder greeting — where you are, what's next
   statusline Claude Code statusLine: adoption bar + context-consumption meter
            (reads the host's statusline JSON on stdin; GSD-style ctx meter)
@@ -4374,6 +4382,15 @@ def cmd_quickstart(args):
                 cmd_eval([str(root)])
             except SystemExit as e:  # eval exits RED on a miss — report, never crash
                 print(f"  · L1 not yet certified: {e}")
+
+    # a LIVE demonstration, not a number: the substrate answering a real question
+    # from its own canon, so the new user SEES retrieval work (best-effort — the demo
+    # never decides the climb; it reads cwd's index, the common in-repo case).
+    print("\n[try it] the substrate answering a question from its own canon:")
+    try:
+        cmd_query(["how do I prove a task is done"])
+    except (SystemExit, OSError) as e:
+        print(f"  · query demo skipped ({e}); run `socom query \"...\"` yourself.")
 
     # Wall 3: the orchestration runtime verdict, surfaced now (not at first --exec).
     print("\n[runtime] orchestration readiness…")

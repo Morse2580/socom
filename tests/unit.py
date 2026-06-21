@@ -809,6 +809,14 @@ eq("_probe_count: no probes file -> 0", socom._probe_count(_qp), 0)
     "probes:\n  - query: a\n    expect: x\n  - query: b\n    expect: y\n")
 eq("_probe_count: counts the probes on file", socom._probe_count(_qp), 2)
 
+# ── help completeness (the guard that would have caught spawn/monarch/forge drift) ──
+# every registered command MUST appear in the help text, else `socom` lies about its
+# own surface — exactly how spawn/monarch/forge silently fell out of the listing.
+_help = socom.__doc__ or ""
+_listed = set(re.findall(r'^  (\w+)\s', _help, re.M))
+_unlisted = sorted(c for c in socom.COMMANDS if c not in _listed)
+check(f"help lists every registered command (unlisted: {_unlisted})", not _unlisted)
+
 # ── summary ──────────────────────────────────────────────────────────────────
 print(f"unit: {_PASS} passed, {_FAIL} failed")
 raise SystemExit(1 if _FAIL else 0)
