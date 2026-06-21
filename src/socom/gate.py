@@ -12,8 +12,9 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 from socom.claims import claim_expired, reap_orphans
-from socom.core import SOCOM_DIR, _now_iso, canonical_hash, load_cfg, repo_root
+from socom.core import SOCOM_DIR, _now_iso, canonical_hash, load_cfg, log_breach, repo_root
 from socom.ledger import _append_ledger_row, _promise_ref
+from socom.monarch import reap_dead_runs
 
 # === BODY ===
 
@@ -56,14 +57,6 @@ def cmd_breach(args):
 def run_check(cmd: str, root: Path) -> int:
     print(f"  $ {cmd}")
     return subprocess.run(cmd, shell=True, cwd=root).returncode
-
-
-def log_breach(root: Path, gate: str, detail: str):
-    log = root / SOCOM_DIR / "gates" / "breaches.log"
-    log.parent.mkdir(parents=True, exist_ok=True)
-    ts = _now_iso()
-    with log.open("a") as f:
-        f.write(f"{ts}\t{gate}\t{detail}\n")
 
 
 COMMIT_RX = re.compile(r"^(feat|fix|chore|refactor|test|docs)\([a-z0-9._-]+\): .+")
@@ -150,6 +143,11 @@ def cmd_gate(args):
                       "run `socom compile`", file=sys.stderr)
                 sys.exit(2)
         for ln in reap_orphans(root):  # R12: reap, don't just report
+            print(f"  {ln}")
+        # close the orchestration loop beside the claim reaper: a worker spawned
+        # with --exec that died (or completed) without a verdict is reaped here
+        # every session, so dead runs never linger.
+        for ln in reap_dead_runs(root):
             print(f"  {ln}")
         wt = subprocess.run(["git", "worktree", "list"], cwd=root,
                             capture_output=True, text=True).stdout

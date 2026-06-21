@@ -467,6 +467,42 @@ try:
 except SystemExit:
     check("_emit_flags: a duplicated scalar flag degrades loudly (SystemExit)", True)
 
+# ── monarch — run liveness classification (pure: record + now -> state) ──────
+import os as _os
+_mnow = datetime(2026, 6, 21, 12, 0, 0, tzinfo=timezone.utc)
+
+
+def _rec(**kw):
+    base = {"status": "running", "pid": 2147483646,
+            "ts_started": _mnow.isoformat()}
+    base.update(kw)
+    return base
+
+
+eq("_classify: materialized passes through",
+   socom._classify(_rec(status="materialized"), _mnow), "materialized")
+eq("_classify: dead passes through",
+   socom._classify(_rec(status="dead"), _mnow), "dead")
+eq("_classify: running + dead pid -> dead",
+   socom._classify(_rec(pid=2147483646), _mnow), "dead")
+eq("_classify: running + no pid -> dead",
+   socom._classify(_rec(pid=None), _mnow), "dead")
+eq("_classify: running + stale start -> dead (cross-host horizon)",
+   socom._classify(_rec(ts_started=(_mnow - timedelta(hours=socom.RUN_STALE_HOURS + 1)).isoformat()),
+                   _mnow), "dead")
+eq("_classify: running + unparseable start -> dead",
+   socom._classify(_rec(ts_started="not-a-date"), _mnow), "dead")
+check("_classify: running + live pid + fresh -> running",
+      socom._classify(_rec(pid=_os.getpid()), _mnow) == "running")
+check("_pid_alive: this process is alive", socom._pid_alive(_os.getpid()))
+check("_pid_alive: pid 0 / None / negative is dead",
+      not socom._pid_alive(0) and not socom._pid_alive(None) and not socom._pid_alive(-5))
+eq("_uptime: seconds", socom._uptime(_rec(ts_started=(_mnow - timedelta(seconds=5)).isoformat()), _mnow), "5s")
+eq("_uptime: minutes", socom._uptime(_rec(ts_started=(_mnow - timedelta(minutes=3)).isoformat()), _mnow), "3m")
+eq("_uptime: hours", socom._uptime(_rec(ts_started=(_mnow - timedelta(hours=2)).isoformat()), _mnow), "2h")
+eq("_uptime: days", socom._uptime(_rec(ts_started=(_mnow - timedelta(days=4)).isoformat()), _mnow), "4d")
+eq("_uptime: unparseable -> ?", socom._uptime(_rec(ts_started="x"), _mnow), "?")
+
 # ── summary ──────────────────────────────────────────────────────────────────
 print(f"unit: {_PASS} passed, {_FAIL} failed")
 raise SystemExit(1 if _FAIL else 0)

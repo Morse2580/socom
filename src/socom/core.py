@@ -91,6 +91,17 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def log_breach(root: Path, gate: str, detail: str):
+    """Append one amber breach to .socom/gates/breaches.log (ts, source, detail).
+    A shared substrate primitive: gates log here (HR3), and so does the monarch
+    run-reaper — kept in core so both can write without a gate<->monarch import
+    cycle (§least-common-mechanism). Telemetry about the system, never an author."""
+    log = root / SOCOM_DIR / "gates" / "breaches.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with log.open("a") as f:
+        f.write(f"{_now_iso()}\t{gate}\t{detail}\n")
+
+
 def md_text(el) -> str:
     """Dedented text content of an <md> child (or the element itself)."""
     node = el.find("md") if el.find("md") is not None else el
