@@ -2362,9 +2362,9 @@ def cmd_init(args):
               full: "true"           # pre-push + CI (red band)
             ci:
               status: "echo 'bind me: cache-free pipeline state query'"
-            seats:
+            seats:                   # context_budget (tokens, optional) caps a seat's spawn brief
               builder:  {{ runtime: claude-code, model: default }}
-              reviewer: {{ runtime: claude-code, model: different-family-preferred }}
+              reviewer: {{ runtime: claude-code, model: different-family-preferred, context_budget: 600 }}
             """))
         print(f"  planted {cfg} — EDIT THE BINDINGS, then run `socom compile`")
     cmd_greet([str(root)])
@@ -3041,7 +3041,11 @@ RUNS_DIR = "runs"  # under .socom/ — the run registry monarch reconciles
 # the running token estimate (reusing context.py's single-sourced divisor) caps the
 # subsection. Doctrine/residuality are fixed canon, not the unbounded-growth risk.
 ENVELOPE_MAX_LESSONS = 5
-ENVELOPE_BUDGET_TOKENS = 1200
+# the FALLBACK envelope lesson-token cap, used when a seat's socom.yaml binding
+# declares no `context_budget`. A seat that DOES declare one overrides this (slice
+# 6: the seat's context budget caps its brief); the default keeps a budget-less
+# repo byte-identical to slice 3.
+ENVELOPE_DEFAULT_BUDGET_TOKENS = 1200
 
 
 # runtime: value in socom.yaml -> (binary, argv-builder). The binary is what must
@@ -3168,12 +3172,15 @@ def _envelope_lessons(root: Path, domain, goal) -> list:
     return [by_id[i] for i in l0_score(goal, cands, len(cands))]
 
 
-def _forge_operating_envelope(root: Path, domain, goal, signal) -> str:
+def _forge_operating_envelope(root: Path, domain, goal, signal,
+                              budget=ENVELOPE_DEFAULT_BUDGET_TOKENS) -> str:
     """The heuristic envelope: earned domain lessons (ranked, lifecycle-honest,
     budget-bounded) + doctrine thinking-devices + residuality stressors (only when a
     residuality contract applies). Advisory, cited by id — it informs HOW, the contract
     still decides DONE. Degrades LOUDLY to an explicit 'none on record yet' for lessons
-    rather than a silent empty section (R6)."""
+    rather than a silent empty section (R6). `budget` (the resolved seat's context_budget,
+    or the default) caps the LESSONS subsection in tokens — a tighter seat carries fewer
+    lessons; the single most-relevant always rides (slice 6)."""
     divisor = _load_context_contract()[3]
     devices = ["Thinking devices (reach for one when its trigger fires):"]
     for c in _canon_doc(root, "doctrine.xml").findall("concept"):
@@ -3201,7 +3208,7 @@ def _forge_operating_envelope(root: Path, domain, goal, signal) -> str:
         for c in lessons[:ENVELOPE_MAX_LESSONS]:
             line = f"- **{c['id']}** — {c['text']}"
             over = fixed_cost + _estimate_tokens("\n".join(lines + [line]),
-                                                 divisor) > ENVELOPE_BUDGET_TOKENS
+                                                 divisor) > budget
             if shown and over:  # always keep the top lesson; drop lowest-relevance first
                 break
             lines.append(line)
@@ -3231,12 +3238,27 @@ def _atomic_write_locked(path: Path, data: str, lock: Path):
         os.replace(tmp, path)
 
 
+def _seat_budget(binding: dict, seat: str) -> int:
+    """The seat's envelope token budget: its `context_budget` if declared (a positive
+    int), else the default. A declared-but-invalid value (non-int / <= 0) exits LOUDLY
+    (R6) — a budget that silently reverts to a default is the rule-that-evaporates the
+    context contract forbids (slice 6)."""
+    raw = binding.get("context_budget")
+    if raw is None:
+        return ENVELOPE_DEFAULT_BUDGET_TOKENS
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw <= 0:
+        sys.exit(f"socom spawn: seat '{seat}' context_budget {raw!r} is not a positive "
+                 "integer (tokens) — fix socom.yaml or remove it (R6: degrade loudly).")
+    return raw
+
+
 def _resolve_seat(root: Path, cfg: dict, seat: str, model_override=None):
-    """Resolve a seat to its launch binding: returns (runtime, model, role). The
-    binding (runtime + default model) comes from socom.yaml seats; the role envelope
-    from canon. Exits LOUDLY (R6) on an unbound seat, an unknown runtime, or a seat
-    with no role. Factored from cmd_spawn so monarch recover re-dispatches through the
-    SAME resolution (§least-common-mechanism — no second seat-resolver to drift)."""
+    """Resolve a seat to its launch binding: returns (runtime, model, role, budget). The
+    binding (runtime + default model + optional context_budget) comes from socom.yaml
+    seats; the role envelope from canon. Exits LOUDLY (R6) on an unbound seat, an unknown
+    runtime, a seat with no role, or an invalid context_budget. Factored from cmd_spawn so
+    monarch recover re-dispatches through the SAME resolution (§least-common-mechanism —
+    no second seat-resolver to drift)."""
     seats = cfg.get("seats", {}) or {}
     if seat not in seats:
         sys.exit(f"socom spawn: seat '{seat}' not bound in socom.yaml seats "
@@ -3251,7 +3273,7 @@ def _resolve_seat(root: Path, cfg: dict, seat: str, model_override=None):
     if runtime not in RUNTIMES:
         sys.exit(f"socom spawn: runtime '{runtime}' for seat '{seat}' is unknown "
                  f"(bound runtimes: {sorted(RUNTIMES)}) (R6: degrade loudly).")
-    return runtime, model, role
+    return runtime, model, role, _seat_budget(binding, seat)
 
 
 def _resolve_promise(root: Path, promise_arg: str) -> dict:
@@ -3286,15 +3308,17 @@ def _resolve_promise(root: Path, promise_arg: str) -> dict:
 
 def _spawn_run(root: Path, seat: str, runtime: str, model, role, pr: dict, *,
                contract_override=None, exec_=False, no_envelope=False,
-               out_arg=None, lineage="") -> dict:
+               out_arg=None, lineage="", budget=ENVELOPE_DEFAULT_BUDGET_TOKENS) -> dict:
     """The shared launch core for `spawn` and `monarch recover` (§least-common-mechanism):
     forge the dispatch brief from a resolved seat + promise (pr from _resolve_promise),
     content-address the run-id off the STABLE CORE only, write the run record + brief
     atomically (locked), and EITHER leave it materialized (default) OR background-launch
     the bound runtime (--exec). NEVER writes a verdict — the record carries liveness +
     provenance, never judgment. `lineage`, when set, enters the hashed core so a recovery
-    run gets its own id (distinct from the dead run). Returns a result dict for the caller
-    to report; printing is the caller's, so spawn and recover phrase their own output."""
+    run gets its own id (distinct from the dead run). `budget` (the resolved seat's
+    context_budget) caps the heuristic envelope — it touches only the UNHASHED op_env, so
+    it never perturbs the run-id. Returns a result dict for the caller to report; printing
+    is the caller's, so spawn and recover phrase their own output."""
     verbatim, decoded = pr["verbatim"], pr["decoded"]
     goal, checks, domain = pr["goal"], pr["checks"], pr["domain"]
     contract_ref = contract_override or pr["contract_ref"]
@@ -3315,7 +3339,7 @@ def _spawn_run(root: Path, seat: str, runtime: str, model, role, pr: dict, *,
     # (verbatim + decoded + goal + contract ref), never the raw file.
     signal = " ".join(x for x in (verbatim, decoded, goal, contract_ref) if x)
     op_env = "" if no_envelope else _forge_operating_envelope(
-        root, domain, goal, signal)
+        root, domain, goal, signal, budget)
     brief = core if not op_env else _forge_brief(
         verbatim, decoded, seat_env, goal, checks, contract_ref, op_env, lineage)
 
@@ -3385,11 +3409,11 @@ def cmd_spawn(args):
 
     root = repo_root()
     cfg = load_cfg(root)
-    runtime, model, role = _resolve_seat(root, cfg, seat, model_override)
+    runtime, model, role, budget = _resolve_seat(root, cfg, seat, model_override)
     pr = _resolve_promise(root, promise_arg)
     r = _spawn_run(root, seat, runtime, model, role, pr,
                    contract_override=contract_override, exec_=exec_,
-                   no_envelope=no_envelope, out_arg=out_arg)
+                   no_envelope=no_envelope, out_arg=out_arg, budget=budget)
 
     promise_id = pr["promise_id"]
     rel_brief, rel_rec = r["rel_brief"], r["record_path"].relative_to(root.resolve())
@@ -3659,14 +3683,15 @@ def _recover_one(root: Path, cfg: dict, entry: dict, exec_: bool):
         print(f"  skip {entry['promise']}: promise source '{promise_path}' is gone — "
               "cannot re-dispatch (degrade loudly).", file=sys.stderr)
         return None
-    runtime, model, role = _resolve_seat(root, cfg, seat, model_override=dead.get("model"))
+    runtime, model, role, budget = _resolve_seat(root, cfg, seat,
+                                                 model_override=dead.get("model"))
     pr = _resolve_promise(root, promise_path)
     attempt_n = entry["attempts"] + 1
     lineage = (f"recovery attempt {attempt_n} of {dead.get('run_id')} — the prior "
                "attempt died unkept; this is a fresh, independently-judged run.")
     return _spawn_run(root, seat, runtime, model, role, pr,
                       contract_override=dead.get("contract"), exec_=exec_,
-                      lineage=lineage)
+                      lineage=lineage, budget=budget)
 
 
 # ── monarch triage — heuristic relevance over which dead runs to recover (slice 5)
