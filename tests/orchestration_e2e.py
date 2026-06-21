@@ -424,6 +424,50 @@ def main():
         check("spawn still resolves the reviewer's declared budget after delegation",
               rc == 0)
 
+        # ── quickstart first-run on-ramp: one command, fresh repo -> live substrate ──
+        # a fresh repo with a detectable test command (package.json scripts.test) climbs
+        # the whole ladder: adopt -> bind checks -> baseline -> embed -> runtime preflight
+        # -> value. env_with_stub puts the `claude` stub on PATH so the runtime verdict is ✓.
+        qs = tmp / "qs_npm"
+        qs.mkdir()
+        subprocess.run(["git", "init", "-q", "-b", "main", "."], cwd=qs, check=True)
+        (qs / "package.json").write_text('{"name":"demo","scripts":{"test":"jest"}}')
+        rc, out = run(["quickstart"], env_with_stub, qs)
+        check("quickstart exits 0 on a fresh detectable repo", rc == 0)
+        check("quickstart auto-binds checks to the detected command",
+              '"npm test"' in (qs / "socom.yaml").read_text())
+        check("quickstart built the retrieval floor + L1 index",
+              (qs / ".socom" / "index" / "baseline.json").exists()
+              and (qs / ".socom" / "index" / "vectors.json").exists())
+        check("quickstart surfaces the runtime verdict (claude on PATH)",
+              "runtime 'claude' on PATH" in out)
+        check("quickstart reports the ≥12-probe eval ceiling honestly (not a crash)",
+              "≥12 probes" in out or ">=12 probes" in out)
+        check("quickstart ends on a value readout with knowledge live",
+              "what the substrate has bought you" in out and "chunks retrievable" in out)
+        check("quickstart reaches T6 (vectors.json built = the ladder's operational gate)",
+              "T6" in out)
+        # idempotent: a second run rebinds nothing and reports the same top rung
+        rc2, out2 = run(["quickstart"], env_with_stub, qs)
+        check("quickstart is idempotent (second run leaves checks as-is)",
+              rc2 == 0 and "already bound" in out2
+              and (qs / "socom.yaml").read_text().count('"npm test"') == 3)
+
+        # a repo with NO detectable test command degrades loudly + stalls honestly at T2
+        qn = tmp / "qs_none"
+        qn.mkdir()
+        subprocess.run(["git", "init", "-q", "-b", "main", "."], cwd=qn, check=True)
+        rc, out = run(["quickstart", "--no-eval"], env_with_stub, qn)
+        check("quickstart with no detectable test command exits 0 (degrades, never crashes)",
+              rc == 0)
+        check("quickstart says loudly which field to edit when nothing detected",
+              "no test command detected" in out and "checks.fast" in out)
+        check("quickstart leaves the placeholder unbound when nothing detected",
+              '"true"' in (qn / "socom.yaml").read_text())
+        check("quickstart rung honestly stalls at T2 with vacuous gates",
+              "T2" in out)
+        check("quickstart --no-eval skips the L1 attempt", "L1 eval skipped" in out)
+
     finally:
         if killed_pid:
             try:

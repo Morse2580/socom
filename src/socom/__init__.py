@@ -41,6 +41,9 @@ Commands:
   greet    adoption-ladder greeting — where you are, what's next
   statusline Claude Code statusLine: adoption bar + context-consumption meter
            (reads the host's statusline JSON on stdin; GSD-style ctx meter)
+  quickstart one command from a fresh repo to a live substrate: adopt + auto-bind
+           gates to your real test command + build the retrieval floor/index +
+           runtime preflight, ending on a `value` readout (the brand-new-user on-ramp)
   adopt    one-shot: plant + compile + wire git hooks (fresh clone -> live gates)
   install  symlink this checkout onto PATH (~/.local/bin) so `socom` just works
   uninstall remove the socom symlink (only if it points at this checkout)

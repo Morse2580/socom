@@ -15,7 +15,7 @@ from socom.claims import cmd_claim, cmd_release
 from socom.context import cmd_context
 from socom.gate import cmd_breach, cmd_gate
 from socom.handoff import cmd_handoff, cmd_prompt
-from socom.install import cmd_install, cmd_uninstall
+from socom.install import cmd_install, cmd_quickstart, cmd_uninstall
 from socom.ledger import cmd_contract
 from socom.lesson import cmd_introspect, cmd_lesson
 from socom.lifecycle import cmd_adopt, cmd_compile, cmd_doctor, cmd_forge, cmd_greet, cmd_init, cmd_precond, cmd_statusline
@@ -39,8 +39,8 @@ COMMANDS = {"init": cmd_init, "compile": cmd_compile, "doctor": cmd_doctor,
             "introspect": cmd_introspect, "contract": cmd_contract,
             "context": cmd_context, "value": cmd_value, "spawn": cmd_spawn,
             "monarch": cmd_monarch,
-            "forge": cmd_forge, "adopt": cmd_adopt, "install": cmd_install,
-            "uninstall": cmd_uninstall}
+            "forge": cmd_forge, "adopt": cmd_adopt, "quickstart": cmd_quickstart,
+            "install": cmd_install, "uninstall": cmd_uninstall}
 
 
 if __name__ == "__main__":
