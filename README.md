@@ -71,6 +71,11 @@ Download-then-run (auditable) — not `curl … | sh` (which executes unseen cod
 `socom install` only symlinks the file you already have; no copy, no sudo, no
 network at install time.
 
+Then run `socom quickstart` in a repo to climb the whole on-ramp in one command.
+**New here, or testing it?** Start with **[PILOT.md](PILOT.md)** — the 5-minute
+discovery path, what's safe to test in this `v0.1` pilot, and a paste-able prompt so
+Claude Code can walk you through it.
+
 ## Requirements
 
 - **Python ≥ 3.9** (uses `pathlib.Path.is_relative_to`).
