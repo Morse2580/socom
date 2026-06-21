@@ -208,7 +208,7 @@ def main():
         # brief, the dead record left intact (death history stays on disk).
         rc, out = run(["monarch", "recover", "--exec"], env_with_stub, repo)
         check("monarch recover --exec exits 0", rc == 0)
-        check("recover reports one eligible promise", "1 promise(s) eligible" in out)
+        check("recover reports one eligible promise", "1 eligible promise(s)" in out)
         recs = [json.loads(p.read_text())
                 for p in sorted((repo / ".socom" / "runs").glob("R-*.json"))]
         live = [r for r in recs if r["status"] == "running"]
@@ -258,6 +258,51 @@ def main():
         run(["monarch", "recover"], env, repo)
         check("re-recover is idempotent (no second abandon breach)",
               len(breach_lines(repo)) == before2)
+
+        # ── monarch triage (slice 5): rank eligible dead runs by recovery-worth ──
+        # clean slate; two eligible dead promises, one whose intent matches a FOCUS.
+        for f in (repo / ".socom" / "runs").glob("R-*"):
+            f.unlink()
+        proms = repo / ".socom" / "promises"
+        for pid, intent in (("P-TPX", "make the ledger flock serialize writers"),
+                            ("P-TPY", "restyle the frontend widget colour palette")):
+            (proms / f"{pid}.xml").write_text(
+                f'<promise id="{pid}" domain="cli">'
+                f'<promiser seat="builder" participant="x"/>'
+                f'<intent><verbatim>{intent}</verbatim></intent>'
+                f'<contract ref="C-{pid}" state="ratified"><goal>{intent}</goal>'
+                f'<check id="1" assessor="gate"><run>true</run><expect>x</expect></check>'
+                f'</contract></promise>')
+            (repo / ".socom" / "runs" / f"R-{pid}.json").write_text(json.dumps({
+                "run_id": f"R-{pid}", "seat": "builder", "promise": pid,
+                "contract": f"C-{pid}", "runtime": "claude-code", "model": "default",
+                "status": "dead", "ts_started": "2026-06-21T12:00:00+00:00",
+                "pid": None, "brief_path": "b",
+                "promise_path": f".socom/promises/{pid}.xml",
+                "ts_ended": "2026-06-21T12:01:00+00:00", "exit_code": 137}))
+        rc, out = run(["monarch", "triage", "flock"], env, repo)
+        check("monarch triage exits 0 (read-only)", rc == 0)
+        check("triage ranks the FOCUS-matching run first",
+              "P-TPX" in out and "P-TPY" in out
+              and out.index("P-TPX") < out.index("P-TPY"))
+        check("triage mutates nothing (no new run record)",
+              len(list((repo / ".socom" / "runs").glob("R-*.json"))) == 2)
+
+        # recover FOCUS --top 1: re-dispatch only the top-worth promise, defer the rest
+        rc, out = run(["monarch", "recover", "flock", "--top", "1"], env, repo)
+        check("recover --top 1 exits 0", rc == 0)
+        check("recover --top 1 defers the lower-worth promise (no silent drop)",
+              "1 lower-worth deferred" in out)
+        after = [json.loads(p.read_text())
+                 for p in (repo / ".socom" / "runs").glob("R-*.json")]
+        tpx = [r for r in after if r["promise"] == "P-TPX"]
+        tpy = [r for r in after if r["promise"] == "P-TPY"]
+        check("recover --top 1 re-dispatched ONLY the top-worth promise (P-TPX)",
+              any(r["status"] == "materialized" for r in tpx)
+              and all(r["status"] == "dead" for r in tpy))
+        # --top with a bad value is loud
+        rc, out = run(["monarch", "recover", "--top", "0"], env, repo)
+        check("recover --top 0 exits nonzero (loud)", rc != 0)
 
     finally:
         if killed_pid:
