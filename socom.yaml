@@ -11,6 +11,11 @@ checks:
   eval: ./bin/socom cycle --gate --threshold 70
 ci:
   status: 'echo ''bind me: cache-free pipeline state query'''
+limits:
+  # Phase-1 runaway guard: monarch kills a single --exec run past this many seconds
+  # and records it broken (the runaway-spend backstop for unsupervised work). 0
+  # disables the kill; the 72h staleness reaper still applies. Raise for long builds.
+  max_runtime_s: 3600
 seats:
   builder:
     runtime: claude-code

@@ -40,6 +40,16 @@ from socom.retrieval import l0_score
 
 RUNS_DIR = "runs"  # under .socom/ — the run registry monarch reconciles
 
+# Phase-1 runaway guard: the wall-clock budget for a SINGLE --exec run. monarch
+# actively kills a live run past this and records it broken (the runaway-spend
+# backstop — an unsupervised worker that never returns can't burn forever). This is
+# DISTINCT from monarch's 72h staleness horizon (RUN_STALE_HOURS), which only reaps a
+# pid that is ALREADY gone; the budget targets a process still alive and still burning.
+# socom.yaml `limits.max_runtime_s` overrides; 0 disables the kill (staleness still
+# applies). Generous-but-protective default — a healthy run finishes in minutes; a
+# multi-hour run is the runaway this catches. Raise it for legitimately long builds.
+DEFAULT_MAX_RUNTIME_S = 3600
+
 # The heuristic envelope's earned-lessons subsection is bounded so the brief never
 # grows without limit as the lesson corpus does — at most this many lessons, and
 # the running token estimate (reusing context.py's single-sourced divisor) caps the
@@ -253,6 +263,22 @@ def _seat_budget(binding: dict, seat: str) -> int:
     return declared if declared is not None else ENVELOPE_DEFAULT_BUDGET_TOKENS
 
 
+def _resolve_runtime_budget(cfg: dict) -> int:
+    """The per-run wall-clock budget in seconds for the runaway guard: socom.yaml
+    `limits.max_runtime_s` (a non-negative int — 0 disables the active kill, leaving
+    only the staleness reaper), else DEFAULT_MAX_RUNTIME_S. Exits LOUDLY (R6) on a
+    present-but-invalid value rather than silently reinterpreting an operator's typo —
+    a guard you can't trust to fire is worse than none."""
+    limits = cfg.get("limits") or {}
+    if "max_runtime_s" not in limits:
+        return DEFAULT_MAX_RUNTIME_S
+    v = limits.get("max_runtime_s")
+    if isinstance(v, bool) or not isinstance(v, int) or v < 0:
+        sys.exit("socom: limits.max_runtime_s must be a non-negative integer (seconds; "
+                 "0 disables the runtime kill) (R6: degrade loudly).")
+    return v
+
+
 def _resolve_seat(root: Path, cfg: dict, seat: str, model_override=None):
     """Resolve a seat to its launch binding: returns (runtime, model, role, budget). The
     binding (runtime + default model + optional context_budget) comes from socom.yaml
@@ -309,7 +335,8 @@ def _resolve_promise(root: Path, promise_arg: str) -> dict:
 
 def _spawn_run(root: Path, seat: str, runtime: str, model, role, pr: dict, *,
                contract_override=None, exec_=False, no_envelope=False,
-               out_arg=None, lineage="", budget=ENVELOPE_DEFAULT_BUDGET_TOKENS) -> dict:
+               out_arg=None, lineage="", budget=ENVELOPE_DEFAULT_BUDGET_TOKENS,
+               max_runtime_s=DEFAULT_MAX_RUNTIME_S) -> dict:
     """The shared launch core for `spawn` and `monarch recover` (§least-common-mechanism):
     forge the dispatch brief from a resolved seat + promise (pr from _resolve_promise),
     content-address the run-id off the STABLE CORE only, write the run record + brief
@@ -364,6 +391,10 @@ def _spawn_run(root: Path, seat: str, runtime: str, model, role, pr: dict, *,
         "status": "materialized", "ts_started": _now_iso(), "pid": None,
         "brief_path": str(rel_brief), "promise_path": pr["promise_path"],
         "ts_ended": None, "exit_code": None,
+        # the runaway guard's wall-clock budget, stamped at launch so monarch can
+        # judge overrun from the record alone (Phase 1). ts_started is the clock the
+        # deadline counts from; a running --exec process past ts_started+this is killed.
+        "max_runtime_s": max_runtime_s,
     }
     result = {"run_id": run_id, "record": record, "record_path": record_path,
               "brief_path": brief_path, "rel_brief": rel_brief, "log_path": log_path,
@@ -414,7 +445,8 @@ def cmd_spawn(args):
     pr = _resolve_promise(root, promise_arg)
     r = _spawn_run(root, seat, runtime, model, role, pr,
                    contract_override=contract_override, exec_=exec_,
-                   no_envelope=no_envelope, out_arg=out_arg, budget=budget)
+                   no_envelope=no_envelope, out_arg=out_arg, budget=budget,
+                   max_runtime_s=_resolve_runtime_budget(cfg))
 
     promise_id = pr["promise_id"]
     rel_brief, rel_rec = r["rel_brief"], r["record_path"].relative_to(root.resolve())
@@ -430,4 +462,7 @@ def cmd_spawn(args):
           f"{promise_id}) as pid {r['pid']} [status=running]")
     print(f"  brief: {rel_brief}  log: {r['log_path'].relative_to(root.resolve())}")
     print(f"  record: {rel_rec}")
-    print("  monarch tallies + reaps this run; spawn never writes its verdict.")
+    budget = r["record"].get("max_runtime_s")
+    guard = (f"runtime budget {budget}s (monarch kills + records broken on overrun)"
+             if budget else "runtime kill disabled (limits.max_runtime_s=0)")
+    print(f"  monarch tallies + reaps this run ({guard}); spawn never writes its verdict.")

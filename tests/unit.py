@@ -497,6 +497,38 @@ check("_classify: running + live pid + fresh -> running",
 check("_pid_alive: this process is alive", socom._pid_alive(_os.getpid()))
 check("_pid_alive: pid 0 / None / negative is dead",
       not socom._pid_alive(0) and not socom._pid_alive(None) and not socom._pid_alive(-5))
+
+# ── monarch — Phase-1 runtime budget (runaway guard) ────────────────────────
+check("_overrun: no budget on record -> False (legacy/opt-out falls through)",
+      not socom._overrun(_rec(), _mnow))
+check("_overrun: within budget -> False",
+      not socom._overrun(_rec(max_runtime_s=3600,
+                              ts_started=(_mnow - timedelta(seconds=100)).isoformat()), _mnow))
+check("_overrun: past budget -> True",
+      socom._overrun(_rec(max_runtime_s=60,
+                          ts_started=(_mnow - timedelta(seconds=120)).isoformat()), _mnow))
+check("_overrun: zero budget disables the deadline -> False",
+      not socom._overrun(_rec(max_runtime_s=0,
+                              ts_started=(_mnow - timedelta(hours=99)).isoformat()), _mnow))
+check("_overrun: unparseable start -> False (left to _stale)",
+      not socom._overrun(_rec(max_runtime_s=60, ts_started="x"), _mnow))
+eq("_classify: running + live pid but overrun -> dead (budget overrides liveness)",
+   socom._classify(_rec(pid=_os.getpid(), max_runtime_s=1,
+                        ts_started=(_mnow - timedelta(seconds=10)).isoformat()), _mnow), "dead")
+check("_kill: bogus pid (0 / None / negative) is a no-op False",
+      not socom._kill(0) and not socom._kill(None) and not socom._kill(-5))
+eq("_resolve_runtime_budget: absent limits -> default",
+   socom._resolve_runtime_budget({}), socom.DEFAULT_MAX_RUNTIME_S)
+eq("_resolve_runtime_budget: explicit value honored",
+   socom._resolve_runtime_budget({"limits": {"max_runtime_s": 120}}), 120)
+eq("_resolve_runtime_budget: explicit 0 disables (allowed)",
+   socom._resolve_runtime_budget({"limits": {"max_runtime_s": 0}}), 0)
+for _bad in (-1, "60", True, 1.5):
+    try:
+        socom._resolve_runtime_budget({"limits": {"max_runtime_s": _bad}})
+        check(f"_resolve_runtime_budget: invalid {_bad!r} degrades loudly (SystemExit)", False)
+    except SystemExit:
+        check(f"_resolve_runtime_budget: invalid {_bad!r} degrades loudly (SystemExit)", True)
 eq("_uptime: seconds", socom._uptime(_rec(ts_started=(_mnow - timedelta(seconds=5)).isoformat()), _mnow), "5s")
 eq("_uptime: minutes", socom._uptime(_rec(ts_started=(_mnow - timedelta(minutes=3)).isoformat()), _mnow), "3m")
 eq("_uptime: hours", socom._uptime(_rec(ts_started=(_mnow - timedelta(hours=2)).isoformat()), _mnow), "2h")

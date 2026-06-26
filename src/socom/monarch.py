@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shlex
+import signal
 import subprocess
 import sys
 import textwrap
@@ -16,7 +17,7 @@ from socom.core import SOCOM_DIR, _now_iso, load_cfg, log_breach, repo_root
 from socom.ledger import _append_ledger_row
 from socom.lesson import _lesson_attr, _lesson_files, _lesson_statement
 from socom.spawn import (RUNS_DIR, RUNTIMES, _atomic_write_locked, _resolve_promise,
-                         _resolve_seat, _spawn_run)
+                         _resolve_runtime_budget, _resolve_seat, _spawn_run)
 
 # === BODY ===
 
@@ -67,6 +68,38 @@ def _stale(rec, now) -> bool:
     return (now - ts).total_seconds() / 3600 > RUN_STALE_HOURS
 
 
+def _overrun(rec, now) -> bool:
+    """True iff a run has a POSITIVE wall-clock budget (max_runtime_s) and has been
+    running past it — the Phase-1 runaway-spend backstop. DISTINCT from _stale: stale is
+    the 72h record horizon for a pid that may already be gone; overrun targets a run that
+    is (likely) still ALIVE and still burning, so reap must actively KILL it. A 0/absent/
+    invalid budget => no deadline (legacy records and explicit opt-out fall through to
+    staleness only). An unparseable ts_started is left to _stale, not double-judged here."""
+    budget = rec.get("max_runtime_s")
+    if isinstance(budget, bool) or not isinstance(budget, int) or budget <= 0:
+        return False
+    try:
+        ts = datetime.fromisoformat(rec.get("ts_started"))
+    except (ValueError, TypeError):
+        return False
+    return (now - ts).total_seconds() > budget
+
+
+def _kill(pid) -> bool:
+    """SIGKILL a live run's pid — the ACTIVE half of the runtime budget. reap observes
+    the death it just caused, so the verdict boundary holds (the worker never self-asserts;
+    the supervisor ends it and records the broken verdict). Tolerant by construction: a gone
+    pid (already dead), a non-int, or a pid owned by another user is a no-op returning False —
+    never raises, so one unkillable record never aborts a reap pass."""
+    if not isinstance(pid, int) or pid <= 0:
+        return False
+    try:
+        os.kill(pid, signal.SIGKILL)
+        return True
+    except (ProcessLookupError, PermissionError, OSError):
+        return False
+
+
 def _classify(rec, now) -> str:
     """Pure: a run record + now -> running | done | dead | its own status. A
     non-running status passes through (materialized/done/dead are facts on record).
@@ -76,7 +109,7 @@ def _classify(rec, now) -> str:
     st = rec.get("status")
     if st != "running":
         return st or "unknown"
-    if _stale(rec, now):
+    if _stale(rec, now) or _overrun(rec, now):
         return "dead"
     return "running" if _pid_alive(rec.get("pid")) else "dead"
 
@@ -129,16 +162,25 @@ def reap_dead_runs(root: Path) -> list:
     for p, rec in _load_runs(root):
         if rec.get("status") != "running" or _classify(rec, now) != "dead":
             continue
+        # active enforcement (Phase-1 runaway guard): a still-alive pid being reaped is a
+        # runaway overrun (or a stale survivor); either way it must stop burning the moment
+        # we record it dead. Killing it here keeps reap the SOLE place a verdict is written
+        # — the supervisor ends the run and observes the death (the boundary holds).
+        overrun = _overrun(rec, now)
+        killed = _kill(rec.get("pid")) if _pid_alive(rec.get("pid")) else False
         rec["status"] = "dead"
         rec["ts_ended"] = _now_iso()
         if rec.get("exit_code") is None:
-            rec["exit_code"] = 137  # presumed killed (128 + SIGKILL) — process gone
+            rec["exit_code"] = 137  # 128 + SIGKILL — killed or presumed killed
         _atomic_write_locked(p, json.dumps(rec, indent=2) + "\n", lock)
+        reason = "exceeded its runtime budget" if overrun else "died without verdict"
+        killnote = " — killed by monarch" if killed else ""
         log_breach(root, "monarch",
-                   f"amber: run {rec.get('run_id')} died without verdict "
+                   f"amber: run {rec.get('run_id')} {reason}{killnote} "
                    f"(seat {rec.get('seat')}, promise {rec.get('promise')})")
-        report.append(f"reaped dead run: {rec.get('run_id')} "
-                      f"(seat {rec.get('seat')}, promise {rec.get('promise')})")
+        report.append(f"reaped {'overrun' if overrun else 'dead'} run: "
+                      f"{rec.get('run_id')} (seat {rec.get('seat')}, "
+                      f"promise {rec.get('promise')}){killnote}")
         # broken ledger row — guarded on an attributable (promise, seat), the same
         # requirement contract verify --record enforces (a row needs an owner).
         promise, seat = rec.get("promise"), rec.get("seat")
@@ -281,7 +323,8 @@ def _recover_one(root: Path, cfg: dict, entry: dict, exec_: bool):
                "attempt died unkept; this is a fresh, independently-judged run.")
     return _spawn_run(root, seat, runtime, model, role, pr,
                       contract_override=dead.get("contract"), exec_=exec_,
-                      lineage=lineage, budget=budget)
+                      lineage=lineage, budget=budget,
+                      max_runtime_s=_resolve_runtime_budget(cfg))
 
 
 # ── monarch triage — heuristic relevance over which dead runs to recover (slice 5)

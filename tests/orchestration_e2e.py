@@ -104,7 +104,9 @@ def main():
         check("record carries exactly the schema fields", rec and set(rec) == {
             "run_id", "seat", "promise", "contract", "runtime", "model",
             "status", "ts_started", "pid", "brief_path", "promise_path",
-            "ts_ended", "exit_code"})
+            "ts_ended", "exit_code", "max_runtime_s"})
+        check("record stamps the runtime budget (Phase-1 runaway guard)",
+              rec.get("max_runtime_s") == 3600)
         brief = (repo / rec["brief_path"]).read_text()
         check("brief carries the literal user verbatim",
               "spin up teh worker and watch it" in brief)
