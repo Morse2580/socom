@@ -34,7 +34,13 @@ Nothing downstream is provable without this. Pick the ground truth before buildi
 - **Definition of done:** a committed `bench/` task set + a baseline record in the
   run ledger you can diff against later.
 
-## Phase 1 — Make unsupervised SAFE (the two 🔴, weeks)
+## Phase 1 — Make unsupervised SAFE (the two 🔴, weeks) ✅ DONE
+
+> **Status: complete.** 1a — trust-boundary principle (#12) + scout seat redesign
+> (commit `cd6b1cd`). 1b — per-run wall-clock budget; monarch kills overruns, records
+> broken (commit `c610dce`). Both verified: full test suite green (unit 227, e2e,
+> xmlcheck, build), plus behavioral proofs (live process killed R→Z→gone; canon renders
+> into CLAUDE.md + scout agent file).
 
 These are the doors that must close before *anything* runs unwatched. Both gate the
 exact regime the vision targets.
