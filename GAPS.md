@@ -10,6 +10,40 @@
 > simonwillison.net). URLs, titles, dates, and the structural claims are high-confidence;
 > verify exact long-quote wording against the live pages before quoting in published docs.
 
+## The end goal (the bar everything below is measured against)
+
+Per `VISION.md`, SOCOM is not "a better agent." The end goal is a **durable,
+model-agnostic engineering substrate** with one north star:
+
+> **Widen, every cycle, the fraction of engineering work that can run
+> *unsupervised* without losing coherence — so that supervision concentrates on
+> genuine judgment and execution runs against the protocol.** "Team capacity, not
+> individual productivity, is the unit."
+
+Four load-bearing commitments under that goal:
+1. **Durable foundation / obsolescence hedge.** Knowledge lives in *natural
+   language* (it appreciates as models improve) contracted against *XML* (so it
+   never degrades to vibes). "Participants are disposable; the protocol compounds"
+   — a stronger model produces better output with **zero migration**.
+2. **Governance by promises, not permission.** "Computer says no" enforcement
+   (amber→red); "remove people from approval bottlenecks" so **approval latency
+   goes to zero while standards go up**.
+3. **Beyond coders.** Seats are defined by substrate operations, so architects,
+   data engineers, and (later) analysts plug in identically.
+4. **The evolution ladder L0→L4**, culminating in **L4 — containerized
+   substrate-as-a-service**: "across all repos, all developers," an org running a
+   *fleet of sealed rooms the way it runs CI."
+
+**Why this reframes the gaps:** the goal is *unsupervised operation at org scale*.
+That makes the two 🔴 items (lethal-trifecta, runaway-loop guard) and the
+observability/eval gaps **end-goal-blocking, not nice-to-have** — they are exactly
+the controls that decide whether work can safely run with no human watching. The
+flywheel's promise ("each cycle widens what runs unsupervised") is only as real as
+the measurement (evals) and safety (trifecta/loop/HITL) that let you *trust*
+removing the human. The substrate compounds knowledge well; it does not yet
+compound the *evidence and safety* that unsupervised scale requires. Closing that
+is the path from v0.1 pilot to the L4 vision.
+
 ## TL;DR
 
 SOCOM's **enforcement architecture is excellent**; its **measurement architecture is thin.**
