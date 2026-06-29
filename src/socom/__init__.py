@@ -21,6 +21,9 @@ Commands:
   eval     L1 acceptance gate: beats the floor on the probes or exits RED
   cycle    roll the run ledger into a scored cycle: pass@1/pass@k by seat,
            hotspots; --gate --threshold N for the pass-rate gate (R: evals)
+  judge    calibrate a model assessor against human labels: confusion matrix +
+           TPR/TNR/precision over a labelled set (.socom/evals/<set>.jsonl);
+           --gate blocks unless BOTH TPR & TNR meet the threshold (Phase 2b)
   lesson   experience -> durable retrievable rules: candidates (from cycle
            hotspots) | list | promote | retire (preserved, never deleted)
   precond  is THIS work ready? fast pre-flight [seat]; auto-heals safe gaps,

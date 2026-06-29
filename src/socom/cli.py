@@ -20,7 +20,7 @@ from socom.ledger import cmd_contract
 from socom.lesson import cmd_introspect, cmd_lesson
 from socom.lifecycle import cmd_adopt, cmd_compile, cmd_doctor, cmd_forge, cmd_greet, cmd_init, cmd_precond, cmd_statusline
 from socom.monarch import cmd_monarch, cmd_trace
-from socom.retrieval import cmd_baseline, cmd_cycle, cmd_embed, cmd_eval, cmd_hydrate, cmd_index, cmd_query
+from socom.retrieval import cmd_baseline, cmd_cycle, cmd_embed, cmd_eval, cmd_hydrate, cmd_index, cmd_judge, cmd_query
 from socom.spawn import cmd_spawn
 from socom.value import cmd_value
 
@@ -35,7 +35,8 @@ COMMANDS = {"init": cmd_init, "compile": cmd_compile, "doctor": cmd_doctor,
             "baseline": cmd_baseline, "greet": cmd_greet,
             "statusline": cmd_statusline,
             "embed": cmd_embed, "query": cmd_query, "eval": cmd_eval,
-            "cycle": cmd_cycle, "lesson": cmd_lesson, "precond": cmd_precond,
+            "cycle": cmd_cycle, "judge": cmd_judge,
+            "lesson": cmd_lesson, "precond": cmd_precond,
             "introspect": cmd_introspect, "contract": cmd_contract,
             "context": cmd_context, "value": cmd_value, "spawn": cmd_spawn,
             "monarch": cmd_monarch, "trace": cmd_trace,

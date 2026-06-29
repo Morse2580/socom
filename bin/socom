@@ -22,6 +22,9 @@ Commands:
   eval     L1 acceptance gate: beats the floor on the probes or exits RED
   cycle    roll the run ledger into a scored cycle: pass@1/pass@k by seat,
            hotspots; --gate --threshold N for the pass-rate gate (R: evals)
+  judge    calibrate a model assessor against human labels: confusion matrix +
+           TPR/TNR/precision over a labelled set (.socom/evals/<set>.jsonl);
+           --gate blocks unless BOTH TPR & TNR meet the threshold (Phase 2b)
   lesson   experience -> durable retrievable rules: candidates (from cycle
            hotspots) | list | promote | retire (preserved, never deleted)
   precond  is THIS work ready? fast pre-flight [seat]; auto-heals safe gaps,
@@ -1085,6 +1088,125 @@ def cmd_cycle(args):
             print(f"    {h['promise']}  broken {h['broken']}/{h['total']}")
     if written:
         print(f"  -> {written}")
+
+
+# ── judge — calibrate the assessor, not just the work (Phase 2b) ──────────
+# cycle scores the VERDICTS; judge scores the JUDGE. When a seat (reviewer) or any
+# model assesses a promise, its verdict is only trustworthy if it agrees with a human.
+# The field is emphatic (Hamel, Eugene Yan, Shankar "Who Validates the Validators?"):
+# measure TPR and TNR SEPARATELY against human labels before relying on a judge — raw
+# agreement misleads under class imbalance. judge reads a labelled set (each row a human
+# label + the judge's verdict), computes the confusion matrix + TPR/TNR/precision, and
+# --gate BLOCKS when EITHER falls below the bound (both must hold; a judge that only
+# catches good work OR only catches bad work is not calibrated). The labelled set is
+# JSONL under .socom/evals/ — the operational-data idiom the run ledger already uses.
+# 'pass' is the positive class (the work is good / the promise is kept).
+
+def _judge_metrics(rows: list) -> dict:
+    """Pure: labelled rows [{human: pass|fail, judge: pass|fail}] -> confusion matrix +
+    TPR/TNR/precision/agreement. A row whose human|judge is outside {pass,fail} is
+    SKIPPED and counted (never silently dropped — a half-labelled set must not inflate
+    the score). Rates are percentages, or None when the denominator is empty (an honest
+    'no data for this rate', never a fabricated 100%)."""
+    tp = fp = tn = fn = skipped = 0
+    for r in rows:
+        h, j = r.get("human"), r.get("judge")
+        if h not in ("pass", "fail") or j not in ("pass", "fail"):
+            skipped += 1
+            continue
+        if h == "pass":
+            tp += (j == "pass")
+            fn += (j == "fail")
+        else:
+            fp += (j == "pass")
+            tn += (j == "fail")
+    n = tp + fp + tn + fn
+
+    def rate(num, den):
+        return round(100 * num / den, 1) if den else None
+    return {
+        "n": n, "skipped": skipped, "tp": tp, "fp": fp, "tn": tn, "fn": fn,
+        "tpr": rate(tp, tp + fn),         # judge accepts good work (recall on 'pass')
+        "tnr": rate(tn, tn + fp),         # judge rejects bad work (recall on 'fail')
+        "precision": rate(tp, tp + fp),   # of judge-passes, how many were truly good
+        "agreement": rate(tp + tn, n),    # raw — printed, never gated (imbalance lies)
+    }
+
+
+def _load_labeled(path: Path) -> list:
+    """Read a labelled-set JSONL into rows. Loud (R6) on a missing file or a malformed
+    row — a calibration you can't trust the inputs of is worse than none (the same RED
+    posture cycle takes on a torn ledger row)."""
+    import json
+    if not path.exists():
+        sys.exit(f"socom judge: no labelled set at {path} — create it as JSONL rows "
+                 '{"case": id, "human": "pass|fail", "judge": "pass|fail", '
+                 '"critique": "..."} (R6: degrade loudly).')
+    rows = []
+    for ln in path.read_text().splitlines():
+        ln = ln.strip()
+        if not ln:
+            continue
+        try:
+            rows.append(json.loads(ln))
+        except json.JSONDecodeError:
+            sys.exit(f"socom judge: RED — malformed labelled row: {ln[:80]!r}")
+    return rows
+
+
+def cmd_judge(args):
+    """`socom judge <set> [--gate] [--threshold N]` — calibrate a model assessor against
+    human labels. <set> is a name (-> .socom/evals/<set>.jsonl) or a path. Prints the
+    confusion matrix + TPR/TNR/precision/agreement; --gate exits RED unless BOTH TPR and
+    TNR meet the threshold (default 90%). Read-only."""
+    pos = [a for a in args if not a.startswith("--")]
+    if not pos:
+        sys.exit("usage: socom judge <set> [--gate] [--threshold N]  "
+                 "(<set> -> .socom/evals/<set>.jsonl, or a path)")
+    gate = "--gate" in args
+    thr = 90.0
+    if "--threshold" in args:
+        i = args.index("--threshold")
+        if i + 1 >= len(args):
+            sys.exit("socom judge: --threshold needs a number (R6: degrade loudly).")
+        try:
+            thr = float(args[i + 1])
+        except ValueError:
+            sys.exit(f"socom judge: --threshold must be a number, got {args[i + 1]!r}.")
+
+    root = repo_root()
+    name = pos[0]
+    path = Path(name) if (name.endswith(".jsonl") or "/" in name) else \
+        root / SOCOM_DIR / "evals" / f"{name}.jsonl"
+    if not path.is_absolute():
+        path = root / path
+    m = _judge_metrics(_load_labeled(path))
+    if m["n"] == 0:
+        sys.exit(f"socom judge: no usable labelled rows in {name} "
+                 f"({m['skipped']} skipped — need human+judge in {{pass,fail}}).")
+
+    print(f"socom judge — {name}: {m['n']} labelled case(s)"
+          + (f", {m['skipped']} skipped" if m["skipped"] else ""))
+    print(f"  confusion: tp {m['tp']}  fn {m['fn']}  tn {m['tn']}  fp {m['fp']}  "
+          "(positive = 'pass' / kept)")
+    print(f"  TPR {m['tpr']}% (accepts good)   TNR {m['tnr']}% (rejects bad)   "
+          f"precision {m['precision']}%")
+    print(f"  agreement {m['agreement']}% — raw; not gated (class imbalance misleads, "
+          "so the gate uses TPR & TNR)")
+
+    if gate:
+        worst = min(x for x in (m["tpr"], m["tnr"]) if x is not None) \
+            if (m["tpr"] is not None and m["tnr"] is not None) else None
+        ok = worst is not None and worst >= thr
+        which = "TPR" if (m["tpr"] is not None and m["tpr"] == worst) else "TNR"
+        if worst is None:
+            print("socom judge: BELOW — a one-sided labelled set (TPR or TNR has no "
+                  "cases); the judge is uncalibrated on one direction.")
+            sys.exit(1)
+        print(f"socom judge: min(TPR,TNR) {worst}% ({which}) vs threshold {thr}% "
+              f"-> {'PASS' if ok else 'BELOW'}")
+        if not ok:
+            sys.exit(1)
 
 
 # ── baseline (the gate before naive RAG) ─────────────────────────────────
@@ -4719,7 +4841,8 @@ COMMANDS = {"init": cmd_init, "compile": cmd_compile, "doctor": cmd_doctor,
             "baseline": cmd_baseline, "greet": cmd_greet,
             "statusline": cmd_statusline,
             "embed": cmd_embed, "query": cmd_query, "eval": cmd_eval,
-            "cycle": cmd_cycle, "lesson": cmd_lesson, "precond": cmd_precond,
+            "cycle": cmd_cycle, "judge": cmd_judge,
+            "lesson": cmd_lesson, "precond": cmd_precond,
             "introspect": cmd_introspect, "contract": cmd_contract,
             "context": cmd_context, "value": cmd_value, "spawn": cmd_spawn,
             "monarch": cmd_monarch, "trace": cmd_trace,

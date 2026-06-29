@@ -59,6 +59,30 @@ _top = socom.l0_score("residuality gate", _chunks, k=2)
 check("l0_score ranks overlapping chunks first", set(_top) == {"a", "c"})
 eq("l0_score honours k", len(socom.l0_score("residuality", _chunks, k=1)), 1)
 
+# ── judge — assessor calibration (Phase 2b: TPR/TNR vs human labels) ─────────
+# a perfect judge: every human label matched
+_perf = socom._judge_metrics([{"human": "pass", "judge": "pass"},
+                              {"human": "fail", "judge": "fail"}])
+eq("_judge_metrics: perfect judge TPR=100", _perf["tpr"], 100.0)
+eq("_judge_metrics: perfect judge TNR=100", _perf["tnr"], 100.0)
+eq("_judge_metrics: perfect judge agreement=100", _perf["agreement"], 100.0)
+# a sycophantic judge that always says 'pass' — high TPR, ZERO TNR (the failure the
+# gate must catch: it never rejects bad work, but raw agreement looks fine under imbalance)
+_syc = socom._judge_metrics([{"human": "pass", "judge": "pass"}] * 9
+                            + [{"human": "fail", "judge": "pass"}])
+eq("_judge_metrics: sycophant TPR=100 (accepts all good)", _syc["tpr"], 100.0)
+eq("_judge_metrics: sycophant TNR=0 (never rejects bad)", _syc["tnr"], 0.0)
+eq("_judge_metrics: sycophant agreement is misleadingly high (90)", _syc["agreement"], 90.0)
+check("_judge_metrics: confusion counts add up to n",
+      _syc["tp"] + _syc["fp"] + _syc["tn"] + _syc["fn"] == _syc["n"] == 10)
+# half-labelled rows are skipped & counted, never inflate the score
+_skip = socom._judge_metrics([{"human": "pass", "judge": "pass"},
+                             {"human": "?", "judge": "pass"}, {"human": "pass"}])
+eq("_judge_metrics: unusable rows are skipped", _skip["skipped"], 2)
+eq("_judge_metrics: only fully-labelled rows count toward n", _skip["n"], 1)
+eq("_judge_metrics: empty denominator -> None rate (no fabricated 100)",
+   socom._judge_metrics([{"human": "pass", "judge": "pass"}])["tnr"], None)
+
 # ── l1_score (BM25) ──────────────────────────────────────────────────────────
 _index = {
     "idf": {"residuality": 1.2, "gate": 0.8, "lesson": 1.5},
