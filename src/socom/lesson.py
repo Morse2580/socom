@@ -80,11 +80,64 @@ def _regen_lessons_index(root):
     (root / SOCOM_DIR / "lessons" / "index.md").write_text("\n".join(lines) + "\n")
 
 
+# ── lessons -> regression cases (Phase 2b) ────────────────────────────────────
+# Close the lesson lifecycle into a "do not break" contract. A lesson born from a
+# hotspot guards a promise that kept failing; once promoted (the failure understood +
+# guarded), that promise must STAY kept. `lesson regression` builds the guarded-promise
+# manifest from ACTIVE lessons and --check asserts each is still kept in the ledger — a
+# previously-fixed failure going broken again is a regression (OpenAI's "do not break"
+# set, sourced from SOCOM's own lessons). Reads the ledger verdict of record; never
+# re-runs (the verdict already lives in the ledger).
+
+def _regression_entries(root) -> list:
+    """ACTIVE lessons that guard a specific promise (derived-from promise=…) -> the
+    do-not-break set. Provisional/retired lessons are excluded — only an EARNED guard is
+    a regression contract. Pure-ish: reads lesson files, mutates nothing."""
+    out = []
+    for f in _lesson_files(root):
+        t = f.read_text()
+        if _lesson_attr(t, "state") != "active":
+            continue
+        promise = _lesson_attr(t, "promise")
+        if promise:
+            out.append({"lesson": _lesson_attr(t, "id") or f.stem,
+                        "promise": promise, "domain": _lesson_attr(t, "domain")})
+    return out
+
+
+def _latest_verdict(root) -> dict:
+    """promise -> its MOST-RECENT ledger verdict (kept|broken), by (attempt, ts). The
+    regression check reads 'is the guarded promise currently green' from the verdict of
+    record — a fixed failure going broken again is the regression. Tolerant: torn rows
+    skipped, absent ledger -> {}."""
+    import json
+    led = root / SOCOM_DIR / "ledger" / "runs.jsonl"
+    if not led.exists():
+        return {}
+    best = {}
+    for ln in led.read_text().splitlines():
+        ln = ln.strip()
+        if not ln:
+            continue
+        try:
+            r = json.loads(ln)
+        except ValueError:
+            continue
+        p, v = r.get("promise"), r.get("verdict")
+        if not p or v not in ("kept", "broken"):
+            continue
+        key = (r.get("attempt", 0), r.get("ts", ""))
+        if p not in best or key > best[p][0]:
+            best[p] = (key, v)
+    return {p: v for p, (k, v) in best.items()}
+
+
 def cmd_lesson(args):
     import json
     root = repo_root()
     if not args:
-        sys.exit("usage: socom lesson <candidates|list|promote|retire> [args]")
+        sys.exit("usage: socom lesson "
+                 "<candidates|list|promote|retire|regression> [args]")
     sub, rest = args[0], args[1:]
 
     def flag_val(name, default=None):
@@ -170,6 +223,45 @@ def cmd_lesson(args):
         f.write_text(t)
         _regen_lessons_index(root)
         print(f"socom lesson: {lid} {cur} -> retired (preserved; reason: {reason})")
+        return
+
+    if sub == "regression":
+        do_check = "--check" in rest
+        entries = _regression_entries(root)
+        edir = root / SOCOM_DIR / "evals"
+        edir.mkdir(parents=True, exist_ok=True)
+        manifest = edir / "regression.jsonl"
+        manifest.write_text("".join(json.dumps(e) + "\n" for e in entries))
+        if not entries:
+            print("socom lesson regression: no active lesson guards a promise yet — "
+                  "promote a hotspot-born lesson to seed the do-not-break set.")
+            return
+        if not do_check:
+            print(f"socom lesson regression: {len(entries)} guarded promise(s) -> "
+                  f"{manifest.relative_to(root)} (the do-not-break set):")
+            for e in entries:
+                print(f"  {e['lesson']} guards {e['promise']}"
+                      + (f" [{e['domain']}]" if e["domain"] else ""))
+            print("  re-run with --check to assert each is still kept in the ledger.")
+            return
+        verdicts = _latest_verdict(root)
+        regressed, unverified = [], []
+        print(f"socom lesson regression --check: {len(entries)} guarded promise(s):")
+        for e in entries:
+            v = verdicts.get(e["promise"])
+            print(f"  {e['promise']:<18} {v or 'unverified':<11} (guard {e['lesson']})")
+            if v == "broken":
+                regressed.append(e)
+            elif v is None:
+                unverified.append(e)
+        if unverified:
+            print(f"  {len(unverified)} unverified (no ledger verdict yet) — "
+                  "warned, not failed.")
+        if regressed:
+            print(f"socom lesson regression: RED — {len(regressed)} guarded promise(s) "
+                  "broke again (a fixed failure regressed) — the do-not-break gate fires.")
+            sys.exit(1)
+        print("socom lesson regression: all guarded promises still kept (no regression).")
         return
 
     sys.exit(f"socom lesson: unknown subcommand '{sub}'")

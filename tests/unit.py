@@ -598,6 +598,35 @@ eq("_uptime: hours", socom._uptime(_rec(ts_started=(_mnow - timedelta(hours=2)).
 eq("_uptime: days", socom._uptime(_rec(ts_started=(_mnow - timedelta(days=4)).isoformat()), _mnow), "4d")
 eq("_uptime: unparseable -> ?", socom._uptime(_rec(ts_started="x"), _mnow), "?")
 
+# ── lessons -> regression cases (Phase 2b: the do-not-break set) ─────────────
+with tempfile.TemporaryDirectory() as _rd:
+    _rr = Path(_rd)
+    _ld = _rr / ".socom" / "lessons"
+    _ld.mkdir(parents=True)
+    (_ld / "L-PX.xml").write_text(
+        '<lesson id="L-PX" domain="cli" state="active">'
+        '<derived-from promise="P-X" cycle="c" broken="3" total="4"/></lesson>')
+    (_ld / "L-PY.xml").write_text(  # provisional -> NOT a regression contract yet
+        '<lesson id="L-PY" domain="cli" state="provisional">'
+        '<derived-from promise="P-Y" cycle="c" broken="2" total="2"/></lesson>')
+    _re = socom._regression_entries(_rr)
+    check("_regression_entries: only ACTIVE promise-guarding lessons count",
+          len(_re) == 1 and _re[0]["promise"] == "P-X" and _re[0]["lesson"] == "L-PX")
+    _led = _rr / ".socom" / "ledger"
+    _led.mkdir(parents=True)
+    (_led / "runs.jsonl").write_text(
+        '{"promise":"P-X","verdict":"broken","attempt":1,"ts":"2026-06-01T00:00:00+00:00"}\n'
+        '{"promise":"P-X","verdict":"kept","attempt":2,"ts":"2026-06-02T00:00:00+00:00"}\n')
+    eq("_latest_verdict: takes the MOST-RECENT attempt (kept beats the earlier broken)",
+       socom._latest_verdict(_rr).get("P-X"), "kept")
+    (_led / "runs.jsonl").write_text(
+        '{"promise":"P-X","verdict":"kept","attempt":1,"ts":"2026-06-01T00:00:00+00:00"}\n'
+        '{"promise":"P-X","verdict":"broken","attempt":2,"ts":"2026-06-02T00:00:00+00:00"}\n')
+    eq("_latest_verdict: a later broken IS the regression signal",
+       socom._latest_verdict(_rr).get("P-X"), "broken")
+    eq("_latest_verdict: absent ledger -> {} (no crash)",
+       socom._latest_verdict(Path(_rd) / "nope"), {})
+
 # ── trace — OTLP/GenAI span export (Phase 2a observability) ──────────────────
 eq("_iso_nanos: parses ISO to unix nanos (string)",
    socom._iso_nanos("2026-06-21T12:00:00+00:00"), str(int(_mnow.timestamp() * 1_000_000_000)))

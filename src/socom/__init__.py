@@ -25,7 +25,9 @@ Commands:
            TPR/TNR/precision over a labelled set (.socom/evals/<set>.jsonl);
            --gate blocks unless BOTH TPR & TNR meet the threshold (Phase 2b)
   lesson   experience -> durable retrievable rules: candidates (from cycle
-           hotspots) | list | promote | retire (preserved, never deleted)
+           hotspots) | list | promote | retire (preserved, never deleted) |
+           regression (active lessons -> a do-not-break set; --check asserts
+           each guarded promise is still kept in the ledger — Phase 2b)
   precond  is THIS work ready? fast pre-flight [seat]; auto-heals safe gaps,
            warns by default, blocks only the unrecoverable; --no-heal for CI
   introspect post-session self-capture: handoff evidence -> replayable
