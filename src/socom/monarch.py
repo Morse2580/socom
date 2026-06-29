@@ -13,7 +13,7 @@ import textwrap
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
-from socom.core import SOCOM_DIR, _now_iso, load_cfg, log_breach, repo_root
+from socom.core import SOCOM_DIR, SOCOM_VERSION, _now_iso, load_cfg, log_breach, repo_root
 from socom.ledger import _append_ledger_row
 from socom.lesson import _lesson_attr, _lesson_files, _lesson_statement
 from socom.spawn import (RUNS_DIR, RUNTIMES, _atomic_write_locked, _resolve_promise,
@@ -557,6 +557,184 @@ def _cmd_recover(root: Path, args: list):
         print("  recover is record-first: re-run with --exec to launch, or paste a "
               "command above. The dead record stays on disk; the verdict is unwritten "
               "until a gate/reviewer/reap speaks.")
+
+
+# ── trace — export the run registry + ledger as OpenTelemetry GenAI spans ────
+# ROADMAP Phase 2a (observability). SOCOM already records every run (.socom/runs)
+# and every verdict (the ledger), but in a SOCOM-private shape no trace tool reads.
+# `trace` joins them into OTLP/JSON spans named by the OpenTelemetry GenAI semantic
+# conventions (gen_ai.*) — a promise's attempts become sibling spans under one trace
+# (trace_id = hash(promise)), so the whole registry replays in Phoenix / LangSmith /
+# any OTLP consumer. Read-only, stdlib-only: the conventions are just attribute names,
+# so no OTel SDK (SOCOM's one-dep rule holds). Token usage is emitted ONLY when a
+# record carries it (gen_ai.usage.*) — SOCOM does not yet meter the runtime, so the
+# cost rollup is duration-based and SAYS so (verify-never-claim: no fabricated tokens).
+
+def _iso_nanos(s):
+    """ISO stamp -> unix nanoseconds as a string (OTLP's wire type), or None if
+    unparseable — a torn stamp drops the timestamp, never aborts the export."""
+    try:
+        return str(int(datetime.fromisoformat(s).timestamp() * 1_000_000_000))
+    except (ValueError, TypeError):
+        return None
+
+
+def _attr(key, val):
+    """One OTLP KeyValue. bool -> boolValue, int -> intValue (OTLP wants it stringified),
+    everything else -> stringValue. Order matters: bool is an int subclass, so test it first."""
+    if isinstance(val, bool):
+        return {"key": key, "value": {"boolValue": val}}
+    if isinstance(val, int):
+        return {"key": key, "value": {"intValue": str(val)}}
+    return {"key": key, "value": {"stringValue": str(val)}}
+
+
+def _run_seconds(rec) -> int:
+    """Wall-clock seconds a run record spans (ts_ended - ts_started), or 0 when either
+    stamp is missing/torn — the duration-based cost proxy until the runtime is metered."""
+    s, e = _iso_nanos(rec.get("ts_started")), _iso_nanos(rec.get("ts_ended"))
+    return max(0, (int(e) - int(s)) // 1_000_000_000) if s and e else 0
+
+
+def _run_overran(rec, now) -> bool:
+    """True iff a run breached its wall-clock budget — the cost-rollup's overrun test,
+    correct for BOTH finished and live runs (unlike _overrun, which compares ts_started to
+    NOW and so only fits a still-running record). A killed run (exit 137) overran by
+    definition; a FINISHED run overran iff its actual wall (_run_seconds) exceeded the
+    budget; a still-in-flight run defers to the live deadline (_overrun)."""
+    if rec.get("exit_code") == 137:
+        return True
+    b = rec.get("max_runtime_s")
+    if not isinstance(b, int) or isinstance(b, bool) or b <= 0:
+        return False
+    secs = _run_seconds(rec)  # >0 only when ts_ended is present (a finished run)
+    return secs > b if secs else _overrun(rec, now)
+
+
+def _run_span(rec, now, verdict):
+    """One OTLP span for a run record, attributes per the GenAI semantic conventions.
+    Deterministic ids (trace = hash(promise) so attempts share a trace; span = hash(run_id))
+    so re-export is stable. Span status from the run's lifecycle: done/exit0 -> OK,
+    dead/killed -> ERROR, still-in-flight -> UNSET (the run is the span; the ledger verdict
+    rides as a cross-reference attribute, never overriding what the run itself did)."""
+    cls = _classify(rec, now)
+    exit_code = rec.get("exit_code")
+    if cls == "done" and exit_code in (0, None):
+        status = {"code": 1}  # OK
+    elif cls == "dead":
+        status = {"code": 2, "message": "run died/killed without a kept verdict"}  # ERROR
+    else:
+        status = {"code": 0}  # UNSET — running/materialized
+    attrs = [
+        _attr("gen_ai.operation.name", "invoke_agent"),
+        _attr("gen_ai.agent.name", rec.get("seat") or "?"),
+        _attr("gen_ai.agent.id", rec.get("run_id") or "?"),
+        _attr("gen_ai.conversation.id", rec.get("promise") or "?"),
+    ]
+    if rec.get("model"):
+        attrs.append(_attr("gen_ai.request.model", rec["model"]))
+    if rec.get("runtime"):
+        attrs.append(_attr("gen_ai.provider.name", rec["runtime"]))
+    # usage only when the record actually carries it — no fabricated token counts
+    for k, conv in (("input_tokens", "gen_ai.usage.input_tokens"),
+                    ("output_tokens", "gen_ai.usage.output_tokens")):
+        if isinstance(rec.get(k), int) and not isinstance(rec.get(k), bool):
+            attrs.append(_attr(conv, rec[k]))
+    # socom-native cross-reference (namespaced so it never collides with gen_ai.*)
+    attrs.append(_attr("socom.run.status", cls))
+    if exit_code is not None:
+        attrs.append(_attr("socom.run.exit_code", exit_code))
+    if rec.get("max_runtime_s") is not None:
+        attrs.append(_attr("socom.run.max_runtime_s", rec["max_runtime_s"]))
+    if rec.get("contract"):
+        attrs.append(_attr("socom.contract", rec["contract"]))
+    if verdict:
+        attrs.append(_attr("socom.promise.verdict", verdict))
+    if status["code"] == 2:
+        attrs.append(_attr("error.type", "run_died"))
+    start = _iso_nanos(rec.get("ts_started"))
+    end = (_iso_nanos(rec.get("ts_ended"))
+           or (_iso_nanos(now.isoformat()) if cls == "running" else start))
+    span = {
+        "traceId": hashlib.sha256((rec.get("promise") or "?").encode()).hexdigest()[:32],
+        "spanId": hashlib.sha256((rec.get("run_id") or "?").encode()).hexdigest()[:16],
+        "name": f"invoke_agent {rec.get('model') or rec.get('seat') or '?'}",
+        "kind": 1,  # SPAN_KIND_INTERNAL
+        "attributes": attrs,
+        "status": status,
+    }
+    if start:
+        span["startTimeUnixNano"] = start
+    if end:
+        span["endTimeUnixNano"] = end
+    return span
+
+
+def _otlp_payload(runs, verdicts, now) -> dict:
+    """Pure: run records + per-promise verdicts -> an OTLP/JSON ExportTraceServiceRequest
+    (resourceSpans -> scopeSpans -> spans). The interop shape any OTLP collector ingests."""
+    spans = [_run_span(rec, now, verdicts.get(rec.get("promise"))) for _, rec in runs]
+    return {"resourceSpans": [{
+        "resource": {"attributes": [_attr("service.name", "socom"),
+                                    _attr("service.version", SOCOM_VERSION)]},
+        "scopeSpans": [{"scope": {"name": "socom", "version": SOCOM_VERSION},
+                        "spans": spans}],
+    }]}
+
+
+def cmd_trace(args):
+    """`socom trace [--out PATH] [--stdout]` — export the run registry + ledger as OTLP/
+    JSON GenAI spans (Phase 2a observability). Default writes .socom/traces/trace-<stamp>.json;
+    --stdout streams the OTLP to stdout (the human rollup then goes to stderr, so the pipe
+    stays clean). Read-only."""
+    import json
+    from collections import defaultdict
+    root = repo_root()
+    to_stdout = "--stdout" in args
+    out_path = None
+    if "--out" in args:
+        i = args.index("--out")
+        if i + 1 >= len(args) or args[i + 1].startswith("--"):
+            sys.exit("socom trace: --out needs a path (R6: degrade loudly).")
+        out_path = args[i + 1]
+    now = datetime.now(timezone.utc)
+    runs = _load_runs(root)
+    if not runs:
+        sys.exit("socom trace: no run records under .socom/runs — launch a worker with "
+                 "`socom spawn` first (R6: degrade loudly, never an empty trace).")
+    verdicts = {}
+    for r in _read_ledger(root):
+        if r.get("verdict") in ("kept", "broken"):
+            verdicts[r.get("promise")] = r["verdict"]  # append-order: last verdict wins
+    payload = json.dumps(_otlp_payload(runs, verdicts, now), indent=2) + "\n"
+
+    if to_stdout:
+        sys.stdout.write(payload)
+    else:
+        tdir = root / SOCOM_DIR / "traces"
+        tdir.mkdir(parents=True, exist_ok=True)
+        out = Path(out_path) if out_path else tdir / f"trace-{_now_iso().replace(':', '').replace('-', '')}.json"
+        if not out.is_absolute():
+            out = root / out
+        out.write_text(payload)
+        rel = out.relative_to(root.resolve()) if out.resolve().is_relative_to(root.resolve()) else out
+        print(f"socom trace: wrote {len(runs)} OTLP/GenAI span(s) -> {rel}")
+
+    # cost/latency rollup — duration-based (the runtime is not yet metered for tokens;
+    # SAY so rather than print a fake $/token). Goes to stderr so --stdout stays a clean pipe.
+    agg = defaultdict(lambda: {"runs": 0, "secs": 0, "overruns": 0})
+    for _, rec in runs:
+        a = agg[(rec.get("seat") or "?", rec.get("model") or "?")]
+        a["runs"] += 1
+        a["secs"] += _run_seconds(rec)
+        if _run_overran(rec, now):
+            a["overruns"] += 1
+    w = sys.stderr
+    print(f"socom trace: {len(runs)} run(s) across {len(agg)} (seat,model) pair(s) "
+          "— cost view is duration-based (runtime not yet token-metered).", file=w)
+    print(f"  {'seat':<10} {'model':<22} {'runs':<5} {'wall_s':<7} overruns", file=w)
+    for (seat, model), a in sorted(agg.items()):
+        print(f"  {seat:<10} {model:<22} {a['runs']:<5} {a['secs']:<7} {a['overruns']}", file=w)
 
 
 def cmd_monarch(args):

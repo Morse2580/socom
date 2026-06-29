@@ -535,6 +535,68 @@ eq("_uptime: hours", socom._uptime(_rec(ts_started=(_mnow - timedelta(hours=2)).
 eq("_uptime: days", socom._uptime(_rec(ts_started=(_mnow - timedelta(days=4)).isoformat()), _mnow), "4d")
 eq("_uptime: unparseable -> ?", socom._uptime(_rec(ts_started="x"), _mnow), "?")
 
+# ── trace — OTLP/GenAI span export (Phase 2a observability) ──────────────────
+eq("_iso_nanos: parses ISO to unix nanos (string)",
+   socom._iso_nanos("2026-06-21T12:00:00+00:00"), str(int(_mnow.timestamp() * 1_000_000_000)))
+eq("_iso_nanos: unparseable -> None", socom._iso_nanos("nope"), None)
+eq("_attr: int -> stringified intValue",
+   socom._attr("k", 5), {"key": "k", "value": {"intValue": "5"}})
+eq("_attr: bool -> boolValue (not int — bool tested first)",
+   socom._attr("k", True), {"key": "k", "value": {"boolValue": True}})
+eq("_attr: str -> stringValue",
+   socom._attr("k", "v"), {"key": "k", "value": {"stringValue": "v"}})
+# a done run -> OK status with GenAI attrs; a dead run -> ERROR + error.type
+_done = _rec(status="done", exit_code=0, run_id="R-d", seat="builder",
+             promise="P1", model="default", runtime="claude-code",
+             ts_ended=(_mnow + timedelta(seconds=5)).isoformat())
+_dspan = socom._run_span(_done, _mnow, "kept")
+eq("_run_span: done+exit0 -> status OK", _dspan["status"]["code"], 1)
+_akeys = {a["key"]: a["value"] for a in _dspan["attributes"]}
+check("_run_span: carries gen_ai.operation.name=invoke_agent",
+      _akeys.get("gen_ai.operation.name") == {"stringValue": "invoke_agent"})
+check("_run_span: agent.name is the seat, request.model is the model",
+      _akeys.get("gen_ai.agent.name") == {"stringValue": "builder"}
+      and _akeys.get("gen_ai.request.model") == {"stringValue": "default"})
+check("_run_span: conversation.id is the promise; verdict rides as cross-ref",
+      _akeys.get("gen_ai.conversation.id") == {"stringValue": "P1"}
+      and _akeys.get("socom.promise.verdict") == {"stringValue": "kept"})
+check("_run_span: NO fabricated token usage when the record lacks it",
+      "gen_ai.usage.input_tokens" not in _akeys)
+check("_run_span: deterministic ids (trace=hash(promise) 32hex, span=hash(run) 16hex)",
+      len(_dspan["traceId"]) == 32 and len(_dspan["spanId"]) == 16)
+_dead = _rec(status="running", pid=2147483646, run_id="R-x", promise="P2",
+             ts_started=(_mnow - timedelta(hours=socom.RUN_STALE_HOURS + 1)).isoformat())
+_xspan = socom._run_span(_dead, _mnow, "broken")
+eq("_run_span: dead run -> status ERROR", _xspan["status"]["code"], 2)
+check("_run_span: ERROR span carries error.type",
+      any(a["key"] == "error.type" for a in _xspan["attributes"]))
+# usage IS emitted when the record actually carries it
+_tok = socom._run_span(_rec(status="done", exit_code=0, input_tokens=120,
+                            output_tokens=40), _mnow, None)
+_tkeys = {a["key"] for a in _tok["attributes"]}
+check("_run_span: emits gen_ai.usage.* when the record carries token counts",
+      {"gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens"} <= _tkeys)
+# the OTLP envelope is well-formed (resourceSpans -> scopeSpans -> spans)
+_otlp = socom._otlp_payload([("p", _done)], {"P1": "kept"}, _mnow)
+check("_otlp_payload: valid ExportTraceServiceRequest shape",
+      _otlp["resourceSpans"][0]["scopeSpans"][0]["spans"][0]["name"].startswith("invoke_agent"))
+eq("_run_seconds: ts_ended - ts_started in whole seconds",
+   socom._run_seconds(_done), 5)
+eq("_run_seconds: missing end stamp -> 0", socom._run_seconds(_rec(ts_ended=None)), 0)
+# _run_overran: a finished run under budget is NOT an overrun even if it started long ago
+check("_run_overran: finished run under budget -> False (not judged against now)",
+      not socom._run_overran(_done, _mnow))
+check("_run_overran: killed run (exit 137) -> True",
+      socom._run_overran(_rec(status="dead", exit_code=137, max_runtime_s=3600,
+                              ts_ended=(_mnow + timedelta(seconds=10)).isoformat()), _mnow))
+check("_run_overran: finished run OVER budget -> True",
+      socom._run_overran(_rec(status="done", exit_code=0, max_runtime_s=5,
+                              ts_started=_mnow.isoformat(),
+                              ts_ended=(_mnow + timedelta(seconds=60)).isoformat()), _mnow))
+check("_run_overran: still-running past the live deadline -> True",
+      socom._run_overran(_rec(status="running", pid=_os.getpid(), max_runtime_s=1,
+                              ts_started=(_mnow - timedelta(seconds=10)).isoformat()), _mnow))
+
 # ── monarch recover — kept-check + attempt-count + recoverable bucketing ──────
 eq("_promise_kept: a kept verdict for the promise is seen",
    socom._promise_kept([{"promise": "P", "verdict": "kept"}], "P"), True)

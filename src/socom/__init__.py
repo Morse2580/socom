@@ -44,6 +44,9 @@ Commands:
   monarch  reconcile-and-reap supervisor over run records (no daemon): tally
            liveness | reap dead-but-running (one amber breach) | recover
            re-dispatches dead-but-unkept under a cap | triage ranks by recovery-worth
+  trace    export the run registry + ledger as OpenTelemetry GenAI spans
+           (OTLP/JSON) for any trace tool; --stdout streams, default writes
+           .socom/traces/ — replayable observability (Phase 2a)
   forge    domain verbs (canon forge.xml) bound to this repo's commands —
            `forge list` shows verbs + bindings (the repo-specific action layer)
   greet    adoption-ladder greeting — where you are, what's next
