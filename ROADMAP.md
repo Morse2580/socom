@@ -62,32 +62,33 @@ exact regime the vision targets.
   two catastrophic failure modes (data exfiltration, runaway spend) are
   structurally impossible, not "unlikely."
 
-## Phase 2 — Make unsupervised MEASURABLE (the spine, weeks) 🟡 IN PROGRESS
+## Phase 2 — Make unsupervised MEASURABLE (the spine, weeks) ✅ DONE
+
+> **Status: complete.** Five atomic commits. The unsupervised-green metric is now
+> trustworthy: behaviour is traceable, the judge is calibrated, the regression set is
+> sourced from earned lessons, and a green gate is checked for adequacy.
 
 This is the highest-leverage phase. It's what turns the flywheel claim from
 assertion into evidence and lets you *trust* removing the human.
 
-- **2a. Trajectory observability** (GAPS #10). ✅ **DONE** (`socom trace`, commit
-  `1b13e5c`). Exports the run registry + ledger as OTLP/JSON spans named by the
-  OpenTelemetry GenAI conventions (`invoke_agent`, `gen_ai.agent.name`,
-  `gen_ai.request.model`, `gen_ai.conversation.id`, `gen_ai.usage.*` when present) —
-  replayable in any OTLP tool. Duration-based cost rollup; honest that the runtime is
-  not yet token-metered (no fabricated tokens). *Remaining:* a real **token meter**
-  (parse runtime usage so `gen_ai.usage.*` is populated and cost is dollar-real).
-- **2b. The eval + judge-alignment loop** (GAPS #4).
-  - **Human-aligned judge** — ✅ **DONE** (`socom judge`, commit `e0cf0f1`). Scores a
-    model assessor against human labels; TPR/TNR measured separately; `--gate` blocks
-    unless BOTH meet the threshold (raw agreement misleads under imbalance). Proven to
-    catch a sycophant a naive gate would pass.
-  - Curate an eval dataset from real failure traces; **binary pass/fail + critique** —
-    *the `judge` set format supports a `critique` field; the curation loop (error
-    analysis → labelled set) is operator-run; a `socom judge --seed`/sampling helper is
-    the remaining ergonomics.*
-  - Wire **lessons → regression cases** — ⏳ **TODO.** Every fixed failure (a promoted
-    lesson born from a hotspot) becomes a permanent eval case, closing the lesson
-    lifecycle into a "do not break" contract.
-- **2c. Contract-adequacy check** — ⏳ **TODO.** Coverage/mutation signal so a green
-  gate isn't false confidence (a passing weak test is worse than no gate).
+- **2a. Trajectory observability + token meter** (GAPS #3, #10). ✅ **DONE**
+  (`socom trace` `1b13e5c`, `socom meter` `12acad9`). `trace` exports the run registry +
+  ledger as OTLP/JSON spans named by the OpenTelemetry GenAI conventions
+  (`invoke_agent`, `gen_ai.agent.name`, `gen_ai.request.model`, `gen_ai.conversation.id`,
+  `gen_ai.usage.*`) — replayable in any OTLP tool. `meter` parses token usage from run
+  logs into the records, so the cost view is token-real; never fabricates counts.
+- **2b. The eval + judge-alignment loop** (GAPS #4). ✅ **DONE**.
+  - **Human-aligned judge** (`socom judge`, `e0cf0f1`): scores a model assessor against
+    human labels; TPR/TNR separately; `--gate` blocks unless BOTH meet threshold (raw
+    agreement misleads under imbalance). Proven to catch a sycophant a naive gate passes.
+    The labelled-set format carries a `critique` field (critique-shadowing); curation is
+    the operator's loop.
+  - **Lessons → regression cases** (`socom lesson regression`, `34462c6`): active
+    hotspot-born lessons become a "do not break" set; `--check` fires RED when a guarded
+    promise's latest ledger verdict goes broken again.
+- **2c. Contract-adequacy check** (`socom contract adequacy`, `ffb235b`). ✅ **DONE**.
+  Flags a green-but-meaningless verify (no/trivial checks) plus coverage gaps (no
+  regression-surface, single check); `--gate` blocks on a strong weakness.
 - **Definition of phase done:** for any promise you can answer "did it do the
   *right* thing, and how do I know" with a trace and a calibrated score — not vibes.
 
