@@ -675,6 +675,20 @@ check("_otlp_payload: valid ExportTraceServiceRequest shape",
 eq("_run_seconds: ts_ended - ts_started in whole seconds",
    socom._run_seconds(_done), 5)
 eq("_run_seconds: missing end stamp -> 0", socom._run_seconds(_rec(ts_ended=None)), 0)
+
+# ── meter — parse real token usage from runtime output (Phase 2a token half) ─
+eq("_parse_usage: whole-object JSON (claude --output-format json)",
+   socom._parse_usage('{"type":"result","usage":{"input_tokens":1200,"output_tokens":340}}'),
+   {"input_tokens": 1200, "output_tokens": 340})
+eq("_parse_usage: scans for the LAST pair in a mixed/stream log",
+   socom._parse_usage('noise "input_tokens": 1 ... later "input_tokens": 50, '
+                      '"output_tokens": 9 trailing'),
+   {"input_tokens": 50, "output_tokens": 9})
+eq("_parse_usage: no usage -> None (never fabricated)",
+   socom._parse_usage("just some plain log output, no tokens here"), None)
+eq("_parse_usage: half a pair (input only) -> None",
+   socom._parse_usage('{"usage":{"input_tokens":10}}'), None)
+eq("_parse_usage: empty/none -> None", socom._parse_usage(""), None)
 # _run_overran: a finished run under budget is NOT an overrun even if it started long ago
 check("_run_overran: finished run under budget -> False (not judged against now)",
       not socom._run_overran(_done, _mnow))

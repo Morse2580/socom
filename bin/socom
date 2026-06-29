@@ -55,6 +55,9 @@ Commands:
   trace    export the run registry + ledger as OpenTelemetry GenAI spans
            (OTLP/JSON) for any trace tool; --stdout streams, default writes
            .socom/traces/ — replayable observability (Phase 2a)
+  meter    parse token usage from run logs into the run records, so trace
+           emits gen_ai.usage.* and the cost view is token-real; never
+           fabricates counts (Phase 2a)
   forge    domain verbs (canon forge.xml) bound to this repo's commands —
            `forge list` shows verbs + bindings (the repo-specific action layer)
   greet    adoption-ladder greeting — where you are, what's next
@@ -4539,21 +4542,101 @@ def cmd_trace(args):
         rel = out.relative_to(root.resolve()) if out.resolve().is_relative_to(root.resolve()) else out
         print(f"socom trace: wrote {len(runs)} OTLP/GenAI span(s) -> {rel}")
 
-    # cost/latency rollup — duration-based (the runtime is not yet metered for tokens;
-    # SAY so rather than print a fake $/token). Goes to stderr so --stdout stays a clean pipe.
-    agg = defaultdict(lambda: {"runs": 0, "secs": 0, "overruns": 0})
+    # cost/latency rollup — token-real when records carry usage (run `socom meter`),
+    # duration-only otherwise; SAY which (never a fabricated $/token). Goes to stderr so
+    # --stdout stays a clean pipe.
+    agg = defaultdict(lambda: {"runs": 0, "secs": 0, "in": 0, "out": 0, "overruns": 0})
+    any_tokens = False
     for _, rec in runs:
         a = agg[(rec.get("seat") or "?", rec.get("model") or "?")]
         a["runs"] += 1
         a["secs"] += _run_seconds(rec)
+        for k, col in (("input_tokens", "in"), ("output_tokens", "out")):
+            if isinstance(rec.get(k), int) and not isinstance(rec.get(k), bool):
+                a[col] += rec[k]
+                any_tokens = True
         if _run_overran(rec, now):
             a["overruns"] += 1
     w = sys.stderr
+    note = ("token + duration view" if any_tokens
+            else "duration-based (run `socom meter` to add token usage)")
     print(f"socom trace: {len(runs)} run(s) across {len(agg)} (seat,model) pair(s) "
-          "— cost view is duration-based (runtime not yet token-metered).", file=w)
-    print(f"  {'seat':<10} {'model':<22} {'runs':<5} {'wall_s':<7} overruns", file=w)
+          f"— cost view: {note}.", file=w)
+    print(f"  {'seat':<10} {'model':<22} {'runs':<5} {'wall_s':<7} {'in_tok':<8} "
+          f"{'out_tok':<8} overruns", file=w)
     for (seat, model), a in sorted(agg.items()):
-        print(f"  {seat:<10} {model:<22} {a['runs']:<5} {a['secs']:<7} {a['overruns']}", file=w)
+        print(f"  {seat:<10} {model:<22} {a['runs']:<5} {a['secs']:<7} {a['in']:<8} "
+              f"{a['out']:<8} {a['overruns']}", file=w)
+
+
+# ── meter — stamp real token usage onto run records (Phase 2a, token half) ───
+# trace emits gen_ai.usage.* only when a record carries token counts. `meter` reads each
+# run's log (the runtime's own output) and parses the usage block into the record, so the
+# cost view becomes dollar-real instead of duration-only. It NEVER fabricates a count — a
+# log with no usage is reported, not guessed (verify-never-claim). Capturing usage requires
+# the runtime to emit it (e.g. claude `-p --output-format json`); meter parses whatever is
+# there. Idempotent: an already-metered record is skipped unless --force.
+
+def _parse_usage(text):
+    """Extract {input_tokens, output_tokens} from a runtime's output, or None if absent.
+    Handles a whole-object JSON result (claude `--output-format json`: a usage block) and
+    falls back to the LAST input_tokens/output_tokens pair in the text (stream-json / mixed
+    logs). Returns None unless BOTH counts are found — a half-parse is no parse (never
+    fabricate a token count). Pure."""
+    import json
+    txt = (text or "").strip()
+    try:
+        obj = json.loads(txt)
+        u = obj.get("usage") if isinstance(obj, dict) else None
+        if isinstance(u, dict) and isinstance(u.get("input_tokens"), int) \
+                and not isinstance(u.get("input_tokens"), bool) \
+                and isinstance(u.get("output_tokens"), int) \
+                and not isinstance(u.get("output_tokens"), bool):
+            return {"input_tokens": u["input_tokens"], "output_tokens": u["output_tokens"]}
+    except (ValueError, TypeError):
+        pass
+    ins = re.findall(r'"input_tokens"\s*:\s*(\d+)', txt)
+    outs = re.findall(r'"output_tokens"\s*:\s*(\d+)', txt)
+    if ins and outs:
+        return {"input_tokens": int(ins[-1]), "output_tokens": int(outs[-1])}
+    return None
+
+
+def cmd_meter(args):
+    """`socom meter [RUN-ID] [--force]` — parse token usage from run logs (.socom/runs/
+    R-*.log) into the run records, so `socom trace` emits gen_ai.usage.* and the cost view
+    is token-real. Reads the runtime's own output; never fabricates counts (a log without
+    usage is reported). Idempotent unless --force."""
+    import json
+    root = repo_root()
+    force = "--force" in args
+    only = next((a for a in args if not a.startswith("--")), None)
+    runs = _load_runs(root)
+    if not runs:
+        sys.exit("socom meter: no run records under .socom/runs — launch a worker with "
+                 "`socom spawn` first (R6: degrade loudly).")
+    rundir = root / SOCOM_DIR / RUNS_DIR
+    lock = rundir / ".lock"
+    metered = skipped = nousage = 0
+    for p, rec in runs:
+        rid = rec.get("run_id")
+        if only and rid != only:
+            continue
+        if not force and isinstance(rec.get("input_tokens"), int):
+            skipped += 1
+            continue
+        logf = rundir / f"{rid}.log"
+        usage = _parse_usage(logf.read_text()) if logf.exists() else None
+        if not usage:
+            nousage += 1
+            continue
+        rec.update(usage)
+        _atomic_write_locked(p, json.dumps(rec, indent=2) + "\n", lock)
+        metered += 1
+        print(f"  metered {rid}: in {usage['input_tokens']} out {usage['output_tokens']}")
+    print(f"socom meter: {metered} metered, {skipped} already metered, {nousage} without "
+          "parseable usage in their log (the runtime must emit it — e.g. claude "
+          "--output-format json).")
 
 
 def cmd_monarch(args):
@@ -5006,7 +5089,7 @@ COMMANDS = {"init": cmd_init, "compile": cmd_compile, "doctor": cmd_doctor,
             "lesson": cmd_lesson, "precond": cmd_precond,
             "introspect": cmd_introspect, "contract": cmd_contract,
             "context": cmd_context, "value": cmd_value, "spawn": cmd_spawn,
-            "monarch": cmd_monarch, "trace": cmd_trace,
+            "monarch": cmd_monarch, "trace": cmd_trace, "meter": cmd_meter,
             "forge": cmd_forge, "adopt": cmd_adopt, "quickstart": cmd_quickstart,
             "install": cmd_install, "uninstall": cmd_uninstall}
 
