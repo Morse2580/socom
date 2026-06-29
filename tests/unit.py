@@ -83,6 +83,45 @@ eq("_judge_metrics: only fully-labelled rows count toward n", _skip["n"], 1)
 eq("_judge_metrics: empty denominator -> None rate (no fabricated 100)",
    socom._judge_metrics([{"human": "pass", "judge": "pass"}])["tnr"], None)
 
+# ── contract adequacy — is a GREEN verify real confidence? (Phase 2c) ────────
+check("_trivial_run: true/:/exit 0/echo are vacuous",
+      all(socom._trivial_run(c) for c in ("true", ":", "exit 0", "echo hi", "  echo  ")))
+check("_trivial_run: a real command is not trivial",
+      not socom._trivial_run("pytest -q") and not socom._trivial_run("./run.sh"))
+_full = ET.fromstring(
+    '<contract ref="C-1"><goal>g</goal>'
+    '<check id="1" assessor="gate:tc"><run>pytest -q</run><expect>green</expect></check>'
+    '<check id="2" assessor="gate:tc"><run>./lint.sh</run><expect>clean</expect></check>'
+    '<regression-surface>existing API stays green</regression-surface>'
+    '<out-of-scope>perf</out-of-scope></contract>')
+_a_full = socom._contract_adequacy(_full, socom._contract_checks(_full))
+check("_contract_adequacy: a real contract is ADEQUATE, no findings",
+      _a_full["adequate"] and _a_full["findings"] == [])
+_manual = ET.fromstring(
+    '<contract ref="C-2"><goal>g</goal>'
+    '<check id="1" assessor="reviewer"><expect>looks right</expect></check></contract>')
+_a_manual = socom._contract_adequacy(_manual, socom._contract_checks(_manual))
+check("_contract_adequacy: all-manual contract is WEAK (strong: no-auto-check)",
+      not _a_manual["adequate"]
+      and any(f[1] == "no-auto-check" and f[0] == "strong" for f in _a_manual["findings"]))
+_vac = ET.fromstring(
+    '<contract ref="C-3"><goal>g</goal>'
+    '<check id="1" assessor="gate:tc"><run>true</run><expect>x</expect></check></contract>')
+_a_vac = socom._contract_adequacy(_vac, socom._contract_checks(_vac))
+check("_contract_adequacy: only-trivial checks are WEAK (strong: vacuous-checks)",
+      not _a_vac["adequate"]
+      and any(f[1] == "vacuous-checks" for f in _a_vac["findings"]))
+check("_contract_adequacy: a real-but-thin contract flags weak coverage, stays adequate",
+      socom._contract_adequacy(
+          ET.fromstring('<contract ref="C-4"><goal>g</goal>'
+                        '<check id="1" assessor="gate:tc"><run>pytest</run>'
+                        '<expect>x</expect></check></contract>'),
+          socom._contract_checks(ET.fromstring(
+              '<contract ref="C-4"><goal>g</goal><check id="1" assessor="gate:tc">'
+              '<run>pytest</run><expect>x</expect></check></contract>')))["adequate"]
+      and any(f[1] == "no-regression-surface" for f in socom._contract_adequacy(
+          _vac, socom._contract_checks(_vac))["findings"]))
+
 # ── l1_score (BM25) ──────────────────────────────────────────────────────────
 _index = {
     "idf": {"residuality": 1.2, "gate": 0.8, "lesson": 1.5},

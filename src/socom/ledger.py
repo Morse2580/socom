@@ -176,12 +176,62 @@ def _promise_ref(root_el):
             contract.get("ref") if contract is not None else None)
 
 
+# ── contract adequacy — is a GREEN verify real confidence? (Phase 2c) ─────────
+# A passing gate is only as strong as the contract behind it. SWE-bench Verified +
+# UTBoost: weak/auto-trivial test suites pass bad code, so a green verify can be false
+# confidence. `contract adequacy` is a static critic of the contract's OWN structure
+# (not its subject): it flags a contract with no mechanical check, only-trivial checks
+# (true/:/echo — verify passes unconditionally), no declared regression-surface (a fix
+# can silently break the blast radius), single-check thinness, or no out-of-scope bound.
+# Read-only; --gate blocks on a STRONG weakness (a green that means nothing).
+
+_TRIVIAL_RUN = re.compile(r"^(true|:|exit\s+0|/bin/true|echo(\s.*)?)$")
+
+
+def _trivial_run(cmd) -> bool:
+    """True iff a check's <run> is a vacuous no-op (true / : / exit 0 / echo ...) — it
+    PASSES unconditionally, so it gates nothing. Pure."""
+    return bool(_TRIVIAL_RUN.match((cmd or "").strip()))
+
+
+def _contract_adequacy(contract_el, checks: list) -> dict:
+    """Pure: a contract element + its parsed checks -> adequacy findings + a verdict.
+    STRONG findings make a green verify meaningless (no auto check, or only trivial ones);
+    WEAK/INFO findings are coverage gaps (no regression-surface, single check, no
+    out-of-scope). `adequate` iff no STRONG finding — i.e. a passing verify is real."""
+    auto = [c for c in checks if c["auto"]]
+    nontrivial = [c for c in auto if not _trivial_run(c["run"])]
+    findings = []
+    if not auto:
+        findings.append(("strong", "no-auto-check", "every check is MANUAL — `verify` "
+                         "can never mechanically pass; a green is a claim, not a test"))
+    elif not nontrivial:
+        findings.append(("strong", "vacuous-checks", "every auto check is trivial "
+                         "(true/:/echo/exit 0) — verify passes unconditionally"))
+
+    def _empty(tag):
+        return not (contract_el.findtext(tag) or "").strip()
+    if _empty("regression-surface"):
+        findings.append(("weak", "no-regression-surface", "no <regression-surface> — a "
+                         "fix can silently break the blast radius (two-sided coverage)"))
+    if len(checks) <= 1:
+        findings.append(("weak", "single-check", "one check for the whole goal — thin "
+                         "coverage; a single assertion rarely pins done-ness"))
+    if _empty("out-of-scope"):
+        findings.append(("info", "no-out-of-scope", "no <out-of-scope> — the promise is "
+                         "unbounded (scope-drift risk)"))
+    return {"checks": len(checks), "auto": len(auto), "nontrivial": len(nontrivial),
+            "findings": findings,
+            "adequate": not any(f[0] == "strong" for f in findings)}
+
+
 def cmd_contract(args):
     record = "--record" in args
-    args = [a for a in args if a != "--record"]
-    if not args or args[0] not in ("verify", "show"):
-        sys.exit("usage: socom contract <verify|show> <promise-or-contract.xml> "
-                 "[--record]")
+    gate = "--gate" in args
+    args = [a for a in args if a not in ("--record", "--gate")]
+    if not args or args[0] not in ("verify", "show", "adequacy"):
+        sys.exit("usage: socom contract <verify|show|adequacy> "
+                 "<promise-or-contract.xml> [--record] [--gate]")
     sub = args[0]
     if len(args) < 2:
         sys.exit(f"usage: socom contract {sub} <promise-or-contract.xml>")
@@ -210,6 +260,21 @@ def cmd_contract(args):
             kind = f"run: {c['run']}" if c["auto"] else "MANUAL (no <run>)"
             print(f"  check {c['id']} · {c['assessor']} · {kind}")
             print(f"    expect: {c['expect']}")
+        return
+
+    if sub == "adequacy":
+        a = _contract_adequacy(contract, checks)
+        print(f"socom contract adequacy {contract.get('ref', '?')}: "
+              f"{a['checks']} check(s), {a['auto']} auto ({a['nontrivial']} non-trivial)"
+              f" -> {'ADEQUATE' if a['adequate'] else 'WEAK'}")
+        for sev, fid, msg in a["findings"]:
+            print(f"  [{sev}] {fid}: {msg}")
+        if not a["findings"]:
+            print("  no weaknesses — a green verify of this contract is real confidence.")
+        if gate and not a["adequate"]:
+            print("socom contract adequacy: RED — a strong weakness means a passing "
+                  "verify proves nothing (strengthen the checks before relying on the gate).")
+            sys.exit(1)
         return
 
     # verify: run each auto check, report; manual checks flagged, never passed.

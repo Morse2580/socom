@@ -32,7 +32,9 @@ Commands:
            assertion log (+ lesson candidates from captured failures), no model
   contract make the contract testable: verify runs a contract's <check> <run>
            commands (PASS/FAIL on exit), flags no-run checks MANUAL; --record
-           appends the outcome to the run ledger (cycle data) | show
+           appends the outcome to the run ledger (cycle data) | show |
+           adequacy (is a GREEN verify real? flags no/trivial checks, missing
+           regression-surface; --gate blocks on a strong weakness — Phase 2c)
   context  context as a first-class artifact: verify a context envelope (or
            .socom/context/) is schema-valid, within budget, and (CTX-2) its
            declared input_tokens match a re-measure of the <inputs> refs | show |
