@@ -1,0 +1,12 @@
+{"ts": "2026-06-30T07:09:19+00:00", "seat": "builder", "promise": "P-BENCH-01", "contract": "C-BENCH-01", "gate_band": "red", "exit_code": 0, "duration_s": 0, "attempt": 1, "verdict": "kept"}
+{"ts": "2026-06-30T07:09:19+00:00", "seat": "builder", "promise": "P-BENCH-02", "contract": "C-BENCH-02", "gate_band": "red", "exit_code": 0, "duration_s": 0, "attempt": 1, "verdict": "kept"}
+{"ts": "2026-06-30T07:09:43+00:00", "seat": "builder", "promise": "P-BENCH-03", "contract": "C-BENCH-03", "gate_band": "red", "exit_code": 0, "duration_s": 24, "attempt": 1, "verdict": "kept"}
+{"ts": "2026-06-30T07:09:43+00:00", "seat": "builder", "promise": "P-BENCH-04", "contract": "C-BENCH-04", "gate_band": "red", "exit_code": 0, "duration_s": 0, "attempt": 1, "verdict": "kept"}
+{"ts": "2026-06-30T07:09:43+00:00", "seat": "builder", "promise": "P-BENCH-05", "contract": "C-BENCH-05", "gate_band": "red", "exit_code": 0, "duration_s": 0, "attempt": 1, "verdict": "kept"}
+{"ts": "2026-06-30T07:09:43+00:00", "seat": "builder", "promise": "P-BENCH-06", "contract": "C-BENCH-06", "gate_band": "red", "exit_code": 0, "duration_s": 0, "attempt": 1, "verdict": "kept"}
+{"ts": "2026-06-30T07:09:43+00:00", "seat": "builder", "promise": "P-BENCH-07", "contract": "C-BENCH-07", "gate_band": "red", "exit_code": 0, "duration_s": 0, "attempt": 1, "verdict": "kept"}
+{"ts": "2026-06-30T07:09:44+00:00", "seat": "builder", "promise": "P-BENCH-08", "contract": "C-BENCH-08", "gate_band": "red", "exit_code": 0, "duration_s": 0, "attempt": 1, "verdict": "kept"}
+{"ts": "2026-06-30T07:09:44+00:00", "seat": "builder", "promise": "P-BENCH-09", "contract": "C-BENCH-09", "gate_band": "red", "exit_code": 0, "duration_s": 0, "attempt": 1, "verdict": "kept"}
+{"ts": "2026-06-30T07:09:44+00:00", "seat": "builder", "promise": "P-BENCH-10", "contract": "C-BENCH-10", "gate_band": "red", "exit_code": 0, "duration_s": 0, "attempt": 1, "verdict": "kept"}
+{"ts": "2026-06-30T07:09:44+00:00", "seat": "builder", "promise": "P-BENCH-11", "contract": "C-BENCH-11", "gate_band": "red", "exit_code": 0, "duration_s": 0, "attempt": 1, "verdict": "kept"}
+{"ts": "2026-06-30T07:09:45+00:00", "seat": "builder", "promise": "P-BENCH-12", "contract": "C-BENCH-12", "gate_band": "red", "exit_code": 0, "duration_s": 0, "attempt": 1, "verdict": "kept"}

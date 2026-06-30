@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SOCOM bench task B-02 — substrate XML is well-formed (the artifact invariant).
+  Phase-0 pilot task set (bench/README.md). Fully-auto contract.
+-->
+<promise id="P-BENCH-02" state="open" domain="canon" session="bench">
+  <promiser seat="builder" participant="bench:reference"/>
+  <promisee seat="orchestrator" participant="human:moses"/>
+  <assessors>
+    <assessor seat="gate" ref="gate:task-completion"/>
+  </assessors>
+  <intent>
+    <verbatim from="human:moses" date="2026-06-30" embed="true">
+      a raw &lt; in a handoff or promise silently breaks the substrate — every
+      hand-authored xml has to actually parse
+    </verbatim>
+    <decoded embed="true">
+      Every hand-authored substrate XML artifact (canon, schemas, the bench task
+      set itself) parses as well-formed XML; a malformed file fails the gate.
+    </decoded>
+  </intent>
+  <contract ref="C-BENCH-02" state="ratified">
+    <goal embed="true">
+      `tests/xmlcheck.py` exits 0 (all substrate XML well-formed) and the bench
+      task set itself parses.
+    </goal>
+    <check id="1" assessor="gate:task-completion">
+      <run>python3 tests/xmlcheck.py</run>
+      <expect>exit 0: every globbed substrate XML file is well-formed</expect>
+    </check>
+    <check id="2" assessor="gate:task-completion">
+      <run>python3 -c "import glob,xml.etree.ElementTree as E; [E.parse(f) for f in glob.glob('bench/tasks/*.xml')]"</run>
+      <expect>exit 0: all bench task promises parse</expect>
+    </check>
+    <out-of-scope embed="true">
+      Schema validity beyond well-formedness; xmlcheck gates parse, not content.
+    </out-of-scope>
+    <regression-surface embed="true">
+      A malformed promise/handoff must fail pre-commit AND CI, not be skipped.
+    </regression-surface>
+  </contract>
+</promise>

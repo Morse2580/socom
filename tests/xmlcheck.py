@@ -13,7 +13,7 @@ import sys
 import xml.etree.ElementTree as ET
 
 PATTERNS = [
-    "canon/*.xml", "schemas/*.xml",
+    "canon/*.xml", "schemas/*.xml", "bench/tasks/*.xml",
     ".socom/canon/*.xml", ".socom/handoffs/*.xml", ".socom/promises/*.xml",
 ]
 

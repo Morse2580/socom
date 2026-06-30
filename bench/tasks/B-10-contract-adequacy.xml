@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SOCOM bench task B-10 — Phase-2c contract adequacy (a green verify must be real).
+  Phase-0 pilot task set (bench/README.md). Fully-auto, self-referential: it runs
+  the adequacy critic over a sibling bench contract that is itself adequate.
+-->
+<promise id="P-BENCH-10" state="open" domain="cli" session="bench">
+  <promiser seat="builder" participant="bench:reference"/>
+  <promisee seat="orchestrator" participant="human:moses"/>
+  <assessors>
+    <assessor seat="gate" ref="gate:task-completion"/>
+  </assessors>
+  <intent>
+    <verbatim from="human:moses" date="2026-06-30" embed="true">
+      a green verify can still mean nothing if the checks are weak — flag a
+      contract with no real check or no regression surface
+    </verbatim>
+    <decoded embed="true">
+      `socom contract adequacy` is a static critic of a contract's own structure;
+      --gate blocks on a strong weakness. A well-formed bench contract passes it
+      (Phase-2c).
+    </decoded>
+  </intent>
+  <contract ref="C-BENCH-10" state="ratified">
+    <goal embed="true">
+      The adequacy critic runs and passes a strong contract under --gate.
+    </goal>
+    <check id="1" assessor="gate:task-completion">
+      <run>./bin/socom contract adequacy bench/tasks/B-01-build-determinism.xml</run>
+      <expect>exit 0: the adequacy critic runs over a real contract</expect>
+    </check>
+    <check id="2" assessor="gate:task-completion">
+      <run>./bin/socom contract adequacy --gate bench/tasks/B-01-build-determinism.xml</run>
+      <expect>exit 0: a strong contract passes the adequacy gate (no STRONG weakness)</expect>
+    </check>
+    <out-of-scope embed="true">
+      Judging the subject of a contract; adequacy critiques the contract's shape.
+    </out-of-scope>
+    <regression-surface embed="true">
+      A weak/vacuous contract must still be flagged; --gate must block on STRONG.
+    </regression-surface>
+  </contract>
+</promise>

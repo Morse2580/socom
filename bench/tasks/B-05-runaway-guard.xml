@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SOCOM bench task B-05 — Phase-1b runaway guard (the wall-clock kill).
+  Phase-0 pilot task set (bench/README.md). Fully-auto contract.
+-->
+<promise id="P-BENCH-05" state="open" domain="protocol" session="bench">
+  <promiser seat="builder" participant="bench:reference"/>
+  <promisee seat="orchestrator" participant="human:moses"/>
+  <assessors>
+    <assessor seat="gate" ref="gate:task-completion"/>
+  </assessors>
+  <intent>
+    <verbatim from="human:moses" date="2026-06-30" embed="true">
+      a looping run has to be killed by the guard, not by the bill — there has to
+      be a hard per-run ceiling the monarch enforces
+    </verbatim>
+    <decoded embed="true">
+      A per-run wall-clock ceiling (max_runtime_s) is configured and the monarch
+      supervisor enforces it (Phase-1b, GAPS #8 runaway-spend backstop).
+    </decoded>
+  </intent>
+  <contract ref="C-BENCH-05" state="ratified">
+    <goal embed="true">
+      max_runtime_s is a declared limit and the compiled tool carries the
+      enforcement path.
+    </goal>
+    <check id="1" assessor="gate:task-completion">
+      <run>grep -q max_runtime_s socom.yaml</run>
+      <expect>exit 0: the per-run ceiling is configured</expect>
+    </check>
+    <check id="2" assessor="gate:task-completion">
+      <run>grep -q max_runtime_s bin/socom</run>
+      <expect>exit 0: the monarch enforcement reads the ceiling</expect>
+    </check>
+    <out-of-scope embed="true">
+      Token/rate circuit-breaker tuning; this gates the wall-clock kill exists.
+    </out-of-scope>
+    <regression-surface embed="true">
+      Dropping the ceiling or its enforcement must turn this RED (safety floor).
+    </regression-surface>
+  </contract>
+</promise>

@@ -1,0 +1,14 @@
+# SOCOM Phase-0 baseline — captured by bench/run_baseline.sh
+# task<TAB>verdict<TAB>exit
+B-01-build-determinism	kept	0
+B-02-xml-wellformed	kept	0
+B-03-test-suite-green	kept	0
+B-04-trust-boundary	kept	0
+B-05-runaway-guard	kept	0
+B-06-trace-otlp	kept	0
+B-07-token-meter	kept	0
+B-08-judge-calibration	kept	0
+B-09-lesson-regression	kept	0
+B-10-contract-adequacy	kept	0
+B-11-contract-verify-spine	kept	0
+B-12-degrade-loudly	kept	0

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SOCOM bench task B-09 — Phase-2b lessons -> regression cases (the do-not-break gate).
+  Phase-0 pilot task set (bench/README.md). Fully-auto contract.
+-->
+<promise id="P-BENCH-09" state="open" domain="protocol" session="bench">
+  <promiser seat="builder" participant="bench:reference"/>
+  <promisee seat="orchestrator" participant="human:moses"/>
+  <assessors>
+    <assessor seat="gate" ref="gate:task-completion"/>
+  </assessors>
+  <intent>
+    <verbatim from="human:moses" date="2026-06-30" embed="true">
+      earned lessons should become a do-not-break set — if a guarded promise goes
+      broken again the gate fires red
+    </verbatim>
+    <decoded embed="true">
+      `socom lesson regression` turns active hotspot-born lessons into a
+      do-not-break set; --check fires RED when a guarded promise's latest ledger
+      verdict goes broken again (Phase-2b).
+    </decoded>
+  </intent>
+  <contract ref="C-BENCH-09" state="ratified">
+    <goal embed="true">
+      The lesson command exists and carries the regression-set subcommand.
+    </goal>
+    <check id="1" assessor="gate:task-completion">
+      <run>grep -q 'def cmd_lesson' bin/socom</run>
+      <expect>exit 0: the lesson command is compiled in</expect>
+    </check>
+    <check id="2" assessor="gate:task-completion">
+      <run>grep -q regression bin/socom</run>
+      <expect>exit 0: the do-not-break regression path is present</expect>
+    </check>
+    <out-of-scope embed="true">
+      Lesson promotion policy; this gates the regression gate exists and is wired.
+    </out-of-scope>
+    <regression-surface embed="true">
+      Removing the regression subcommand must turn this RED (the do-not-break gate).
+    </regression-surface>
+  </contract>
+</promise>

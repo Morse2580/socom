@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SOCOM bench task B-11 — the contract-verify spine (testable done-ness).
+  Phase-0 pilot task set (bench/README.md). Fully-auto, self-referential: it
+  drives `contract verify`/`show` over a sibling bench contract.
+-->
+<promise id="P-BENCH-11" state="open" domain="cli" session="bench">
+  <promiser seat="builder" participant="bench:reference"/>
+  <promisee seat="orchestrator" participant="human:moses"/>
+  <assessors>
+    <assessor seat="gate" ref="gate:task-completion"/>
+  </assessors>
+  <intent>
+    <verbatim from="human:moses" date="2026-06-30" embed="true">
+      a contract's checks have to actually run — verify executes each run command
+      and judges on exit code, never blesses whatever was built
+    </verbatim>
+    <decoded embed="true">
+      `socom contract verify` runs a contract's auto checks (PASS/FAIL on exit)
+      and `show` renders it — the SOCOM-native conformance runner that makes
+      done-ness falsifiable.
+    </decoded>
+  </intent>
+  <contract ref="C-BENCH-11" state="ratified">
+    <goal embed="true">
+      verify executes a contract's checks and show renders it, both exiting clean
+      on a green contract.
+    </goal>
+    <check id="1" assessor="gate:task-completion">
+      <run>./bin/socom contract verify bench/tasks/B-01-build-determinism.xml</run>
+      <expect>exit 0: every auto check of a green contract passes</expect>
+    </check>
+    <check id="2" assessor="gate:task-completion">
+      <run>./bin/socom contract show bench/tasks/B-01-build-determinism.xml</run>
+      <expect>exit 0: the contract renders (ref, goal, checks)</expect>
+    </check>
+    <out-of-scope embed="true">
+      Comparing live output against the prose expect; verify judges on exit code.
+    </out-of-scope>
+    <regression-surface embed="true">
+      A failing auto check must make verify exit nonzero (fail-closed).
+    </regression-surface>
+  </contract>
+</promise>

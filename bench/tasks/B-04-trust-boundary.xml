@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SOCOM bench task B-04 — Phase-1a trust boundary (the lethal-trifecta cut).
+  Phase-0 pilot task set (bench/README.md). Fully-auto contract.
+-->
+<promise id="P-BENCH-04" state="open" domain="canon" session="bench">
+  <promiser seat="builder" participant="bench:reference"/>
+  <promisee seat="orchestrator" participant="human:moses"/>
+  <assessors>
+    <assessor seat="gate" ref="gate:task-completion"/>
+  </assessors>
+  <intent>
+    <verbatim from="human:moses" date="2026-06-30" embed="true">
+      untrusted content the scout reads must never become instructions — the
+      constitution has to name that boundary and the scout seat has to honor it
+    </verbatim>
+    <decoded embed="true">
+      The constitution declares an explicit untrusted-input / tool-authority
+      boundary, and the scout role exists as the seat that ingests untrusted
+      content as data, never as instructions (Phase-1a, GAPS #1).
+    </decoded>
+  </intent>
+  <contract ref="C-BENCH-04" state="ratified">
+    <goal embed="true">
+      Canon encodes the trust-boundary principle and a scout seat that cuts one
+      leg of the lethal trifecta.
+    </goal>
+    <check id="1" assessor="gate:task-completion">
+      <run>grep -qi untrusted canon/constitution.xml</run>
+      <expect>exit 0: the constitution names the untrusted-input boundary</expect>
+    </check>
+    <check id="2" assessor="gate:task-completion">
+      <run>grep -qi scout canon/roles.xml</run>
+      <expect>exit 0: the scout seat is defined in canon roles</expect>
+    </check>
+    <out-of-scope embed="true">
+      Sandboxing enforcement at runtime; this gates the canonical doctrine + seat.
+    </out-of-scope>
+    <regression-surface embed="true">
+      Deleting the principle or the scout seat must turn this RED (safety floor).
+    </regression-surface>
+  </contract>
+</promise>

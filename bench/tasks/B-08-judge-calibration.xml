@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SOCOM bench task B-08 — Phase-2b judge calibration (TPR/TNR, not raw agreement).
+  Phase-0 pilot task set (bench/README.md). Fully-auto contract.
+-->
+<promise id="P-BENCH-08" state="open" domain="protocol" session="bench">
+  <promiser seat="builder" participant="bench:reference"/>
+  <promisee seat="orchestrator" participant="human:moses"/>
+  <assessors>
+    <assessor seat="gate" ref="gate:task-completion"/>
+  </assessors>
+  <intent>
+    <verbatim from="human:moses" date="2026-06-30" embed="true">
+      calibrate the assessor against human labels — score true-positive and
+      true-negative separately so a sycophant judge gets caught
+    </verbatim>
+    <decoded embed="true">
+      `socom judge` scores a model assessor against human labels with TPR/TNR
+      reported separately; the gate blocks unless both meet threshold (Phase-2b,
+      GAPS #4 — raw agreement misleads under imbalance).
+    </decoded>
+  </intent>
+  <contract ref="C-BENCH-08" state="ratified">
+    <goal embed="true">
+      The judge command exists and reports the true-positive / true-negative rates.
+    </goal>
+    <check id="1" assessor="gate:task-completion">
+      <run>grep -q 'def cmd_judge' bin/socom</run>
+      <expect>exit 0: the judge command is compiled in</expect>
+    </check>
+    <check id="2" assessor="gate:task-completion">
+      <run>grep -qi 'tpr' bin/socom</run>
+      <expect>exit 0: TPR/TNR calibration is present (not raw agreement only)</expect>
+    </check>
+    <out-of-scope embed="true">
+      The labelled-set curation loop; this gates the calibrated scorer exists.
+    </out-of-scope>
+    <regression-surface embed="true">
+      Collapsing to raw-agreement or removing judge must turn this RED.
+    </regression-surface>
+  </contract>
+</promise>

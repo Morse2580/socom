@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SOCOM bench task B-07 — Phase-2a token meter (the cost view is token-real).
+  Phase-0 pilot task set (bench/README.md). Fully-auto contract.
+-->
+<promise id="P-BENCH-07" state="open" domain="protocol" session="bench">
+  <promiser seat="builder" participant="bench:reference"/>
+  <promisee seat="orchestrator" participant="human:moses"/>
+  <assessors>
+    <assessor seat="gate" ref="gate:task-completion"/>
+  </assessors>
+  <intent>
+    <verbatim from="human:moses" date="2026-06-30" embed="true">
+      the cost numbers have to come from real token usage in the logs, never made up
+    </verbatim>
+    <decoded embed="true">
+      `socom meter` parses real token usage from run logs into the records so the
+      trace cost view is token-real and never fabricated (Phase-2a, GAPS #10).
+    </decoded>
+  </intent>
+  <contract ref="C-BENCH-07" state="ratified">
+    <goal embed="true">
+      The meter command exists and feeds the GenAI usage attributes.
+    </goal>
+    <check id="1" assessor="gate:task-completion">
+      <run>grep -q 'def cmd_meter' bin/socom</run>
+      <expect>exit 0: the meter command is compiled in</expect>
+    </check>
+    <check id="2" assessor="gate:task-completion">
+      <run>grep -q 'gen_ai.usage' bin/socom</run>
+      <expect>exit 0: usage flows into the GenAI usage attributes</expect>
+    </check>
+    <out-of-scope embed="true">
+      Per-provider log-format coverage; this gates the meter exists and is wired.
+    </out-of-scope>
+    <regression-surface embed="true">
+      Fabricated counts or a removed meter must turn this RED (token-real cost).
+    </regression-surface>
+  </contract>
+</promise>

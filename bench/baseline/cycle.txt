@@ -1,0 +1,4 @@
+socom cycle — 12 runs, 12 promises
+  pass@1 12/12 (100.0%)  pass@k 12/12 (100.0%)  pass_rate 100.0%  contract-coverage 100.0%
+  seat builder    pass@1 12/12  pass@k 12/12  (100.0%)
+  -> .socom/cycles/cycle-20260630T070945+0000.json

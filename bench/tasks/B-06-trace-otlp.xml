@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SOCOM bench task B-06 — Phase-2a trajectory observability (OTLP GenAI spans).
+  Phase-0 pilot task set (bench/README.md). Fully-auto contract.
+-->
+<promise id="P-BENCH-06" state="open" domain="protocol" session="bench">
+  <promiser seat="builder" participant="bench:reference"/>
+  <promisee seat="orchestrator" participant="human:moses"/>
+  <assessors>
+    <assessor seat="gate" ref="gate:task-completion"/>
+  </assessors>
+  <intent>
+    <verbatim from="human:moses" date="2026-06-30" embed="true">
+      i want to replay how a run went in a normal trace tool — export the runs as
+      opentelemetry genai spans
+    </verbatim>
+    <decoded embed="true">
+      `socom trace` exports the run registry + ledger as OTLP/JSON spans named by
+      the OpenTelemetry GenAI conventions (Phase-2a, GAPS #3).
+    </decoded>
+  </intent>
+  <contract ref="C-BENCH-06" state="ratified">
+    <goal embed="true">
+      The trace command exists and emits the GenAI span conventions.
+    </goal>
+    <check id="1" assessor="gate:task-completion">
+      <run>grep -q 'def cmd_trace' bin/socom</run>
+      <expect>exit 0: the trace command is compiled in</expect>
+    </check>
+    <check id="2" assessor="gate:task-completion">
+      <run>grep -q 'gen_ai.agent.name' bin/socom</run>
+      <expect>exit 0: spans carry the OTel GenAI agent-name attribute</expect>
+    </check>
+    <out-of-scope embed="true">
+      Span schema completeness vs. the full GenAI spec; this gates presence.
+    </out-of-scope>
+    <regression-surface embed="true">
+      Removing trace or the GenAI attributes must turn this RED (measurement spine).
+    </regression-surface>
+  </contract>
+</promise>
