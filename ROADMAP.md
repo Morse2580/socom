@@ -23,7 +23,15 @@ becomes canon.
 
 ---
 
-## Phase 0 — The measurement spine (prerequisite, days)
+## Phase 0 — The measurement spine (prerequisite, days) ✅ DONE
+
+> **Status: complete.** Pilot repo = SOCOM itself (dogfood — Phase 3 applies
+> SOCOM's gate to SOCOM). Committed `bench/` (commit `b6055c2`): 12 fully-auto
+> promise+contract tasks (`bench/tasks/B-01..B-12`) across protocol/cli/canon, a
+> regenerator (`bench/run_baseline.sh`), and a frozen baseline (`bench/baseline/`)
+> captured through the real Phase-2 spine (`contract verify --record` → run ledger
+> → `cycle`): **12 kept / 0 broken, pass@1 12/12, contract-coverage 100%** — the
+> reference floor the A/B perturbs from. `xmlcheck` now gates the task set.
 
 Nothing downstream is provable without this. Pick the ground truth before building.
 
