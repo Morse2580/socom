@@ -72,7 +72,7 @@ Download-then-run (auditable) — not `curl … | sh` (which executes unseen cod
 network at install time.
 
 Then run `socom quickstart` in a repo to climb the whole on-ramp in one command.
-**New here, or testing it?** Start with **[PILOT.md](PILOT.md)** — the 5-minute
+**New here, or testing it?** Start with **[PILOT.md](.dev/PILOT.md)** — the 5-minute
 discovery path, what's safe to test in this `v0.1` pilot, and a paste-able prompt so
 Claude Code can walk you through it.
 
@@ -135,7 +135,8 @@ easy path.
 
 ## Read next
 
-- [`PROTOCOL.md`](PROTOCOL.md) — the full substrate specification
+- [`PROTOCOL.md`](.dev/PROTOCOL.md) — the full substrate specification
+- [`.dev/`](.dev/) — strategy & design docs (vision, roadmap, gap analysis, residuality, storage)
 - [`schemas/`](schemas/) — XML artifact schemas with exemplar instances
 - [`templates/`](templates/) — the human-facing markdown views (look and feel)
 - [`adapters/`](adapters/) — runtime compilation targets

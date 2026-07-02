@@ -1,12 +1,12 @@
 # SOCOM bench — the Phase-0 pilot task set + baseline (the yardstick)
 
-> Phase 0 of `ROADMAP.md`: *"Nothing downstream is provable without this. Pick the
+> Phase 0 of `.dev/ROADMAP.md`: *"Nothing downstream is provable without this. Pick the
 > ground truth before building."* This directory **is** that ground truth — a fixed,
 > committed task set and a captured baseline that every later claim diffs against.
 
 ## Why this exists
 
-Phase 3 (`ROADMAP.md`) replaces *"the ceremony probably helps"* with measured
+Phase 3 (`.dev/ROADMAP.md`) replaces *"the ceremony probably helps"* with measured
 evidence: **does SOCOM beat a well-prompted agent + plain CI on the same work?**
 You cannot answer that without a yardstick that does not move. This bench is the
 yardstick:

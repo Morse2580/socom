@@ -729,7 +729,7 @@ def cmd_index(args):
             continue
         art = tree.getroot()
 
-        # Identity per STORAGE.md: chunk_id is the FULL element path with id
+        # Identity per .dev/STORAGE.md: chunk_id is the FULL element path with id
         # attributes (ancestors included), so sibling concepts never collide
         # and rewording a chunk keeps its identity. Ancestor attrs (id, state,
         # lineage...) inherit into metadata so filters work on leaf chunks.
@@ -1285,7 +1285,7 @@ def cmd_judge(args):
 # L1 may start only once an L0 floor is measured: corpus shape, L0 latency,
 # and probe hit@k under keyword matching. The L1 acceptance contract is
 # "same probes, strictly better hit@k, latency within budget" — contracts
-# before code, applied to the substrate's own evolution (STORAGE.md).
+# before code, applied to the substrate's own evolution (.dev/STORAGE.md).
 
 def l0_score(query: str, chunks: list, k: int = 5) -> list:
     """Keyword-overlap retrieval — the floor any L1 must beat."""
