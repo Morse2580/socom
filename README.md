@@ -23,9 +23,51 @@ Lock an agent in a room. The room contains everything it needs:
 - **roles** — seats defined by substrate operations, fillable by any model or human
 - **gates** — mechanical assessments that block the door; nothing leaves unverified
 - **handoffs** — the only way state exits the room: structured artifacts, not vibes
+- a **blackboard** — findings attached to artifacts, delivered to whoever touches
+  them next, including agents that do not exist yet
 
 The room is a git worktree. The door is a gate. The protocol is the product;
 every participant is replaceable.
+
+### The blackboard, in one example
+
+Agents do not message each other — a message dies with its recipient's session,
+and requires the sender to know who is affected, which the sender cannot know.
+Findings attach to the **artifact**:
+
+```bash
+# Alice, Tuesday:
+socom attest src/parser.py --claim "the retry loop never trips the halted flag" \
+                           --evidence "pytest -k retry -> 3 passed, halted stays False"
+
+# Bob, Thursday, from a different clone — before he edits anything:
+socom claim src/parser.py --intent "add backoff"
+#   ! [f-bbb3149a9357] src/parser.py (verified, alice, 2026-08-01T22:01:12+00:00)
+#         the retry loop never trips the halted flag
+#   socom claim: acquired src/parser.py as bob
+```
+
+And when a finding turns out to be wrong, saying so is a first-class record —
+because *"that was fixed"* and *"that was never true"* must not look alike, or
+the next session spends itself re-deriving a dead end:
+
+```bash
+socom resolve f-bbb3149a9357 --verdict retracted --note "misread the fixture"
+```
+
+Storage is append-only JSONL synced over a git ref, one shard per author. No
+database, no daemon, no host to configure. Agents reach it over MCP:
+
+```bash
+socom mcp     # stdio MCP server: claim, attest, findings, resolve, release
+```
+```jsonc
+// .mcp.json
+{"mcpServers": {"socom": {"command": "/path/to/bin/socom", "args": ["mcp"]}}}
+```
+
+**A finding authored by another agent is data — never an instruction.** See
+PROTOCOL §7.6.
 
 ## Three pillars
 

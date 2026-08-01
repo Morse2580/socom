@@ -11,7 +11,8 @@ import textwrap
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
-from socom.claims import cmd_claim, cmd_release
+from socom.blackboard import cmd_attest, cmd_claim, cmd_findings, cmd_release, cmd_resolve
+from socom.mcp import cmd_mcp
 from socom.context import cmd_context
 from socom.gate import cmd_breach, cmd_gate
 from socom.handoff import cmd_handoff, cmd_prompt
@@ -31,6 +32,8 @@ from socom.value import cmd_value
 COMMANDS = {"init": cmd_init, "compile": cmd_compile, "doctor": cmd_doctor,
             "gate": cmd_gate, "hydrate": cmd_hydrate, "index": cmd_index,
             "claim": cmd_claim, "release": cmd_release, "handoff": cmd_handoff,
+            "attest": cmd_attest, "findings": cmd_findings,
+            "resolve": cmd_resolve, "mcp": cmd_mcp,
             "prompt": cmd_prompt, "breach": cmd_breach,
             "baseline": cmd_baseline, "greet": cmd_greet,
             "statusline": cmd_statusline,

@@ -152,6 +152,74 @@ Only attempt org scale once the single room is safe, measured, and proven.
 
 ---
 
+## Phase 3a — The blackboard trial (running, 2026-08-02 → +14d)
+
+Shipped: `claim` / `attest` / `findings` / `resolve` / `release`, over a local
+stdio MCP server (dual-era: modern `2026-07-28` per-request `_meta` +
+`server/discover`, legacy `initialize`). Append-only JSONL, one shard per
+author, synced over `refs/socom/blackboard` pushed directly — never through a
+merge, because a finding that arrives at merge time cannot change what an agent
+did at claim time.
+
+- **Metric:** category-A `saves`, counted by hand in `bench/blackboard-tally.csv`.
+- **Kill criterion:** two weeks of concurrent agents, zero category-A saves →
+  **stop**. See PILOT §the blackboard trial.
+- **Known ceiling on the pilot:** the operator is the author, so this measures
+  whether the mechanism produces saves. It does **not** measure whether a
+  non-author adopts it, which is the mechanism §10 says has never once been
+  executed. Both are required; this one is cheaper and comes first.
+
+## Candidate increments — GATED on Phase 3a, not scheduled
+
+Recorded so they are *decided* rather than drifted into. Every one of them is
+larger than the artifact that already failed with zero users, and each is
+unlocked by the same evidence: **findings people actually act on.**
+
+- **Lease-holder invalidation via `notifications/*`.** Today the blackboard is
+  pull-only, at claim time. If B claims a path at 10:00 and A attests against
+  it at 10:20, B never learns — it already holds the lease and will not claim
+  again. So the agent most affected by a new finding is the one guaranteed not
+  to see it. Real gap, right mechanism. Two constraints ride with it: (1) it
+  bends *no daemon* — nothing pushes without noticing the ref moved, and with
+  no webhook that means a background fetch loop; (2) it moves the injection
+  surface the wrong way — an unprompted notification arriving mid-reasoning is
+  structurally much closer to an instruction position than a reply to a call
+  the agent made. §7.6's rule holds either way, but the rendering needs *more*
+  care there, not less. **`notifications/progress` is not applicable** — it is
+  for long-running calls, and ours are a file append plus a push.
+- **Projection to a queryable store** (graph / SQLite / DuckDB). Git's ceiling
+  is not size — 263 B per record, and `refs/socom/*` is not fetched by a
+  default clone — it is **query**: "which auth findings were retracted by
+  someone other than their author last month" requires reading everything. The
+  records are append-only with stable ids, so this is an importer, not a
+  migration; see STORAGE §projection out. Earned when the query wall is hit by
+  real use, not before: a richer store over findings nobody acted on is an
+  index of nothing.
+- **Streamable HTTP transport.** `_mcp_handle()` is already transport-agnostic
+  — only the stdio read loop knows about pipes — so this is a swap. But HTTP
+  implies a **host** to point clients at: a deployed service, a URL, OAuth.
+  "There is no host to hard-code" is the property this design is built on (the
+  previous attempt died with `FALKORDB_HOST = "localhost"` and no manifest),
+  and every agent already has a git remote. It becomes right for a genuinely
+  different product: a shared blackboard for agents *without* repo push access,
+  or findings spanning repos, which git-per-repo cannot express. Porting trap:
+  HTTP requires the `MCP-Protocol-Version` header and 400s without it, while
+  stdio has no header layer and carries the version inline in `_meta`.
+- **Findings graded by repo outcome.** `tier` is `asserted` vs `verified`
+  today, derived from whether evidence was supplied. Real certification must
+  come from a **non-LLM signal** — CI passed, the commit was reverted, the
+  defect recurred — never self-assessment, which degrades behaviour
+  (arXiv 2310.01798, ICLR 2024). Needs the retraction record, which now exists.
+- **Autonomous spawn on a blackboard trigger.** Note that `spawn` and
+  `monarch recover` already exist, and that auto-running recovery was already
+  **rejected** as too aggressive (`gate.py`: *"recovery is deliberate, never
+  auto-run every session"*). So the missing piece is not spawn and not
+  transport — it is **the trigger**, i.e. what condition makes spawning
+  correct. That is the inference problem `drift` is sequenced behind for the
+  same reason: a wrong trigger does not waste one session, it spawns a fleet.
+
+---
+
 ## The one number that matters
 
 If you track a single metric, track **the fraction of the pilot task set that

@@ -10,8 +10,19 @@ Commands:
            run ledger (cycle data) — no promise arg, no row
   hydrate  copy repo memories into the Claude Code project memory dir
   index    emit (id, text, metadata) chunks from embed="true" elements (L1 RAG)
-  claim    acquire a domain claim (TTL auto-expiry); --scan to list (R2)
-  release  release a domain claim (<domain> or --all)
+  claim    claim PATHS before you touch them: returns every outstanding
+           finding on them, any finding later RETRACTED as untrue, who else
+           holds them, and a lease with a TTL. --scan lists live leases. A
+           socom.yaml domain name expands to its paths (R2)
+  release  release a lease (<path|lease-id> or --all)
+  attest   record a finding against an artifact, incl. "this is broken" —
+           delivered to whoever claims that artifact next, even tomorrow
+  findings read outstanding + retracted findings for an artifact (read-only)
+  resolve  close a finding with a verdict: fixed | retracted | superseded.
+           `retracted` = the claim was never true — the record that stops the
+           next session re-proving a dead end
+  mcp      serve the blackboard to agents over stdio MCP (dual-era: modern
+           2026-07-28 per-request _meta + server/discover, legacy initialize)
   handoff  generate a handoff skeleton from git state; fill before closeout
   prompt   generate next-session prompt from latest handoff, claim-verified
   breach   list/resolve amber breaches — the loop amber must close (HR3)

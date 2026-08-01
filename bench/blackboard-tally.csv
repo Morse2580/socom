@@ -1,0 +1,21 @@
+# socom blackboard trial — the saves tally. Counted BY HAND, deliberately.
+#
+# Building a saves-counter is scaffolding: if category A never happens, no
+# instrumentation would have made it happen. See PILOT.md §the blackboard trial.
+#
+# LOG THE VERDICT AT CLAIM TIME, BEFORE YOU KNOW HOW THE WORK TURNS OUT.
+# Filling it in afterwards turns every session that went well into a "save" —
+# the tally then measures mood, not mechanism.
+#
+# outcome:
+#   A  save    — the agent narrowed, abandoned, or changed approach BECAUSE of a finding
+#   B  noise   — findings returned, ignored, no effect
+#   C  silent  — no findings existed for those paths
+#
+# findings_returned feeds the secondary metric: findings-per-claim over time.
+# A monotonic rise means the blackboard is becoming noise before it becomes
+# useful (Hearsay-II's control problem) — watch it as closely as the A count.
+#
+# Kill criterion: two weeks of concurrent agents with zero A -> STOP.
+#
+date,session,paths,findings_returned,retracted_returned,outcome,what_changed

@@ -12,7 +12,7 @@ import textwrap
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
-from socom.claims import claim_expired
+from socom.blackboard import BB_LEASES, bb_cfg, bb_live_leases, bb_read_local
 from socom.core import SOCOM_DIR, repo_root
 from socom.lifecycle import adoption_bar, adoption_rung
 from socom.retrieval import _cycle_rollup
@@ -95,11 +95,10 @@ def _val_context(root: Path):
 
 
 def _val_claims(root: Path) -> int:
-    """Live (unexpired) domain locks — concurrent work the substrate serialized."""
-    cdir = root / SOCOM_DIR / "claims"
-    if not cdir.exists():
-        return 0
-    return sum(1 for p in cdir.glob("*.claim") if not claim_expired(p))
+    """Live (unexpired) path leases — concurrent work the substrate serialized.
+    Local shards only: `value` is a readout of signals already on disk, and must
+    not reach the network to produce one."""
+    return len(bb_live_leases(bb_read_local(root, BB_LEASES)))
 
 
 def _val_knowledge(root: Path):

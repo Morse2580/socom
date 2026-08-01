@@ -1,13 +1,16 @@
 socom: '0.1'
 project: socom
+# A domain is now a NAME for a set of paths, not a claim unit of its own.
+# Claims are per-path (see `socom claim`); this map is the translator that
+# keeps `socom claim protocol` working without a second vocabulary.
 domains:
-- protocol
-- cli
-- canon
+  protocol: 'PROTOCOL.md'
+  cli: 'src/socom/*'
+  canon: 'canon/*'
 checks:
   fast: tests/smoke.sh
-  medium: tests/smoke.sh && python3 tests/xmlcheck.py && python3 tests/ledgercheck.py && ./bin/socom context verify
-  full: tests/smoke.sh && python3 tests/xmlcheck.py && python3 tests/ledgercheck.py && ./bin/socom context verify && ./bin/socom index . >/dev/null && echo full-ok
+  medium: tests/smoke.sh && python3 tests/xmlcheck.py && python3 tests/ledgercheck.py && python3 tests/mcp.py && ./bin/socom context verify
+  full: tests/smoke.sh && python3 tests/xmlcheck.py && python3 tests/ledgercheck.py && python3 tests/mcp.py && ./bin/socom context verify && ./bin/socom index . >/dev/null && echo full-ok
   eval: ./bin/socom cycle --gate --threshold 70
 ci:
   status: 'echo ''bind me: cache-free pipeline state query'''
@@ -16,6 +19,18 @@ limits:
   # and records it broken (the runaway-spend backstop for unsupervised work). 0
   # disables the kill; the 72h staleness reaper still applies. Raise for long builds.
   max_runtime_s: 3600
+blackboard:
+  # The shared surface: a git ref pushed directly, NOT a commit on the working
+  # branch. A finding that only arrives when an MR merges cannot change what an
+  # agent did at claim time. Set ref to refs/heads/socom/blackboard on a forge
+  # that refuses custom ref namespaces (socom probes and falls back on its own,
+  # then tells you to pin it here).
+  ref: refs/socom/blackboard
+  remote: origin
+  sync: true          # false = local-only blackboard, no pushes
+  policy: lease       # the conflict policy seam — see BB_POLICIES
+  ttl_s: 28800        # 8h; a dead session never wedges a path
+
 seats:
   builder:
     runtime: claude-code

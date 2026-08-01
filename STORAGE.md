@@ -96,6 +96,78 @@ it consumes JSONL with stable IDs and never parses XML itself. Redaction
 (HR6) happened upstream at index time, so the projection is safe by
 construction.
 
+## The blackboard store (findings + path leases)
+
+A second store, deliberately dumber than the index above: no chunking, no
+embedding, no ranking. A finding is *authored*, not inferred, and it is
+delivered by exact artifact match. Nothing here has to be right about
+relevance — only about delivery.
+
+```
+.socom/blackboard/findings/<author>.jsonl     append-only
+.socom/blackboard/leases/<author>.jsonl       append-only
+```
+
+**One shard per author is the whole concurrency design.** No session ever
+writes another's file, so the union of shards is always well-defined and there
+is no merge strategy to get wrong. Records are never mutated; state changes are
+new records that reference an earlier `id`.
+
+| kind | fields |
+|---|---|
+| `finding` | `id ts author artifact claim evidence status tier` |
+| `resolve` | `id ts author ref verdict note` — closes the finding at `ref` |
+| `lease` | `id ts author paths[] intent ttl_s` |
+| `release` | `id ts author ref` — retires the lease at `ref` |
+
+`tier` is `verified` when evidence was supplied, else `asserted` — derived from
+the record, never self-declared, because an agent grading its own claim is the
+self-assessment that degrades behaviour (arXiv 2310.01798, ICLR 2024). Real
+certification is a later increment and must come from **repo outcome** (CI
+passed, commit reverted, defect recurred) — a non-LLM signal.
+
+`verdict` is `fixed | retracted | superseded`. **`retracted` means the claim
+was never true**, and it is the reason `resolve` carries a verdict at all —
+see RESIDUALITY §R2.
+
+Every free-text field is control-char-stripped and length-capped **on write**,
+so a poisoned record never enters the store. See PROTOCOL §7.1.
+
+### Sync: a git ref, pushed directly
+
+```
+attest / claim / resolve  → append to this author's shard
+                          → git push origin <commit>:refs/socom/blackboard
+claim                     → git fetch, union every shard, filter by artifact
+```
+
+The commit is built with plumbing against a throwaway `GIT_INDEX_FILE`, so the
+session's real index and working tree are never touched. Not a branch and not a
+commit on the working branch: **a finding that arrives when an MR merges cannot
+change what an agent did at claim time.** Measured cost: 263 bytes per finding
+record; `refs/socom/*` is not fetched by a default clone, so it never bloats a
+checkout that does not use it.
+
+### Projection out (the graph seam)
+
+The same property that makes the index projectable applies here, and it is the
+reason git is not a one-way door: append-only records with stable ids and typed
+fields load into any store — graph, SQLite, DuckDB — with a small importer that
+never parses anything but JSONL.
+
+```
+projector (any impl) → reads findings/*.jsonl + leases/*.jsonl,
+                       upserts by record id (ids are content-derived and stable),
+                       folds resolve/release the same way bb_open_findings does
+```
+
+Git's real ceiling is not size, it is **query**: "which findings about auth were
+retracted by someone other than their author last month" requires reading
+everything. That wall arrives long before the storage wall, and it is the
+signal that a projection is now earned. Until findings are demonstrably worth
+acting on (see PILOT §the tally), a richer store would be indexing records
+nobody used.
+
 ## The baseline gate (when RAG is allowed to start)
 
 Naive RAG starts **only after an L0 performance baseline exists** — otherwise

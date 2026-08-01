@@ -11,7 +11,7 @@ import textwrap
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
-from socom.claims import claim_expired, reap_orphans
+from socom.blackboard import bb_cfg, bb_live_for_session, reap_orphans
 from socom.core import SOCOM_DIR, _now_iso, canonical_hash, load_cfg, log_breach, repo_root
 from socom.ledger import _append_ledger_row, _promise_model, _promise_ref
 from socom.monarch import reap_dead_runs, recoverable
@@ -190,13 +190,15 @@ def cmd_gate(args):
                 prompt.stat().st_mtime < fresh[-1].stat().st_mtime:
             sys.exit("socom gate session-end: RED — next-session prompt missing "
                      "or older than the handoff. Run `socom prompt`.")
-        open_claims = [p.stem for p in (root / SOCOM_DIR / "claims").glob("*.claim")
-                       if not claim_expired(p)] \
-            if (root / SOCOM_DIR / "claims").exists() else []
-        if open_claims:
-            print(f"socom session-end: AMBER — live claims not released: "
-                  f"{open_claims} (TTL will expire them, but release is the intent)")
-            log_breach(root, "session-end", f"amber: unreleased claims {open_claims}")
+        # Local read only (sync=False): session-end must not block on a network
+        # fetch, and the question — "did THIS session leave a lease open?" — is
+        # answerable from our own shard alone.
+        held = bb_live_for_session(root, bb_cfg(load_cfg(root)), sync=False)
+        if held:
+            open_paths = [p for l in held for p in l.get("paths", [])]
+            print(f"socom session-end: AMBER — paths still claimed: "
+                  f"{open_paths} (the TTL will expire them, but release is the intent)")
+            log_breach(root, "session-end", f"amber: unreleased leases {open_paths}")
         print(f"socom session-end: PASS — handoff {fresh[-1].name} filled, "
               "prompt generated + claim-verified. Distill memories (cap 2, "
               "five gates) before you go.")

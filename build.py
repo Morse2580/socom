@@ -24,9 +24,9 @@ MARKER = "# === BODY ==="
 
 # dependency order: core defines TOOL_ROOT before context's CONTEXT_SCHEMA; cli
 # (COMMANDS + the __main__ guard) is last so every cmd_* is already defined.
-ORDER = ["core", "claims", "ledger", "retrieval", "lesson", "handoff",
+ORDER = ["core", "blackboard", "ledger", "retrieval", "lesson", "handoff",
          "gate", "context", "lifecycle", "spawn", "monarch", "value",
-         "install", "cli"]
+         "install", "mcp", "cli"]
 
 
 EMBED_MARKER = "RESOURCES = {}  # @EMBED@"

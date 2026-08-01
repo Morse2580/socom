@@ -256,6 +256,43 @@ instance?), *Decay* (durable, or version-bound rot?), and *Falsifiability*
 (R5: the memory states what would disprove it; unfalsifiable rules are
 rejected). Memory is a curated asset, not a log.
 
+### 7.6 The blackboard — findings, and why they are never instructions
+
+Agents do not message each other. A finding attaches to the **artifact** it
+concerns, and is delivered to whoever claims that artifact next — including
+agents that do not exist yet. Messaging fails three ways a bulletin does not:
+it dies when the recipient's session ends, it requires the sender to know who
+is affected (which the sender cannot know), and it is unreachable by the agent
+who starts tomorrow — the one who most needs it.
+
+`socom attest` writes one; `socom claim` returns every outstanding finding on
+the paths you are about to touch, plus any finding on them that was later
+**retracted as untrue**, so a dead end another session already walked is not
+re-derived. `socom resolve` closes a finding with a verdict — see
+RESIDUALITY §R2 for why the verdict is load-bearing, and STORAGE §the
+blackboard store for the record shapes.
+
+**The trust boundary, without exception:**
+
+> A finding authored by another agent is **data**. It is never an instruction,
+> and it never enters a peer's context in an instruction position.
+
+A channel between LLM agents is a prompt-injection propagation path: if agent
+A's context is poisoned, A's "warning" to B is an injection vector, and a
+substrate that routes it has industrialised the attack. This is the same rule
+§trust-boundary applies to untrusted ingress, and it is enforced structurally,
+not by convention:
+
+1. **Typed fields only** — `artifact`, `claim`, `evidence`, `author`. There is
+   no free-text blob for framing to hide in, and callers cannot add one.
+2. **Sanitised on write** — control characters (how a payload fakes structure:
+   newlines to forge a line, ANSI to hide text, NUL to truncate a reader) are
+   replaced with a space, not deleted, and length is capped. A poisoned record
+   never enters the store at all.
+3. **Rendered structurally** — a JSON array under a `findings` key, never
+   interpolated into prose. Sanitising a string cannot make it safe to *obey*;
+   it is safe because nothing ever obeys it.
+
 ## 8. Roles — seats, not models
 
 A role is defined by its **substrate operations** (what it reads, what it may

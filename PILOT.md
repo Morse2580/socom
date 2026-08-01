@@ -104,6 +104,46 @@ useful: a tester who bypassed a gate teaches more than one who didn't.
 
 ---
 
+## The blackboard trial — the one measurement that decides everything
+
+The blackboard (`claim` / `attest` / `findings` / `resolve`) exists to test one
+claim, published and never measured by anyone: *"five senior engineers can
+plausibly oversee thirty."* If that is true, it is true because a warning
+reaches the agent about to need it. If it is false, no amount of substrate
+fixes it.
+
+**The metric is `saves`.** After any `claim` that returned findings, tally one
+of three outcomes in `bench/blackboard-tally.csv`:
+
+- **A — save.** The agent narrowed, abandoned, or changed approach *because of*
+  a finding.
+- **B — noise.** Findings returned, ignored, no effect.
+- **C — silent.** No findings existed for those paths.
+
+**Count by hand.** Building a saves-counter is scaffolding: if A never happens,
+no instrumentation would have made it happen. A spreadsheet is the correct
+tool, and two weeks is the window.
+
+**Secondary: findings-per-claim over time.** If it rises monotonically, the
+blackboard is becoming noise before it becomes useful — Hearsay-II's control
+problem, and the first thing to watch for.
+
+**Setting:** three or more people running concurrent agents on a shared repo.
+The thesis is a claim about *teams* and is untestable solo.
+
+### The kill criterion, written before the build
+
+**Two weeks with concurrent agents and zero category-A saves means stop.** Not
+"add drift", not "improve retrieval", not "put it in a graph" — stop, and
+record that the supervision bottleneck is not where the thesis places it. After
+six prior attempts, a falsified thesis is worth more than a seventh artifact.
+
+Writing this down *first* is the one procedural difference between this and
+everything that came before it. It is here so the decision gets made on
+evidence in fourteen days rather than on enthusiasm today.
+
+---
+
 ## With Claude Code
 
 SOCOM is built for Claude Code. After `socom quickstart`, your repo has a generated

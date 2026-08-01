@@ -110,25 +110,68 @@ grep -q "precious" CLAUDE.md && ok "compile refuses to clobber (HR2)" \
 grep -q "socom:generated" CLAUDE.md && ok "--force adopts deliberately (HR2)" \
                                     || bad "--force did not adopt (HR2)"
 
-# 6. claims (R2) + reaper (R12)
+# 6. blackboard: path claims (R2) + findings + retraction + reaper (R12)
 cd "$R"
 export SOCOM_SESSION="smoke-a"
-"$SOCOM" claim core >/dev/null;            check "claim acquire" 0 $?
-"$SOCOM" claim core >/dev/null;            check "re-claim by same holder ok" 0 $?
-SOCOM_SESSION="smoke-b" "$SOCOM" claim core >/dev/null 2>&1; check "claim held by other RED" 1 $?
-"$SOCOM" claim nosuch >/dev/null 2>&1;     check "claim unknown domain RED" 1 $?
-"$SOCOM" claim --scan | grep -q "1 live" && ok "claim --scan sees live claim" \
-                                         || bad "claim --scan missed live claim"
-# expire it: backdate the timestamp, reaper must remove it
-python3 - <<EOF
-from pathlib import Path
-p = Path(".socom/claims/core.claim"); ts, rest = p.read_text().split("\t", 1)
-p.write_text("2020-01-01T00:00:00+00:00\t" + rest)
-EOF
-"$SOCOM" gate session-start 2>/dev/null | grep -q "reaped expired claim: core" \
-  && ok "reaper removes expired claim (R12)" || bad "reaper did not reap (R12)"
-"$SOCOM" claim core >/dev/null && "$SOCOM" release core >/dev/null
-check "release" 0 $?
+"$SOCOM" claim src/parser.py --intent "smoke" >/dev/null 2>&1
+check "claim acquire (per-path)" 0 $?
+"$SOCOM" claim src/parser.py --intent "smoke" >/dev/null 2>&1
+check "re-claim by the same holder is not a conflict" 0 $?
+SOCOM_SESSION="smoke-b" "$SOCOM" claim src/ --intent "x" >/dev/null 2>&1
+check "an OVERLAPPING path held by another session is RED" 1 $?
+SOCOM_SESSION="smoke-b" "$SOCOM" claim docs/other.md --intent "x" >/dev/null 2>&1
+check "a DISJOINT path is free while another lease is live" 0 $?
+"$SOCOM" claim core --intent "domain alias" >/dev/null 2>&1
+check "a socom.yaml domain name expands to its paths" 0 $?
+"$SOCOM" claim --scan | grep -q "live lease" && ok "claim --scan lists live leases" \
+                                             || bad "claim --scan missed the leases"
+"$SOCOM" release --all >/dev/null 2>&1;    check "release --all" 0 $?
+SOCOM_SESSION="smoke-b" "$SOCOM" release --all >/dev/null 2>&1
+
+# attest -> the finding must reach whoever claims that artifact NEXT. This is
+# the whole product; if only one assertion in this file survives, keep this one.
+SOCOM_SESSION="smoke-a" "$SOCOM" attest src/parser.py \
+  --claim "the retry loop never trips the halted flag" \
+  --evidence "pytest -k retry" >/dev/null 2>&1
+check "attest records a finding" 0 $?
+"$SOCOM" attest --claim "no artifact" >/dev/null 2>&1
+check "attest without an artifact is RED" 1 $?
+"$SOCOM" attest src/x.py >/dev/null 2>&1
+check "attest without a claim is RED" 1 $?
+SOCOM_SESSION="smoke-c" "$SOCOM" claim src/parser.py --intent "add backoff" 2>/dev/null \
+  | grep -q "halted flag" \
+  && ok "a peer's finding is DELIVERED at claim time (the product)" \
+  || bad "claim did not deliver the outstanding finding"
+SOCOM_SESSION="smoke-c" "$SOCOM" claim src/parser.py --intent "x" 2>/dev/null \
+  | grep -qi "do not obey" \
+  && ok "findings are labelled as data, never instructions (§17.2)" \
+  || bad "findings delivered without the data-not-instruction contract"
+SOCOM_SESSION="smoke-c" "$SOCOM" release --all >/dev/null 2>&1
+
+# retraction: 'was never true' must not read like 'was fixed', or the next
+# session re-derives the dead end at full price.
+"$SOCOM" resolve f-nosuchfinding --verdict retracted >/dev/null 2>&1
+check "resolve REFUSES an id that names nothing (no phantom retraction)" 1 $?
+FID=$("$SOCOM" findings src/parser.py --json | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["findings"][0]["id"])')
+"$SOCOM" resolve "$FID" --verdict nonsense >/dev/null 2>&1
+check "resolve rejects an unknown verdict" 1 $?
+"$SOCOM" resolve "$FID" --verdict retracted --note "misread the fixture" >/dev/null 2>&1
+check "resolve retracts" 0 $?
+SOCOM_SESSION="smoke-d" "$SOCOM" claim src/parser.py --intent "investigate" 2>/dev/null \
+  | grep -q "RETRACTED as untrue" \
+  && ok "a retracted finding warns the NEXT session off the dead end" \
+  || bad "retraction was not surfaced at claim time"
+"$SOCOM" findings src/parser.py | grep -q "0 outstanding" \
+  && ok "a retracted finding is no longer outstanding" \
+  || bad "retracted finding still counted as outstanding"
+SOCOM_SESSION="smoke-d" "$SOCOM" release --all >/dev/null 2>&1
+
+# R12: a superseded domain-claim store must not linger beside the lease store.
+mkdir -p .socom/claims && echo "2020-01-01T00:00:00+00:00	old" > .socom/claims/core.claim
+"$SOCOM" gate session-start 2>/dev/null | grep -q "superseded domain claim" \
+  && ok "reaper clears the superseded domain-claim store (R12)" \
+  || bad "reaper left a second claim store in place (R12)"
 
 # 7. handoff + prompt + session-end gate
 "$SOCOM" gate session-end >/dev/null 2>&1; check "session-end RED without handoff" 1 $?

@@ -71,9 +71,37 @@ is *permitted for flow* but never escapes re-assessment; merge is the real
 door. Survives S1, S5, S19. Criticality: also makes S12 tractable (slow
 checks belong to the CI tier, see R9).
 
-**R2 — Claims with auto-expiry.** Domain claims are cheap origin markers
-(marker branches / claim files) with a TTL; expiry self-releases. Survives
-S2, S20. Criticality: gives S10 its sharding unit (claims are per-domain).
+**R2 — Path claims with auto-expiry, and findings attached to artifacts.**
+Claims are cheap append-only lease records over PATHS with a TTL; expiry
+self-releases, so a dead session never wedges a file. Survives S2, S20.
+Criticality: gives S10 its sharding unit.
+
+*Superseded the domain claim (2026-08-02).* A domain was the wrong unit in
+both directions: two sessions editing different files in one domain blocked
+each other, while two sessions editing the SAME file through different domains
+did not — the failure a claim exists to prevent was the one it did not catch.
+A domain survives as a NAME for a set of paths (`socom.yaml domains:`), which
+keeps one vocabulary instead of two.
+
+The lease is the smaller half. The same surface carries **findings** — a claim
+about an artifact, authored by anyone, delivered to whoever claims that
+artifact next, including sessions that do not exist yet. This is the
+blackboard (Hearsay-II 1980; Nii, *AI Magazine* 1986): participants never
+address each other, they write to a shared surface and read from it, decoupled
+in time and identity. It survives a residual S20 that messaging cannot: a
+warning sent to a peer dies with that peer's session, and the agent who most
+needs it is the one who starts tomorrow.
+
+A finding closes with a **verdict** — `fixed`, `retracted`, or `superseded`.
+`retracted` means the claim was never true, and it is load-bearing: without
+it, "someone fixed this" and "that was never true" close identically, so the
+next session cannot tell them apart and re-derives the dead end at full price.
+That is its own failure mode (a session spent disproving a prior session's
+wrong assertion, repeatedly), and the retraction record is what closes it.
+
+Storage is append-only JSONL, one shard per author, synced over a git ref
+pushed directly — never through a merge. A finding that arrives when an MR
+merges cannot change what an agent did at claim time.
 
 **R3 — Compiled views are hashed.** Every compiled artifact carries the hash
 of its canonical source; the session-start gate diffs them — mismatch is P0

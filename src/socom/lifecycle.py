@@ -11,7 +11,7 @@ import textwrap
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
-from socom.claims import claim_expired, claim_holder
+from socom.blackboard import bb_author, bb_cfg, bb_live_for_session
 from socom.core import CANON_FILES, HOOKS_DIR, SOCOM_DIR, SOCOM_VERSION, canonical_hash, load_cfg, md_text, parse_canon, repo_root, resource, write_generated
 
 # === BODY ===
@@ -60,7 +60,15 @@ def cmd_init(args):
         cfg.write_text(textwrap.dedent(f"""\
             socom: "{SOCOM_VERSION}"
             project: {root.name}
-            domains: [core]          # claim + lesson granularity
+            domains:                 # a NAME for a set of paths — claims are
+              core: "src/**"         # per-PATH; EDIT so `socom claim core` covers
+                                     # what you mean. Also lesson granularity.
+            blackboard:              # findings + path leases, shared over git
+              ref: refs/socom/blackboard   # a directly-pushed ref, NOT an MR —
+              remote: origin               # a finding must arrive at claim time
+              sync: true             # false = local-only, never pushes
+              policy: lease          # the conflict-policy seam
+              ttl_s: 28800           # 8h; a dead session never wedges a path
             checks:                  # bind to commands that really run here
               fast: "true"           # seconds-budget; runs at task-completion
               medium: "true"         # pre-commit (amber band)
@@ -193,7 +201,10 @@ def render_body(root: Path, cfg: dict) -> str:
     for k in ("fast", "medium", "full"):
         out.append(f"| {k} | `{checks.get(k, 'UNBOUND')}` |")
     out.append(f"| ci.status | `{cfg.get('ci', {}).get('status', 'UNBOUND')}` |")
-    out.append(f"\nDomains: {', '.join(cfg.get('domains', []))}\n")
+    doms = cfg.get("domains") or {}
+    out.append("\nDomains (a name for a set of paths — claims are per-path): "
+               + (", ".join(f"{k} -> {v}" for k, v in doms.items())
+                  if isinstance(doms, dict) else ", ".join(doms)) + "\n")
 
     out.append("## Retrieval map\n")
     out.append(
@@ -513,17 +524,19 @@ def cmd_precond(args):
             rows.append(("✓", "compiled views in sync"))
 
     # 6. Claim — only meaningful for production seats; warn if none held by you (R2).
+    # Local read (sync=False): precond is a fast pre-flight and must not block
+    # on the network to answer a question about this session's own shard.
     if seat in ("builder", "reviewer", "validator", "analyst"):
-        cdir = root / SOCOM_DIR / "claims"
-        mine = [p.stem for p in cdir.glob("*.claim")
-                if not claim_expired(p) and claim_holder() in p.read_text()] \
-            if cdir.exists() else []
+        mine = [p for l in bb_live_for_session(root, bb_cfg(cfg), sync=False)
+                for p in l.get("paths", [])]
         if mine:
-            rows.append(("✓", f"domain claimed by you: {mine}"))
+            rows.append(("✓", f"paths claimed by you: {mine}"))
         else:
             warns += 1
-            rows.append(("!", f"WARN: no domain claimed by you ({claim_holder()}) "
-                              "— parallel seats need a claim (R2)"))
+            rows.append(("!", f"WARN: no paths claimed by you ({bb_author()}) — "
+                              "parallel seats need a claim, and claiming is how "
+                              "you receive the findings on what you are about to "
+                              "touch (R2)"))
 
     ms = round((time.monotonic() - t0) * 1000)
     label = f"precond (seat={seat})" if seat else "precond"
