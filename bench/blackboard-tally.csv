@@ -19,3 +19,4 @@
 # Kill criterion: two weeks of concurrent agents with zero A -> STOP.
 #
 date,session,paths,findings_returned,retracted_returned,outcome,what_changed
+2026-08-02,akili-s1-wire,".mcp.json .gitignore",0,0,C,"first claim on a fresh surface — no findings existed yet"
