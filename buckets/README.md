@@ -13,8 +13,17 @@ merge domain:
 |---|---|
 | [`build.md`](build.md) | a capability. Code that did not exist before. |
 | [`evidence.md`](evidence.md) | a fact about the world. Something we did not know before. |
+| [`defects.md`](defects.md) | behaviour already shipped and already claimed, made true. |
 
 This split is deliberate and it is an instrument, not bookkeeping.
+
+`defects.md` was added 2026-08-03 by decision 0001 §Amendment 1, because a
+defect repair is **neither** of the first two — it produces no capability (the
+code already ships and already claims it) and no fact about the world — and so
+had no legitimate row shape. Its bound: anything adding a surface, knob,
+mechanism or authorization absent from `bin/socom` today is a capability and
+belongs in `build.md` as `BLOCKED`. **When in doubt it is a capability**, so the
+lane cannot become a build lane under another name.
 
 The diagnosis in [`../decisions/0001-exposure-before-capability.md`](../decisions/0001-exposure-before-capability.md)
 is that **every increment in the R1–R5 ladder is a build, and none is an
@@ -29,8 +38,9 @@ Two buckets make the ratio impossible to miss. If `build.md` has rows moving and
 one glance.
 
 **The one number to read here:** rows DONE in `evidence.md`. As of 2026-08-03 it
-is **zero**, and the root gate has been at proof tier **D0 — ASSUMED** since
-2026-08-01.
+is **one** (`EV-R1-ACCEPTANCE-CORPUS-01`), and the root gate has been at proof
+tier **D0 — ASSUMED** since 2026-08-01. One DONE row is not a trend, and the row
+that can move the tier — `EV-NONAUTHOR-EXPOSURE-01` — is still unrun.
 
 ## Row format
 

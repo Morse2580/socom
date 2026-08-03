@@ -30,7 +30,28 @@ nothing in `build.md` can move it. Only rows here can.
   stall points in `bench/`, and a yes/no per participant on voluntary second
   use. A result of "five people, zero second uses" is a **valid and complete**
   outcome of this row — it is the kill signal the Phase 3a trial cannot
-  produce. **Files:** `PILOT.md` (unchanged, as instrument), `bench/`.
+  produce.
+
+  ⚠️ **Agent cold runs cannot substitute for this row, and it was tried on
+  2026-08-03.** Five agents with distinct engineering backgrounds were given only
+  the public link and one session each on a real repo of their choosing. It was
+  productive — ~30 defects, 4 filed `P0` in [`defects.md`](defects.md), one
+  (`DEF-HOOKS-HIJACK-NO-UNADOPT-01`) more severe than anything the author had
+  found. **It produced none of this row's output.** (a) *Zero stall points*: not
+  one agent stopped. One downloaded and installed a Go toolchain mid-session to
+  keep going where a person closes the tab; all five read the source rather than
+  giving up. Agents do not quit, and the stall point is the measurement. (b)
+  *Zero organic value*: 3/5 planted their own defect and then caught it, 1 built
+  a probe repo — so every "it caught something real" is staged. The cohort
+  produced evidence of defects and **no evidence of value**. (c) *Nobody reached
+  run #2*, which is the metric. **The asymmetry is the rule: an agent cohort can
+  FALSIFY (a tool that fails a compliant, infinitely patient reader certainly
+  fails a person) but cannot CONFIRM** — a simulated "yes" is compliance, and the
+  profile is written by the author, so the author writes the verdict. This
+  forecloses the substitution: cheap, fast, needs no humans, **and cannot move
+  the D-tier**. Reaching for it again instead of this row is proxy selection.
+
+  **Files:** `PILOT.md` (unchanged, as instrument), `bench/`.
 
 - `EV-TRIAL-PROTOCOL-CONFOUND-01` **READY P2** — **The blackboard trial protocol
   produces uninterpretable rows when the session prompt names the paths that

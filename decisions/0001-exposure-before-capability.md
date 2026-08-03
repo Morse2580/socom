@@ -131,3 +131,49 @@ This decision changes what gets built next. It does **not** claim R1 will
 succeed — R1's own acceptance test is unrun, and whether a stranger finds its
 output useful is exactly the thing at D0. That is the point: it is the cheapest
 available way to find out.
+
+---
+
+## Amendment 1 — the defect-repair lane (2026-08-03)
+
+**Adds** a third bucket, `buckets/defects.md`, and the rule that bounds it.
+Nothing above is retracted.
+
+**Why it was needed.** This decision defines two lanes — capability and
+evidence — and **a defect repair is neither.** It produces no capability (the
+code already ships and already claims the behaviour) and no fact about the
+world. A five-agent cold-run cohort on 2026-08-03 returned ~30 defects in
+shipped behaviour, and no legitimate row shape existed for any of them: filing
+them in `build.md` as `READY` would have falsified this decision's own
+acceptance clause on sight, and filing nothing would have discarded measured
+findings. The gap is closed here rather than filed around — filing around a
+governing decision is how it stops governing.
+
+**The rule that bounds the lane.** Without this it becomes a build lane wearing
+a different name:
+
+1. A `defects.md` row repairs behaviour the tool **already ships and already
+   claims**. If it adds a surface, a knob, a mechanism, or an authorization that
+   does not exist today, it is a capability and belongs in `build.md` as
+   `BLOCKED`. **When in doubt it is a capability.**
+2. Only defects that fire **before a non-author's stall point** may be `P0` —
+   work that would otherwise corrupt [[EV-NONAUTHOR-EXPOSURE-01]] by burning a
+   scarce participant on a defect already recorded here. That is the entire
+   pre-exposure budget. Everything else is `P1` and waits.
+3. A defect the exposure measurement is **supposed to discover** is not repaired
+   first. `PILOT.md`'s own report list asks *"did a gate fire a false positive?"*
+   and *"did a metric mislead you?"* — repairing a misleading metric before the
+   run deletes the finding. Such rows are recorded `P1` **with that reason
+   stated**.
+
+**What this does not license.** This is not a re-opened build lane. The 6/6
+pattern this decision exists to stop — *"building is more enjoyable than finding
+out why the last one got no users"* — reproduces just as easily through a repair
+backlog as through a feature backlog. [[EV-NONAUTHOR-EXPOSURE-01]] remains the
+P0 and remains unrun. Four repairs and the exposure run is the honest output of
+the cohort that produced them; the rest is the seventh artifact.
+
+**Falsifiable acceptance:** every `defects.md` row names the shipped behaviour
+and the claim it contradicts; no `defects.md` row introduces a surface absent
+from `bin/socom` today; and `P0` is held to defects a stranger hits before their
+session ends.

@@ -66,6 +66,81 @@ All blocked on [[EV-NONAUTHOR-EXPOSURE-01]] per decision 0001.
   from accumulated history ("why was X rejected?") returns the right prior
   decision with its provenance chain. **Size:** 3–4 wks.
 
+#### From the 2026-08-03 cold-run cohort
+
+Filed `BLOCKED` because each **adds a surface that does not exist today** — the
+line decision 0001 §Amendment 1 draws between a repair and a capability. Their
+repair-shaped halves are already filed in
+[`defects.md`](defects.md); what remains here is the part that is new.
+
+- `SUBSTRATE-CLAUDEMD-COEXIST-01` **BLOCKED P1** — blocked on
+  [[EV-NONAUTHOR-EXPOSURE-01]]. **A repo with a hand-written `CLAUDE.md` has no
+  adoption path that keeps it.** `adopt` correctly REFUSES to clobber it
+  (verified byte-for-byte by a cold-run agent) — but then `doctor` reports
+  `✗ CLAUDE.md: no socom:generated header — hand-written or tampered` forever,
+  and there is **no merge / include / append mechanism**, only `--force`. The
+  steady state offered is: overwrite the conventions you already own, or carry a
+  permanent red. For a tool whose stated audience is *"built for Claude Code"*
+  (PILOT.md), a hand-written `CLAUDE.md` is the **modal case, not the edge**.
+  p2's *"I don't know what I'm supposed to do here"* is a stall point — precisely
+  the output [[EV-NONAUTHOR-EXPOSURE-01]] exists to collect, which is a second
+  reason not to pre-empt it. ⚠️ **Capability, not repair:** an include/merge
+  mechanism does not exist and is larger than several recorded candidate
+  increments. **Falsifiable acceptance:** a repo with a hand-written `CLAUDE.md`
+  adopts, keeps its content, and reaches `doctor` clean. **Size:** 1 wk.
+
+- `R3-LEASE-IDENTITY-DURABLE-01` **BLOCKED P2** — blocked on
+  [[EV-NONAUTHOR-EXPOSURE-01]]. **Lease identity is ambient process state, so
+  leases orphan and ownership is spoofable.** VERIFIED at `blackboard.py:93`:
+  `SOCOM_SESSION or f"{gethostname()}-{os.getppid()}"`. PPID is the parent shell,
+  so identity churns across invocations — two consecutive calls on this box gave
+  `akili-build-2027022` then `…2027320`. 4/5 agents orphaned their own lease;
+  `cmd_release` has no `--force` or steal (`grep force|steal` → no matches), so an
+  orphan is unbreakable for the full 8h TTL short of hand-editing JSONL. And
+  `SOCOM_SESSION=<id-read-from---scan> socom release --all` releases a lease it
+  does not own — `--scan` hands out the key.
+  **Scope, corrected twice and now measured:** the MCP path is a persistent stdio
+  server (`mcp.py:343`), so identity is stable **within one server process** — but
+  it is re-derived on every server start, and a live restart experiment showed the
+  lease orphaned to a dead identity, `release --all` returning `released: []`, and
+  re-claim refused. Akili's `.mcp.json` sets **no** `SOCOM_SESSION`, so Akili is
+  exposed per-restart. (Its one lease shard, `akili-build-1090626.jsonl`, carries
+  its own `release` record 23 min later — exposed to the mechanism, not yet bitten.)
+  ⚠️ **Capability, not repair:** "a session cannot release a lease it does not own"
+  is an **authorization mechanism that does not exist today**, on an instrument
+  decision 0001 demoted. **Falsifiable acceptance:** a lease taken in one
+  invocation is releasable from another on the same machine, and a session cannot
+  release a lease it does not own. **Size:** 3–5 d.
+
+- `SUBSTRATE-STATUS-TIER-SWEEP-01` **BLOCKED P2** — blocked on
+  [[EV-NONAUTHOR-EXPOSURE-01]]. **Extend the `verified`/`asserted` tier discipline
+  socom already derives for findings (`blackboard.py:508`, citing arXiv 2310.01798)
+  to what socom says about itself** — changing what the seven status surfaces
+  derive their claims *from*, not merely labelling them. Requires a band-outcome
+  record that does not exist: the ledger has no `blocked` field, and rows are
+  written only by `gate task-completion <promise.xml>` and `contract verify
+  --record` — both of which deliberately refuse promiseless rows citing
+  `§separation-of-privilege` (`gate.py:87`, `ledger.py:325`). Routing plain
+  `pre-commit`/`pre-push` through it means relaxing a fail-closed identity
+  contract and filtering four downstream consumers (`retrieval.py` pass@k,
+  `monarch.py` recovery eligibility, `lesson.py`, `value.py`) so the new rows do
+  not corrupt them. Six files plus a schema. **Prerequisite:**
+  [[DEF-LEDGER-GATE-BAND-HARDCODED-01]] — the band must be true before anything is
+  derived from it. The **labelling** half is [[DEF-STATUS-CLAIMS-UNLABELLED-01]].
+  **Falsifiable acceptance:** on a repo where an amber gate fired and the commit
+  landed, `socom value` does not say "stopped before they landed", and a RED
+  pre-push block appears in the count. **Size:** 1 wk.
+
+- `SUBSTRATE-COMMIT-TYPES-CONFIGURABLE-01` **BLOCKED P3** — blocked on
+  [[EV-NONAUTHOR-EXPOSURE-01]]. **Make the commit-type allowlist configurable in
+  `socom.yaml`.** VERIFIED there is no knob today: `COMMIT_RX` has exactly two
+  occurrences repo-wide — its definition (`gate.py:62`) and its single use
+  (`gate.py:112`). ⚠️ **Capability, not repair** — a new config surface. The
+  repair (widen the set, print the rule) is
+  [[DEF-COMMIT-GATE-REJECTS-HOST-CONVENTION-01]] and needs no new surface.
+  **Falsifiable acceptance:** a repo declares its own commit types in
+  `socom.yaml` and the gate enforces that set. **Size:** 2 d.
+
 ### Candidate increments — recorded, unscheduled
 
 Full text in [`../ROADMAP.md`](../ROADMAP.md) §Candidate increments. All
