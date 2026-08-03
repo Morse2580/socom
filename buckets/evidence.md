@@ -32,19 +32,47 @@ nothing in `build.md` can move it. Only rows here can.
   outcome of this row — it is the kill signal the Phase 3a trial cannot
   produce. **Files:** `PILOT.md` (unchanged, as instrument), `bench/`.
 
-- `EV-R1-SEEDED-CORPUS-01` **READY P1** — **Build the seeded-defect corpus that
-  is R1's acceptance test, before R1 is written.** ≥10 real repos, each with a
-  planted intent-drift defect: a `CLAUDE.md` naming a build command that was
-  renamed, a "never edit X" rule with X modified after the rule landed, a
-  documented path that no longer exists. Needs **no people**, so it is not
-  blocked on [[EV-NONAUTHOR-EXPOSURE-01]] and can run in parallel. Writing the
-  corpus first means R1 cannot be tuned to pass its own test. ⚠️ **A corpus of
-  synthetic repos is worthless here** — the defect class is "config drifted
-  away from a real codebase over months," which a freshly generated fixture
-  cannot exhibit. Use real repos with real history. **Falsifiable acceptance:**
-  the corpus exists and every seeded defect is independently confirmed present
-  by a command whose output is recorded — before any R1 code is written.
-  **Files:** `bench/`, `tests/`.
+- `EV-R1-ACCEPTANCE-CORPUS-01` **READY P1** — **Build R1's acceptance corpus
+  before R1 is written, by MINING real drift out of git history rather than
+  planting it.** Needs **no people**, so it is not blocked on
+  [[EV-NONAUTHOR-EXPOSURE-01]] and can run in parallel. **Goal:** turn "R1
+  works" from an opinion into a number that is fixed before the code exists —
+  *finds N of M real drift defects, reports nothing on clean repos* — which is
+  also the only sentence that makes [[EV-NONAUTHOR-EXPOSURE-01]] interpretable
+  rather than a vibe.
+
+  **Mine, do not plant** (revised 2026-08-03; the row previously said "seeded",
+  which is now the rejected mechanism). A commit that renamed a build command
+  without updating `CLAUDE.md` is a genuine drift defect, and **its parent
+  commit is a free, perfect control** — same repo, same config, one difference.
+  Planting biases the corpus toward defects the author already knows R1 will
+  catch; mining does not. ⚠️ **Synthetic repos are worthless here** — the defect
+  class is "config drifted away from a real codebase over months", which a
+  freshly generated fixture cannot exhibit.
+
+  **Precision matters more than recall.** A detector that flags everything
+  scores 100% on defects alone. PILOT already names the killer: *"Did a gate
+  fire a FALSE POSITIVE? Even one on a bad day kills adoption."* R1 parses, and
+  parsing can be wrong. Five control classes, all required:
+
+  | Control | Catches |
+  |---|---|
+  | **Paired parent** — the same repo one commit before the drift | everything; free from history |
+  | **Honest config** — real repo, accurate declarations, R1 must report zero | flags-everything |
+  | **Non-vacuity** — assert R1 extracted **>0 assertions** from that honest repo | ⚠️ the killer: a parser that understands nothing reports "clean" and is indistinguishable from healthy |
+  | **Near-miss** — command exists only via Makefile/alias/wrapper · path gitignored but present · "never edit X" where X was edited *before* the rule landed · a command name appearing in prose, not as a declaration | anchoring + temporal traps |
+  | **No config / pure prose** — nothing checkable exists | R1 must say "nothing to check" *distinguishably* from "checked, clean" |
+
+  ⚠️ **Non-vacuity is the one that gets skipped.** An honest-config control
+  alone cannot distinguish "parsed the config and found it truthful" from
+  "parsed nothing at all" — both emit zero findings. Same class as the inert-check
+  problem: a gate that looks present and checks nothing.
+
+  **Falsifiable acceptance:** ≥10 mined defects, each with its paired parent
+  commit, every defect independently confirmed present by a recorded command;
+  plus at least one instance of each of the other four control classes; and the
+  whole corpus committed **before any R1 code is written** — checkable by
+  `git log` ordering. **Files:** `bench/`, `tests/`.
 
 - `EV-TRIAL-PROTOCOL-CONFOUND-01` **READY P2** — **The blackboard trial protocol
   produces uninterpretable rows when the session prompt names the paths that

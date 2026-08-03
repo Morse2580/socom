@@ -23,16 +23,18 @@ Ladder reference: §14.2 of
   adopt, nothing to configure. That is what makes it the cheapest instrument
   ever available for moving the D-tier, per §14.4. Contrast R3, already built,
   whose payoff is structurally invisible without 2+ agents and a stock of
-  findings. ⚠️ **Write [[EV-R1-SEEDED-CORPUS-01]] first** — building the
+  findings. ⚠️ **Write [[EV-R1-ACCEPTANCE-CORPUS-01]] first** — building the
   acceptance corpus after the detector lets the detector be tuned to pass its
   own test. ⚠️ **R1 must parse, and parsing can be wrong** — this is exactly why
   §20 preferred the blackboard, whose findings are authored and need no
   inference. Accept the inference cost here; it is the price of paying off to
   one person. **Falsifiable acceptance:** on a repo whose `CLAUDE.md` names a
   build command that was renamed, R1 reports it and exits non-zero; and it
-  scores against [[EV-R1-SEEDED-CORPUS-01]]'s ≥10-repo corpus with the
-  per-defect result recorded. **Size:** 1–2 wks. **Files:** `src/socom/` (new
-  module), `tests/`, `bin/socom` (rebuilt via `build.py`).
+  scores against [[EV-R1-ACCEPTANCE-CORPUS-01]]'s mined corpus on **both recall
+  and precision**, with the per-defect result recorded — including a non-zero
+  assertion count on the honest-config control, so "reported nothing" cannot be
+  confused with "parsed nothing". **Size:** 1–2 wks. **Files:** `src/socom/`
+  (new module), `tests/`, `bin/socom` (rebuilt via `build.py`).
 
 ## Blocked
 

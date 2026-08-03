@@ -90,7 +90,7 @@ Supporting instruments, in order of cost:
 
 | Instrument | Needs people? | What it establishes |
 |---|---|---|
-| R1 seeded-defect corpus (≥10 real repos) | no | R1 works at all — its own §14.2 acceptance test |
+| R1 acceptance corpus — drift MINED from real git history, each defect paired with its parent commit as control | no | R1 works at all — recall *and* precision. Its own §14.2 acceptance test |
 | Stall point — where a non-author stops and has to read source | 5, one run each | `PILOT.md`'s own phrasing; the first D1 evidence this idea has ever had |
 | Voluntary second use | same 5, no prompting | the D0→D1 mechanism itself |
 | `saves` A/B/C tally | 3+ concurrent | demoted to instrument; interpretable only once the above exists |
