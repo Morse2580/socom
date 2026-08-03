@@ -59,7 +59,33 @@ def run_check(cmd: str, root: Path) -> int:
     return subprocess.run(cmd, shell=True, cwd=root).returncode
 
 
-COMMIT_RX = re.compile(r"^(feat|fix|chore|refactor|test|docs)\([a-z0-9._-]+\): .+")
+# Conventional Commits v1.0.0: `type[(scope)][!]: description`.
+#
+# The set is the spec's two mandated types plus its recommended set, plus
+# `revert` (the spec's own example) and `wip`. Two things were wrong before and
+# both rejected commits that ARE conventional:
+#   · the scope was MANDATORY. The spec says optional, and requiring it rejected
+#     zustand's own upstream HEAD (`fix: update broken README links…`).
+#   · the scope charset was [a-z0-9._-], so `test(middleware/immer):` — fully
+#     conventional — was rejected for containing a slash.
+# Together those two took out 60 of zustand's last 100 upstream subjects.
+#
+# This set is deliberately NOT configurable: a knob is a capability, filed as
+# SUBSTRATE-COMMIT-TYPES-CONFIGURABLE-01. The repair is to stop rejecting what
+# the published standard permits.
+COMMIT_TYPES = ("build", "chore", "ci", "docs", "feat", "fix", "perf",
+                "refactor", "revert", "style", "test", "wip")
+COMMIT_RX = re.compile(r"^(?:" + "|".join(COMMIT_TYPES) + r")(?:\([^()]+\))?!?: .+")
+
+# Subjects GIT ITSELF writes. The commit-msg hook fires on `git merge` and
+# `git revert` too, so the old gate RED-blocked a merge on a subject the
+# developer never typed — verified: `git merge --no-ff side` aborts with
+# "Not committing merge". socom's own last 100 subjects contain 21 of these.
+# Conventional Commits does not cover generated subjects and commitlint ignores
+# them by default; this is the same defect as the mandatory scope (the gate
+# rejecting what the adopting repo legitimately produces), not a new exemption
+# surface — there is nothing here to configure.
+GENERATED_SUBJECT_RX = re.compile(r'^(?:Merge |Revert "|Reapply |fixup!|squash!)')
 
 
 def _gate_record(root, promise_arg, rc, duration_s):
@@ -109,9 +135,25 @@ def cmd_gate(args):
     if name == "commit-msg":
         msg = Path(rest[0]).read_text() if rest else ""
         first = msg.splitlines()[0] if msg.splitlines() else ""
+        if GENERATED_SUBJECT_RX.match(first):
+            # git wrote this subject, not a person — and the [what]/[test]
+            # blocks below are equally not the developer's to supply here.
+            return
         if not COMMIT_RX.match(first):
-            sys.exit(f"socom gate commit-msg: RED — first line must be "
-                     f"'type(scope): description', got: {first!r}")
+            # Print the RULE THAT FIRED, not a paraphrase of it. The old message
+            # named the format 'type(scope): description' and then echoed back a
+            # subject that WAS exactly that — rejected for a reason it never
+            # stated (mandatory scope, restricted charset), so three of five
+            # cold-run agents had to grep the binary to learn the real rule.
+            sys.exit("socom gate commit-msg: RED — the subject line is not a "
+                     "Conventional Commits subject.\n"
+                     f"  got:   {first!r}\n"
+                     "  rule:  <type>[(scope)][!]: <description>\n"
+                     f"  types: {' '.join(COMMIT_TYPES)}\n"
+                     "  scope is OPTIONAL; `!` marks a breaking change; the "
+                     "description must be non-empty.\n"
+                     "  e.g.   fix: restore the L0 fallback\n"
+                     "         test(middleware/immer): add runtime tests")
         missing = [b for b in ("[what]", "[test]") if b not in msg]
         if missing:
             log_breach(root, "commit-msg", f"amber: missing {missing} blocks")

@@ -90,6 +90,13 @@ def cmd_uninstall(args):
     if dst.is_symlink() and dst.resolve() == src:
         dst.unlink()
         print(f"socom uninstall: removed {dst}")
+        # uninstall is MACHINE-level: it removes the binary from PATH and
+        # nothing else. Every repo that ran `adopt` still has its core.hooksPath
+        # pointing at socom's hooks — which now resolve to a tool that is gone.
+        # Say so, and name the repo-level exit.
+        print("socom uninstall: NOTE this removed the binary only. A repo you "
+              "ran `socom adopt` in still has core.hooksPath set — run "
+              "`socom unadopt` IN THAT REPO first to put its hooks back.")
     else:
         sys.exit(f"socom uninstall: {dst} is not a symlink to this checkout — "
                  f"refusing to remove. Remove it manually if intended.")

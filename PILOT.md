@@ -19,6 +19,22 @@ say *"walk me through this on this repo"* — see [With Claude Code](#with-claud
   edits), wires git hooks that run *your own* commands, and builds an index. It does
   **not** delete your code, does **not** auto-push, and does **not** run any AI worker
   unless you explicitly pass `--exec`.
+- **Exactly what it writes that is already yours** — the whole list, so the claim
+  above is checkable rather than trusted:
+  - `core.hooksPath`, the one git setting it sets. **If your repo already points
+    it somewhere** (husky, lefthook, your own convention) **SOCOM refuses and
+    changes nothing**, because repointing it would not fail your existing hooks,
+    it would silently *stop* them. It records the prior value either way.
+  - a **marked block** in `.gitignore` (its own machine-local runtime state, so
+    `git add -A` can't sweep it into your commit) and, if you use prettier, in
+    `.prettierignore` (its own generated files, so adopting SOCOM can't turn a
+    green format check red). Everything outside the `# >>> socom` markers is
+    left byte-for-byte alone.
+- **There is a way back:** `socom unadopt` restores `core.hooksPath` to whatever
+  it was before (or unsets it) and drops SOCOM's local git config. It deliberately
+  does **not** delete the planted files — it lists them, so removing them stays
+  your call. (`socom uninstall` is a different thing: it removes the binary from
+  your PATH and touches no repo.)
 - It **degrades loudly**: when it can't do something honestly (detect your test
   command, certify retrieval), it says so and stops — it never fabricates.
 

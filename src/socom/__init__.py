@@ -76,9 +76,15 @@ Commands:
   quickstart one command from a fresh repo to a live substrate: adopt + auto-bind
            gates to your real test command + build the retrieval floor/index +
            runtime preflight, ending on a `value` readout (the brand-new-user on-ramp)
-  adopt    one-shot: plant + compile + wire git hooks (fresh clone -> live gates)
+  adopt    one-shot: plant + compile + declare socom's files to git/prettier +
+           wire git hooks (fresh clone -> live gates). Never takes over a
+           core.hooksPath the repo already set — it refuses and says so
+  unadopt  the repo-level exit: restore core.hooksPath to its pre-adopt value
+           (or unset), drop socom's local git config. Leaves planted files —
+           it lists them rather than deleting anything
   install  symlink this checkout onto PATH (~/.local/bin) so `socom` just works
-  uninstall remove the socom symlink (only if it points at this checkout)
+  uninstall remove the socom symlink (only if it points at this checkout).
+           Machine-level only — run `unadopt` in each adopted repo first
 
 All intelligence is canonical (.socom/); compiled views are one-way renders
 carrying a source hash (residue R3). Local gates may be bypassed for flow;

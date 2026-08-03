@@ -270,10 +270,42 @@ check("COMMIT_RX accepts type(scope): desc",
       socom.COMMIT_RX.match("feat(cli): add a thing") is not None)
 check("COMMIT_RX accepts dotted/hyphen scope",
       socom.COMMIT_RX.match("fix(a.b-c): y") is not None)
-check("COMMIT_RX rejects missing scope",
-      socom.COMMIT_RX.match("feat: no scope") is None)
+# The three cases below are the DEF-COMMIT-GATE-REJECTS-HOST-CONVENTION-01
+# regressions, each a real rejected subject from zustand's upstream history.
+# Conventional Commits v1.0.0 makes the scope optional; requiring it (and
+# restricting its charset to [a-z0-9._-]) rejected 60 of the last 100 subjects.
+check("COMMIT_RX accepts an omitted scope (spec: scope is OPTIONAL)",
+      socom.COMMIT_RX.match("fix: update broken README links") is not None)
+check("COMMIT_RX accepts a slash in the scope",
+      socom.COMMIT_RX.match("test(middleware/immer): add runtime tests") is not None)
+check("COMMIT_RX accepts the `!` breaking-change marker",
+      socom.COMMIT_RX.match("feat(api)!: drop the v1 route") is not None)
+for _t in ("perf", "ci", "wip", "build", "style", "revert"):
+    check(f"COMMIT_RX accepts the '{_t}' type (spec/host set)",
+          socom.COMMIT_RX.match(f"{_t}: a real change") is not None)
 check("COMMIT_RX rejects unknown type",
       socom.COMMIT_RX.match("wibble(x): y") is None)
+check("COMMIT_RX rejects a bare version subject (not conventional)",
+      socom.COMMIT_RX.match("5.0.14") is None)
+check("COMMIT_RX rejects an empty description",
+      socom.COMMIT_RX.match("feat: ") is None)
+check("COMMIT_RX rejects a type that is only a prefix of a real one",
+      socom.COMMIT_RX.match("fixup: y") is None)
+# The rejection must name the rule that fired — the old error printed a format
+# the rejected subject already satisfied, so the real rule was unlearnable
+# without grepping the binary.
+# Subjects git generates: the gate must not RED-block a merge the developer
+# never typed (verified: `git merge --no-ff` aborted with "Not committing merge").
+for _g in ('Merge branch \'side\'', 'Merge pull request #12 from x/y',
+           'Revert "feat: a thing"', 'fixup! feat: a thing', 'squash! fix: y'):
+    check(f"GENERATED_SUBJECT_RX exempts git's own subject: {_g[:28]!r}",
+          socom.GENERATED_SUBJECT_RX.match(_g) is not None)
+check("GENERATED_SUBJECT_RX does NOT exempt an ordinary subject",
+      socom.GENERATED_SUBJECT_RX.match("merge the configs by hand") is None)
+check("COMMIT_TYPES is the published set, not a private one",
+      set(socom.COMMIT_TYPES) >= {"feat", "fix", "docs", "chore", "refactor",
+                                  "test", "perf", "ci", "build", "style",
+                                  "revert"})
 
 # ── SECRET_RX (HR6 redaction boundary) ───────────────────────────────────────
 check("SECRET_RX flags an AWS-key shape",

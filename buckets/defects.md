@@ -26,9 +26,17 @@ re-verified against source and re-run from primary artifacts. Claims marked
 
 ---
 
-## Active — P0 (the entire pre-exposure budget: four rows)
+## Done — the pre-exposure P0 budget (all four, 2026-08-03)
 
-- `DEF-HOOKS-HIJACK-NO-UNADOPT-01` **READY P0** — **`adopt` silently overwrites
+Repaired and verified in one session. Each row keeps its original text; the
+**VERIFIED-FIXED** line at the end of each is the evidence against its own
+falsifiable acceptance, re-run on the shipped binary after the last edit.
+
+The lane is now empty of P0s, which is the only state in which
+[[EV-NONAUTHOR-EXPOSURE-01]] can spend a participant on something *not* already
+written down here. **That row is still unrun, and it is still the work.**
+
+- `DEF-HOOKS-HIJACK-NO-UNADOPT-01` **DONE P0** — **`adopt` silently overwrites
   the adopting repo's `core.hooksPath`, disabling every hook it already had, and
   there is no way back.** VERIFIED at `src/socom/lifecycle.py:380` `_wire_hooks`:
   it reads the current value and, if it is anything other than `.githooks`,
@@ -59,8 +67,21 @@ re-verified against source and re-run from primary artifacts. Claims marked
   value and either refuses or warns; and there is a path that restores the repo
   to its pre-adopt hook state. **Files:** `src/socom/lifecycle.py`,
   `src/socom/install.py`, `src/socom/cli.py`, `PILOT.md`.
+  **VERIFIED-FIXED.** `_wire_hooks` now returns `wired|foreign|nogit` instead of
+  a bool — the three cases were never interchangeable, and collapsing them is
+  what hid the destructive one. On a repo with `core.hooksPath=.husky` and a
+  hook that prints `HOST SECRET SCANNER RAN`: after `socom adopt`,
+  `core.hooksPath` reads `.husky` (unchanged), `socom.priorhookspath` reads
+  `.husky`, and a real `git commit` still printed `HOST SECRET SCANNER RAN`.
+  adopt reports the refusal on stderr with both ways forward. New `socom
+  unadopt`: restored `.husky` after a deliberate switch (host hook ran again),
+  and on a plain repo returned `core.hooksPath` to **unset** with 0 residual
+  `socom.*` keys. The prior value is recorded once, so a second `adopt` cannot
+  overwrite the record with socom's own value. `PILOT.md`'s safety section now
+  enumerates every write socom makes to something already yours, and names the
+  way back — the claim is checkable instead of trusted.
 
-- `DEF-COMMIT-GATE-REJECTS-HOST-CONVENTION-01` **READY P0** — **The commit gate
+- `DEF-COMMIT-GATE-REJECTS-HOST-CONVENTION-01` **DONE P0** — **The commit gate
   rejects the majority of the adopting repo's real commits, using a rule it never
   prints, with an error that misnames itself.** VERIFIED at `src/socom/gate.py:62`:
   `COMMIT_RX = ^(feat|fix|chore|refactor|test|docs)\([a-z0-9._-]+\): .+` — a
@@ -86,8 +107,29 @@ re-verified against source and re-run from primary artifacts. Claims marked
   **Falsifiable acceptance:** a rejection prints the rule and the allowed set;
   and ≥90% of the adopting repo's last 100 subjects pass on a repo that follows
   conventional commits. **Files:** `src/socom/gate.py`.
+  **VERIFIED-FIXED.** `COMMIT_RX` is now the Conventional Commits v1.0.0 shape —
+  optional scope, `[^()]+` scope charset, optional `!`, and the spec's type set
+  plus `revert`/`wip`. The RED message prints the rule, the full type list, and
+  two examples. Last-100 acceptance, measured on the shipped binary:
+  angular/angular 48%→**96%**, vuejs/core 79%→**93%**, electron/electron
+  1%→**100%**, socom itself 75%→**100%** — acceptance met on every repo that
+  actually follows the convention. The five cohort repos stay below 90%
+  (zustand 40→67, axum 17→50, petl 0→78, descheduler 7→75, requests 1→12)
+  because they genuinely do not follow it — release commits (`5.0.14`), bare
+  sentences. Widening further to admit those is the BLOCKED knob
+  [[SUBSTRATE-COMMIT-TYPES-CONFIGURABLE-01]], not this repair.
+  ⚠️ **Scope call made during the repair, flagged rather than assumed.** The
+  hook fires on `git merge` too, so the gate RED-blocked merge commits on a
+  subject git writes itself — reproduced: `git merge --no-ff side` aborted with
+  *"Not committing merge"*. socom's own last 100 subjects contain **21** of
+  them. Added `GENERATED_SUBJECT_RX` (`Merge `/`Revert "`/`Reapply `/`fixup!`/
+  `squash!`), which is commitlint's default posture. Judged repair, not
+  capability: same single gate, nothing configurable, no new surface — but it
+  is a widening the row did not name, so it is recorded here rather than buried.
+  Non-vacuity control: `'updated some stuff'` still RED-blocks, a conventional
+  subject still commits.
 
-- `DEF-ADOPTION-REDDENS-HOST-GATE-01` **READY P0** — **quickstart binds the gates
+- `DEF-ADOPTION-REDDENS-HOST-GATE-01` **DONE P0** — **quickstart binds the gates
   to the repo's test command, and its own generated files then fail that command.**
   VERIFIED by controlled 4-cell experiment on zustand: pristine `src/vanilla.ts`
   with socom's files stashed → `npm test` **RC=0, 214 passed, prettier lists zero
@@ -104,8 +146,22 @@ re-verified against source and re-run from primary artifacts. Claims marked
   **Falsifiable acceptance:** adopt on a repo whose format check is green; it is
   still green immediately after `quickstart`, with no hand edits.
   **Files:** `src/socom/lifecycle.py`, `src/socom/install.py`, `templates/`.
+  **VERIFIED-FIXED.** Re-ran the 4-cell experiment on a fresh `pmndrs/zustand`
+  clone (upstream HEAD `beca84e`) with real `prettier@3.8.3`: pristine → 0 files
+  listed, RC=0. After `socom quickstart` on the SHIPPED binary → **0 files
+  listed, RC=0.** Was 16. `adopt` now writes a marked block into
+  `.prettierignore` naming the 14 socom-generated paths it found. Root fix, not
+  a formatting patch: socom emits files into someone else's repo and had never
+  told that repo's tools which files are socom's — so the same mechanism serves
+  `DEF-RUNTIME-STATE-UNIGNORED-01`, and emitting prettier-shaped YAML would have
+  fixed neither. Membership is PROVED by the `socom:generated` header, never
+  assumed from the path, so a repo that owns its own `.gitlab-ci.yml` does not
+  find it silently excluded from its own formatter. `.prettierignore` is written
+  only when the repo actually runs prettier (config file or package.json dep) —
+  prettier is the only common formatter that claims md/yaml/json, which is the
+  whole of socom's emitted surface.
 
-- `DEF-RUNTIME-STATE-UNIGNORED-01` **READY P0** — **socom plants machine-local
+- `DEF-RUNTIME-STATE-UNIGNORED-01` **DONE P0** — **socom plants machine-local
   runtime state and writes no `.gitignore` entry for it, so a routine `git add -A`
   commits it.** VERIFIED 5/5: no `.gitignore` entry in any of the five repos, and
   `grep -rn gitignore src/socom/ templates/` → **zero hits**; socom never touches
@@ -121,6 +177,23 @@ re-verified against source and re-run from primary artifacts. Claims marked
   **Falsifiable acceptance:** after `quickstart`, `git status --porcelain -uall`
   shows no machine-local runtime state as untracked-and-addable.
   **Files:** `src/socom/lifecycle.py`.
+  **VERIFIED-FIXED.** `adopt` writes a marked block into `.gitignore` (6
+  patterns) via the same mechanism as the prettier block. On the zustand clone,
+  after `quickstart` **plus** a real `socom claim` that materialised a per-PID
+  lease shard, `git add -A` staged **0** runtime-state files (32 staged, all
+  substrate source). `git check-ignore`: `breaches.log`, `vectors.json`,
+  `chunks.jsonl`, the lease shard → IGNORED.
+  ⚠️ **The `.socom/` split is the load-bearing part of this repair, and the
+  reason it is not just Akili's line copied in.** Akili's hand-written
+  `.gitignore` ignores **all** of `.socom/`; socom must not, because canon,
+  probes, lessons and memory are the substrate's SOURCE and have to travel with
+  the repo — ignoring them wholesale would silently un-share the substrate on
+  the first teammate's clone, trading a visible defect for an invisible one.
+  Only regenerable per-machine state is ignored. Asserted both directions:
+  `canon/constitution.xml`, `index/probes.yaml`, `lessons/index.md`,
+  `memory/INDEX.md` all still committable. `.socom/` as a whole IS excluded from
+  the prettier block, where excluding it is right — none of it is the host's to
+  format.
 
 ## Active — P1 (recorded; explicitly NOT pre-exposure)
 
@@ -221,7 +294,9 @@ re-verified against source and re-run from primary artifacts. Claims marked
 
 ## Done
 
-*(none)*
+The four P0 rows above. No P1 row has been worked, deliberately — see the P1
+section's own reasons, and decision 0001 §Amendment 1 rule 3 for
+`DEF-STATUS-CLAIMS-UNLABELLED-01` in particular.
 
 ---
 

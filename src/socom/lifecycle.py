@@ -376,23 +376,205 @@ def _git_hooks_path(root: Path) -> str:
                           capture_output=True, text=True).stdout.strip()
 
 
-def _wire_hooks(root: Path) -> bool:
-    """Set core.hooksPath to HOOKS_DIR (idempotent). Returns True if the repo is
-    now wired, False if it could not be (not a git repo). The single WRITER for
-    the hooks-wiring truth — both doctor-heal and `adopt` route through here, so
-    'where the hooks live' lives in exactly one place (§least-common-mechanism).
-    Fails soft: a non-git dir returns False rather than raising (CI re-asserts)."""
-    if _git_hooks_path(root) == HOOKS_DIR:
-        return True
-    subprocess.run(["git", "config", "core.hooksPath", HOOKS_DIR],
-                   cwd=root, capture_output=True)
-    # Record THIS machine's socom location in LOCAL git config (never committed)
-    # so the portable committed hook can resolve the tool without a PATH install
-    # — replaces the old absolute path baked into the shared hook (HR1).
+# core.hooksPath is the ONE piece of the adopting repo's own configuration that
+# socom writes, so it is the one place socom can be destructive. Recording the
+# prior value is what makes that write reversible; refusing a FOREIGN value is
+# what keeps the "additive and non-destructive" claim true for a repo that
+# already routes hooks somewhere (husky, lefthook, its own convention). Both
+# live beside the single writer so "what adopt did to your config" has one home.
+HOOKS_PRIOR_KEY = "socom.priorhookspath"
+
+
+def _git_config_get(root: Path, key: str):
+    """The configured value for `key`, or None if the key is UNSET. Distinct
+    from "": a key deliberately recorded as empty means "core.hooksPath was
+    unset before adopt", and `unadopt` has to tell that apart from "socom never
+    recorded anything here" to restore the right state."""
+    p = subprocess.run(["git", "config", "--get", key], cwd=root,
+                       capture_output=True, text=True)
+    return p.stdout.rstrip("\n") if p.returncode == 0 else None
+
+
+def _record_binpath(root: Path):
+    """Record THIS machine's socom location in LOCAL git config (never committed)
+    so the portable committed hook can resolve the tool without a PATH install
+    — replaces the old absolute path baked into the shared hook (HR1)."""
     subprocess.run(["git", "config", "socom.binpath",
                     str(Path(__file__).resolve())],
                    cwd=root, capture_output=True)
-    return _git_hooks_path(root) == HOOKS_DIR
+
+
+def _wire_hooks(root: Path) -> str:
+    """Point core.hooksPath at HOOKS_DIR, recording what it was so `unadopt` can
+    put it back. The single WRITER for the hooks-wiring truth — both doctor-heal
+    and `adopt` route through here, so 'where the hooks live' lives in exactly
+    one place (§least-common-mechanism). Fails soft: never raises.
+
+    Returns the outcome, which the caller MUST report — the three cases are not
+    interchangeable and collapsing them to a bool is what let the destructive
+    one go unnoticed:
+      'wired'   — the repo's hooks are socom's (idempotent no-op if already)
+      'foreign' — the repo already routes hooks elsewhere; NOTHING was changed
+      'nogit'   — not a git repo, nothing to wire (CI re-asserts regardless)
+
+    Why 'foreign' refuses rather than overwrites: a repo on husky has its
+    lint-staged, its commit-msg validator and its secret scanner behind
+    core.hooksPath. Repointing it does not make those gates fail — it makes them
+    silently PASS, which is the one failure mode a gate must never have. socom
+    declines and says so; the adopter can switch deliberately with one command."""
+    cur = _git_hooks_path(root)
+    if cur == HOOKS_DIR:
+        _record_binpath(root)
+        return "wired"
+    # Record the pre-adopt value BEFORE touching anything, and only once — a
+    # second `adopt` must not overwrite the record with socom's own value, or
+    # `unadopt` would faithfully "restore" the repo to socom.
+    if _git_config_get(root, HOOKS_PRIOR_KEY) is None:
+        subprocess.run(["git", "config", "--local", HOOKS_PRIOR_KEY, cur],
+                       cwd=root, capture_output=True)
+    if cur:
+        return "foreign"
+    subprocess.run(["git", "config", "core.hooksPath", HOOKS_DIR],
+                   cwd=root, capture_output=True)
+    _record_binpath(root)
+    return "wired" if _git_hooks_path(root) == HOOKS_DIR else "nogit"
+
+
+# ── ignore wiring: socom declares its own artifacts to the host repo's tools ──
+# socom writes files INTO someone else's repo, and two of that repo's tools then
+# form an opinion about them:
+#   git       — machine-local runtime state (per-PID lease shards, this machine's
+#               breach log, the derived index) is one `git add -A` from a commit,
+#               and then conflicts on every branch.
+#   the formatter — a generated adapter is not written to the host's prettier
+#               config, so a format check that was green before adopt goes red
+#               on files the adopter did not write and cannot sensibly fix.
+# Both are the same defect: socom never told the host's tools which files are
+# socom's. Emitting prettier-shaped YAML would fix neither (the next formatter,
+# and git, would still be wrong). Naming its own artifacts in the ignore file
+# each tool already reads fixes the class.
+
+IGNORE_BEGIN = "# >>> socom (generated block — edit outside the markers)"
+IGNORE_END = "# <<< socom"
+
+# Machine-local runtime state ONLY: regenerable (`socom embed`), per-machine, and
+# conflict-generating if shared. NOT canon, probes, lessons or memory — those are
+# the substrate's SOURCE and must travel with the repo, so `.socom/` as a whole
+# must never appear here (it does appear in the prettier block, where excluding
+# all of it is right: none of it is the host's to format).
+GITIGNORE_PATTERNS = [
+    f"{SOCOM_DIR}/blackboard/",
+    f"{SOCOM_DIR}/claims/",
+    f"{SOCOM_DIR}/gates/breaches.log",
+    f"{SOCOM_DIR}/gates/breaches.resolved.log",
+    f"{SOCOM_DIR}/index/vectors.json",
+    f"{SOCOM_DIR}/index/chunks.jsonl",
+]
+
+_PRETTIER_CONFIGS = (
+    ".prettierrc", ".prettierrc.json", ".prettierrc.json5", ".prettierrc.yml",
+    ".prettierrc.yaml", ".prettierrc.js", ".prettierrc.cjs", ".prettierrc.mjs",
+    ".prettierrc.toml", "prettier.config.js", "prettier.config.cjs",
+    "prettier.config.mjs", ".prettierignore",
+)
+
+
+def _has_prettier(root: Path) -> bool:
+    """Does this repo actually run prettier? Only then is a .prettierignore
+    socom's business — planting one in a Go repo is litter. Prettier is the only
+    common formatter that claims markdown/yaml/json, which is the whole of
+    socom's emitted surface: black/ruff-format own .py, rustfmt .rs, gofmt .go,
+    and none of them will ever look at a generated CLAUDE.md."""
+    import json
+    if any((root / n).exists() for n in _PRETTIER_CONFIGS):
+        return True
+    pkg = root / "package.json"
+    if not pkg.exists():
+        return False
+    try:
+        d = json.loads(pkg.read_text())
+    except (ValueError, OSError):
+        return False
+    return ("prettier" in d
+            or "prettier" in (d.get("devDependencies") or {})
+            or "prettier" in (d.get("dependencies") or {}))
+
+
+def _socom_artifacts(root: Path) -> list:
+    """The files socom itself wrote — the ONLY ones it may name in the host's
+    ignore files. Membership is PROVED by the `socom:generated` header, never
+    assumed from the path: a repo that owns its own .gitlab-ci.yml must not find
+    it silently excluded from its own formatter because socom recognised the
+    name."""
+    out = []
+    if (root / SOCOM_DIR).is_dir():
+        out.append(f"{SOCOM_DIR}/")
+    if (root / "socom.yaml").exists():
+        out.append("socom.yaml")
+    candidates = ["CLAUDE.md", "AGENTS.md", ".cursor/rules/socom.mdc",
+                  ".gitlab-ci.yml", ".github/workflows/socom-gates.yml"]
+    agents = root / ".claude" / "agents"
+    if agents.is_dir():
+        candidates += [f".claude/agents/{p.name}" for p in sorted(agents.glob("*.md"))]
+    for rel in candidates:
+        f = root / rel
+        try:
+            if f.is_file() and "socom:generated" in f.read_text(errors="ignore"):
+                out.append(rel)
+        except OSError:
+            pass
+    return out
+
+
+def _ensure_ignore_block(f: Path, patterns: list, why: str) -> str:
+    """Idempotently maintain socom's marked block in one ignore file. Everything
+    outside the markers is left byte-for-byte as the repo wrote it; the block
+    itself is rewritten when the pattern set changes, so a later socom version
+    adding an artifact does not append a second block. Returns 'wrote',
+    'updated' or 'unchanged'."""
+    block = "\n".join([IGNORE_BEGIN, f"# {why}", *patterns, IGNORE_END])
+    if not f.exists():
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(block + "\n")
+        return "wrote"
+    text = f.read_text()
+    if IGNORE_BEGIN in text and IGNORE_END in text:
+        pre, rest = text.split(IGNORE_BEGIN, 1)
+        _old, post = rest.split(IGNORE_END, 1)
+        if _old.strip("\n") == "\n".join([f"# {why}", *patterns]):
+            return "unchanged"
+        f.write_text(pre + block + post)
+        return "updated"
+    sep = "" if text.endswith("\n") else "\n"
+    f.write_text(text + sep + "\n" + block + "\n")
+    return "updated"
+
+
+def _wire_ignores(root: Path):
+    """Declare socom's artifacts to git and (when present) prettier. Reports what
+    it did — a file socom writes into the adopter's repo is never silent."""
+    git_res = _ensure_ignore_block(
+        root / ".gitignore", GITIGNORE_PATTERNS,
+        "machine-local socom runtime state: regenerable, per-machine, and a "
+        "merge conflict on every branch if shared. The rest of .socom/ (canon, "
+        "probes, lessons, memory) is SOURCE — keep it committed.")
+    if git_res != "unchanged":
+        print(f"  ✓ .gitignore: socom runtime state ignored "
+              f"({len(GITIGNORE_PATTERNS)} patterns) — `git add -A` is safe")
+
+    if not _has_prettier(root):
+        return
+    arts = _socom_artifacts(root)
+    if not arts:
+        return
+    p_res = _ensure_ignore_block(
+        root / ".prettierignore", arts,
+        "socom-generated files. They are not written to your prettier config, "
+        "and they are not yours to format — excluded so adopting socom cannot "
+        "turn a green format check red.")
+    if p_res != "unchanged":
+        print(f"  ✓ .prettierignore: {len(arts)} socom-generated path(s) "
+              f"excluded — your format check stays green")
 
 
 # ── doctor ───────────────────────────────────────────────────────────────
@@ -494,12 +676,24 @@ def cmd_precond(args):
             rows.append(("✗", f"BLOCKS: {tool} not on PATH"))
 
     # 3. Git hooks wired — heal-on: set config (safe, reversible); else warn.
+    # Healing NEVER includes taking over a foreign core.hooksPath: precond is
+    # allowed to fix what socom owns, never to disable what the repo owns.
     if _git_hooks_path(root) == HOOKS_DIR:
         rows.append(("✓", "git hooks wired (core.hooksPath)"))
     elif heal:
-        _wire_hooks(root)
-        healed += 1
-        rows.append(("~", f"healed: git config core.hooksPath {HOOKS_DIR}"))
+        state = _wire_hooks(root)
+        if state == "wired":
+            healed += 1
+            rows.append(("~", f"healed: git config core.hooksPath {HOOKS_DIR}"))
+        elif state == "foreign":
+            warns += 1
+            rows.append(("!", f"WARN: core.hooksPath is {_git_hooks_path(root)!r}, "
+                              "not socom's — left alone (socom never disables "
+                              "hooks you already have). Local socom gates skip; "
+                              "CI re-asserts. `socom adopt` prints the way forward."))
+        else:
+            warns += 1
+            rows.append(("!", "WARN: hooks not wired — not a git repo (CI re-asserts)"))
     else:
         warns += 1
         rows.append(("!", "WARN: hooks not wired — local gates skip (CI re-asserts)"))
@@ -725,8 +919,27 @@ def cmd_adopt(args):
     root = repo_root(Path(args[0]) if args else None)
     cmd_init([str(root)])       # plant + greet with the post-plant rung
     cmd_compile([str(root)])    # render adapters (no-clobber on hand-edited views)
-    if _wire_hooks(root):
+    # After compile, because the artifact set adopt must declare to the host's
+    # tools is only complete once the adapters are rendered.
+    _wire_ignores(root)
+    state = _wire_hooks(root)
+    if state == "wired":
         print(f"  ✓ git hooks wired (core.hooksPath={HOOKS_DIR}) — local gates live")
+    elif state == "foreign":
+        prior = _git_hooks_path(root)
+        print(f"  ! hooks NOT wired — this repo already routes git hooks to "
+              f"{prior!r}.\n"
+              f"    Nothing was changed. Repointing it would not fail your "
+              f"existing hooks, it would silently STOP them (lint-staged, "
+              f"commit-msg validators, secret scanners), and socom does not do "
+              f"that to a repo it was just invited into.\n"
+              f"    Two ways forward:\n"
+              f"      keep yours — do nothing. socom's gates still run in CI, "
+              f"and `socom gate <name>` runs any of them by hand.\n"
+              f"      switch     — git config core.hooksPath {HOOKS_DIR}\n"
+              f"                   (`socom unadopt` puts {prior!r} back; socom "
+              f"recorded it as {HOOKS_PRIOR_KEY})",
+              file=sys.stderr)
     else:
         print(f"  ! hooks NOT wired: not a git repo. Run `git init`, then "
               f"`socom adopt` again. CI re-asserts every gate regardless.",
@@ -734,3 +947,53 @@ def cmd_adopt(args):
     state, nxt = adoption_rung(root)
     print(f"  {adoption_bar(state)}")
     print(f"  rung: {state}\n  next: {nxt}")
+
+
+def cmd_unadopt(args):
+    """The repo-level exit `uninstall` never was. `uninstall` removes a symlink
+    from ~/.local/bin; nothing has ever put the ADOPTING REPO back the way it
+    was. This restores the one piece of the repo's own configuration socom
+    writes — core.hooksPath — to whatever it held before adopt, or unsets it if
+    it held nothing, and drops the machine-local socom.binpath.
+
+    It deliberately does NOT delete the planted files. Deleting tracked files
+    out from under someone is exactly the destructiveness this command exists to
+    disclaim; it lists them instead so removing them stays the operator's
+    deliberate act."""
+    root = repo_root(Path(args[0]) if args else None)
+    cur = _git_hooks_path(root)
+    prior = _git_config_get(root, HOOKS_PRIOR_KEY)
+
+    if prior is None:
+        print(f"socom unadopt: no pre-adopt core.hooksPath on record — socom "
+              f"never wired this repo (or a previous unadopt already ran). "
+              f"core.hooksPath is {cur or '<unset>'}; left as-is.")
+    elif prior == "":
+        subprocess.run(["git", "config", "--unset", "core.hooksPath"],
+                       cwd=root, capture_output=True)
+        print(f"  ✓ core.hooksPath unset — it was unset before adopt "
+              f"(was {cur or '<unset>'})")
+    else:
+        subprocess.run(["git", "config", "core.hooksPath", prior],
+                       cwd=root, capture_output=True)
+        print(f"  ✓ core.hooksPath restored to {prior!r} (was {cur or '<unset>'})")
+    if prior is not None:
+        subprocess.run(["git", "config", "--unset", HOOKS_PRIOR_KEY],
+                       cwd=root, capture_output=True)
+        subprocess.run(["git", "config", "--unset", "socom.binpath"],
+                       cwd=root, capture_output=True)
+
+    # Read back rather than assert — the restore is the whole product of this
+    # command, so it states what git now reports, not what it just tried to set.
+    now = _git_hooks_path(root)
+    print(f"  core.hooksPath now: {now or '<unset>'}")
+
+    left = [p for p in (SOCOM_DIR, HOOKS_DIR, "socom.yaml", "CLAUDE.md",
+                        "AGENTS.md", ".cursor/rules/socom.mdc",
+                        ".github/workflows/socom-gates.yml")
+            if (root / p).exists()]
+    if left:
+        print(f"  · left in place (yours to delete, socom will not): "
+              f"{', '.join(left)}")
+        print(f"  · socom's blocks in .gitignore/.prettierignore are marked "
+              f"'{IGNORE_BEGIN}' — delete the marked block to remove them.")
