@@ -162,18 +162,32 @@ merge, because a finding that arrives at merge time cannot change what an agent
 did at claim time.
 
 - **Metric:** category-A `saves`, counted by hand in `bench/blackboard-tally.csv`.
-- **Kill criterion:** two weeks of concurrent agents, zero category-A saves →
-  **stop**. See PILOT §the blackboard trial.
-- **Known ceiling on the pilot:** the operator is the author, so this measures
-  whether the mechanism produces saves. It does **not** measure whether a
-  non-author adopts it, which is the mechanism §10 says has never once been
-  executed. Both are required; this one is cheaper and comes first.
+- **Status as of 2026-08-03 — DEMOTED to an instrument** by
+  [`decisions/0001-exposure-before-capability.md`](decisions/0001-exposure-before-capability.md).
+  It keeps running; it is no longer the existential test and no longer gates
+  anything.
+- **The kill criterion cannot fire in this setting.** PILOT requires *"three or
+  more people running concurrent agents… untestable solo"*; the actual setting
+  is one person, the author. So two weeks of zero category-A is recorded as a
+  **NULL, not a kill** — it licenses neither "stop" nor "ship". The kill
+  criterion transfers to `EV-NONAUTHOR-EXPOSURE-01`, where the setting
+  precondition can actually be met. Tracked as
+  `EV-SAVES-KILL-CRITERION-UNFIRABLE-01`.
+- **Why demoted:** this measures whether the mechanism produces saves. The claim
+  actually at D0 is whether a **non-author adopts it** — never once executed
+  across six artifacts and five months. No reading of this tally can move that.
 
-## Candidate increments — GATED on Phase 3a, not scheduled
+## Candidate increments — GATED, not scheduled
 
 Recorded so they are *decided* rather than drifted into. Every one of them is
-larger than the artifact that already failed with zero users, and each is
-unlocked by the same evidence: **findings people actually act on.**
+larger than the artifact that already failed with zero users.
+
+⚠️ **Re-gated 2026-08-03.** These were gated on Phase 3a producing saves. They
+are now gated on **`EV-NONAUTHOR-EXPOSURE-01`** — five non-author engineers,
+recorded stall points, voluntary-second-use yes/no. Saves is an instrument and
+cannot unlock a capability. Per decision 0001, the only capability permitted
+before that measurement is **R1**, the intent-drift detector. See
+[`buckets/build.md`](buckets/build.md).
 
 - **Lease-holder invalidation via `notifications/*`.** Today the blackboard is
   pull-only, at claim time. If B claims a path at 10:00 and A attests against
