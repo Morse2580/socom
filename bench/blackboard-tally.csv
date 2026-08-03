@@ -20,3 +20,4 @@
 #
 date,session,paths,findings_returned,retracted_returned,outcome,what_changed
 2026-08-02,akili-s1-wire,".mcp.json .gitignore",0,0,C,"first claim on a fresh surface — no findings existed yet"
+2026-08-02,akili-hook-decommission,".githooks/pre-commit TASKS.md",2,0,B,"both findings verified and both correct, but CONFOUNDED: the session prompt named the task AND the paths, so the findings could only corroborate, not redirect. What they added over the prompt was reasoning (guard passes / 2>/dev/null swallows / venv arms it), not a change of action. Recorded B rather than A deliberately — interesting reasoning is not a save. Methodological note: a prompt that pre-specifies the task cannot test claim-time delivery; future trial sessions must pick work WITHOUT being told which paths carry findings."
