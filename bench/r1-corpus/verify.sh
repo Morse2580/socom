@@ -50,9 +50,16 @@ for rec in recs:
     for c in rec["confirm"]:
         if not c["cmd"].startswith("git "):
             continue
-        args = c["cmd"].split()[1:]
-        got = subprocess.run(["git", "-C", d, *args],
-                             capture_output=True, text=True, timeout=180)
+        if c.get("shell"):
+            # a pipeline, not a bare git call -- run it through a shell IN the
+            # repo.  Splitting these on whitespace and passing them to git as
+            # argv is how this script silently "passed" nothing.
+            got = subprocess.run(c["cmd"], shell=True, cwd=d,
+                                 capture_output=True, text=True, timeout=180)
+        else:
+            args = c["cmd"].split()[1:]
+            got = subprocess.run(["git", "-C", d, *args],
+                                 capture_output=True, text=True, timeout=180)
         checked += 1
         # ls-tree exits 0 with EMPTY stdout for an absent path -- stdout is the
         # discriminator, not the exit code.  Compare both.
