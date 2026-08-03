@@ -20,9 +20,9 @@ jobs:
       - run: pip install pyyaml
       - name: build integrity — bin/socom matches src/socom (no committed-artifact drift)
         run: python3 build.py --check
-      - name: re-assert the full check (smoke + xmlcheck + ledgercheck + mcp + context + index)
+      - name: re-assert the full check (smoke + xmlcheck + ledgercheck + mcp + r1corpus + context + index)
         # Keep this list in step with socom.yaml checks.full. It is duplicated
         # deliberately (this file is hand-owned, never a generated adapter), so a
         # new suite added to one and not the other is a gate that exists and
         # never runs — which is worse than no gate, because it reads as covered.
-        run: tests/smoke.sh && python3 tests/xmlcheck.py && python3 tests/ledgercheck.py && python3 tests/mcp.py && ./bin/socom context verify && ./bin/socom index . >/dev/null && echo full-ok
+        run: tests/smoke.sh && python3 tests/xmlcheck.py && python3 tests/ledgercheck.py && python3 tests/mcp.py && python3 tests/r1corpus.py && ./bin/socom context verify && ./bin/socom index . >/dev/null && echo full-ok

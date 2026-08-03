@@ -23,9 +23,15 @@ Ladder reference: §14.2 of
   adopt, nothing to configure. That is what makes it the cheapest instrument
   ever available for moving the D-tier, per §14.4. Contrast R3, already built,
   whose payoff is structurally invisible without 2+ agents and a stock of
-  findings. ⚠️ **Write [[EV-R1-ACCEPTANCE-CORPUS-01]] first** — building the
-  acceptance corpus after the detector lets the detector be tuned to pass its
-  own test. ⚠️ **R1 must parse, and parsing can be wrong** — this is exactly why
+  findings. ✅ **[[EV-R1-ACCEPTANCE-CORPUS-01]] is DONE (2026-08-03)** — the corpus is
+  committed and R1 does not exist yet, so the ordering that makes it worth
+  anything is intact and is now enforced permanently by `tests/r1corpus.py`
+  (git-ancestry assertion, in CI). **Read
+  [`../bench/r1-corpus/README.md`](../bench/r1-corpus/README.md) §How to score
+  R1 before writing a line** — it fixes what R1 is graded on, and it was fixed
+  before you got here specifically so you cannot move it. Note there is
+  deliberately **no recall threshold**: report recall, precision and the
+  assertion count together, then argue about whether the recall is enough. ⚠️ **R1 must parse, and parsing can be wrong** — this is exactly why
   §20 preferred the blackboard, whose findings are authored and need no
   inference. Accept the inference cost here; it is the price of paying off to
   one person. **Falsifiable acceptance:** on a repo whose `CLAUDE.md` names a
