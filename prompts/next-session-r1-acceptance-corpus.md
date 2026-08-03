@@ -1,3 +1,13 @@
+> **EXECUTED 2026-08-03 — `EV-R1-ACCEPTANCE-CORPUS-01` is DONE (`5458893`).**
+> Outcome: 30 records in `bench/r1-corpus/` — 18 paired-parent defects across 18
+> distinct repos (target was ≥10), 1 never-existed defect, 11 controls covering
+> all five required classes. Mined from a 475-repo pool; R1 still unwritten, and
+> the ordering is now enforced permanently by `tests/r1corpus.py` via git
+> ancestry. Two candidate defects were reclassified as *controls* on review
+> (gitignored-but-present, declared-as-deleted) — the method working.
+> **Superseded by `next-session-p0-defects-then-exposure.md`.** Kept for
+> provenance, not as instruction.
+
 # Next session — build R1's acceptance corpus, before R1 exists
 
 **Row:** `EV-R1-ACCEPTANCE-CORPUS-01` (READY, P1) in `buckets/evidence.md`.
