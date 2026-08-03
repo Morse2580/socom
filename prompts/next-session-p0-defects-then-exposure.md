@@ -4,8 +4,44 @@
 `DEF-ADOPTION-REDDENS-HOST-GATE-01`, `DEF-RUNTIME-STATE-UNIGNORED-01` — all
 **READY P0** in `buckets/defects.md`.
 **Governed by:** `decisions/0001-exposure-before-capability.md` + **§Amendment 1**.
-**Repo:** socom (`github.com/Morse2580/socom`). This is socom work — do not open
-an Akili MR for it.
+
+## Where the repo is — read this first
+
+**Everything in this prompt is relative to `/root/socom`.** Start there:
+
+```sh
+cd /root/socom && git pull            # remote: github.com/Morse2580/socom.git, branch main
+# not present? →  git clone https://github.com/Morse2580/socom.git /root/socom
+```
+
+⚠️ **socom is a SIBLING of `/root/Akili`, not inside it.** A session often opens
+in `/root/Akili` by default; every path below (`buckets/`, `src/socom/`,
+`bin/socom`, `prompts/`) is a socom path and will silently resolve to the wrong
+place — or to nothing — if you are still in the Akili checkout. Check `pwd`
+before your first edit.
+
+⚠️ **Akili's `CLAUDE.md` does not govern here, and socom has no `CLAUDE.md` of
+its own.** Do not apply Akili's session ritual to this repo — there are **no**
+worktrees, no `scripts/ops/session-claim.sh` row claims, no `glab`, no merge
+trains, no MR, and no `thoughts/shared/buckets/`. socom's own conventions:
+
+| | socom |
+|---|---|
+| Task state | `buckets/{defects,build,evidence}.md` at the repo root |
+| Decisions | `decisions/NNNN-*.md` |
+| Landing work | commit **directly to `main`** and `git push origin main` |
+| CI | GitHub Actions (`.github/workflows/ci.yml`), watch with `gh run watch` |
+| Gate | `./bin/socom gate full` + `python3 build.py --check` |
+
+⚠️ **`bin/socom` is a BUILT artifact** assembled from `src/socom/*.py` by
+`build.py`. Edit `src/socom/`, never `bin/socom` — then run `python3 build.py`
+and commit both. `python3 build.py --check` is a CI gate and fails on drift.
+
+⚠️ **socom's git hooks are not wired in its own checkout** (`core.hooksPath` is
+unset), so nothing runs your gates on commit. Run `./bin/socom gate full`
+yourself before every push; CI is the only other thing that will catch you.
+
+This is socom work — **do not open an Akili MR for it.**
 
 ## The one thing this session is for
 
