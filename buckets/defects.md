@@ -131,10 +131,32 @@ written down here. **That row is still unrun, and it is still the work.**
   hook fires on `git merge` too, so the gate RED-blocked merge commits on a
   subject git writes itself — reproduced: `git merge --no-ff side` aborted with
   *"Not committing merge"*. socom's own last 100 subjects contain **21** of
-  them. Added `GENERATED_SUBJECT_RX` (`Merge `/`Revert "`/`Reapply `/`fixup!`/
-  `squash!`), which is commitlint's default posture. Judged repair, not
-  capability: same single gate, nothing configurable, no new surface — but it
-  is a widening the row did not name, so it is recorded here rather than buried.
+  them. Judged repair, not capability: same single gate, nothing configurable,
+  no new surface — but it is a widening the row did not name, so it is recorded
+  here rather than buried.
+  ⚠️⚠️ **The first cut of that widening was itself a defect, and a worse one
+  than the row it served.** It matched a leading `Merge `/`Revert "`/`fixup!`
+  on the SUBJECT (commitlint's default posture), which means the gate could be
+  defeated by *typing* it. VERIFIED on a scratch repo with socom's hooks wired:
+  the subject `Merge in my sloppy change with no blocks at all` **committed
+  cleanly** — no type, no `[what]`, no `[test]`, not even an amber. Anyone who
+  found it once had a permanent one-word bypass of the entire commit gate.
+  **Root fix: discriminate on repo STATE, not on text.**
+  `_git_authored_commit` checks `MERGE_HEAD` / `REVERT_HEAD` /
+  `CHERRY_PICK_HEAD` under `git rev-parse --git-dir` — verified present during
+  a real merge and absent during an ordinary commit. The message is what the
+  author controls; `MERGE_HEAD` is what git controls, and only the latter can
+  discriminate here. Autosquash has no state file, so `AUTOSQUASH_RX` strips
+  `fixup!`/`squash!`/`amend!` and validates **what the autosquash targets** —
+  so the strip cannot launder a bad subject.
+  Verified end-to-end with real commits, five cases: real `git merge --no-ff` →
+  passes (*"skipped — git authored this message (merge in progress)"*); real
+  `git revert` → passes; the bypass subject → **RED, no commit object created**;
+  `fixup!` of a conventional subject → passes; `fixup! sloppy change` → RED.
+  Known edge, accepted rather than patched: `git commit --fixup=HEAD` where HEAD
+  is itself a merge/revert commit is rejected, because the target subject is not
+  conventional. Narrow — and adding one more special case is exactly how the
+  bypass got in.
   Non-vacuity control: `'updated some stuff'` still RED-blocks, a conventional
   subject still commits.
 

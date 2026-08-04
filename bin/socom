@@ -2648,15 +2648,38 @@ COMMIT_TYPES = ("build", "chore", "ci", "docs", "feat", "fix", "perf",
                 "refactor", "revert", "style", "test", "wip")
 COMMIT_RX = re.compile(r"^(?:" + "|".join(COMMIT_TYPES) + r")(?:\([^()]+\))?!?: .+")
 
-# Subjects GIT ITSELF writes. The commit-msg hook fires on `git merge` and
-# `git revert` too, so the old gate RED-blocked a merge on a subject the
-# developer never typed — verified: `git merge --no-ff side` aborts with
-# "Not committing merge". socom's own last 100 subjects contain 21 of these.
-# Conventional Commits does not cover generated subjects and commitlint ignores
-# them by default; this is the same defect as the mandatory scope (the gate
-# rejecting what the adopting repo legitimately produces), not a new exemption
-# surface — there is nothing here to configure.
-GENERATED_SUBJECT_RX = re.compile(r'^(?:Merge |Revert "|Reapply |fixup!|squash!)')
+# Autosquash subjects: `git commit --fixup=<sha>` writes `fixup! <subject>`.
+# The prefix is STRIPPED and the remainder still validated, so a real autosquash
+# of a conventional commit passes while `fixup! sloppy change` is still RED.
+AUTOSQUASH_RX = re.compile(r"^(?:(?:fixup|squash|amend)! )+")
+
+
+def _git_authored_commit(root: Path) -> str:
+    """The in-progress operation whose message GIT wrote — "merge", "revert",
+    "cherry-pick" — or "" for an ordinary commit. The commit-msg hook fires on
+    all of them, and blocking a merge on a subject the developer never typed is
+    the same defect as the mandatory scope: the gate rejecting what the adopting
+    repo legitimately produces. (Verified: `git merge --no-ff` aborted with "Not
+    committing merge"; 21 of socom's own last 100 subjects are merges.)
+
+    Read from repo STATE, never from the subject text. The first cut of this
+    matched a leading 'Merge '/'Revert "' on the message, which made the ENTIRE
+    commit gate bypassable by typing it — verified: the subject "Merge in my
+    sloppy change with no blocks at all" committed cleanly, no type, no blocks.
+    A message is what the author controls; MERGE_HEAD is what git controls, and
+    only the latter can discriminate here (§complete-mediation)."""
+    p = subprocess.run(["git", "rev-parse", "--git-dir"], cwd=root,
+                       capture_output=True, text=True)
+    if p.returncode:
+        return ""
+    d = Path(p.stdout.strip())
+    if not d.is_absolute():
+        d = root / d
+    for name, label in (("MERGE_HEAD", "merge"), ("REVERT_HEAD", "revert"),
+                        ("CHERRY_PICK_HEAD", "cherry-pick")):
+        if (d / name).exists():
+            return label
+    return ""
 
 
 def _gate_record(root, promise_arg, rc, duration_s):
@@ -2706,11 +2729,16 @@ def cmd_gate(args):
     if name == "commit-msg":
         msg = Path(rest[0]).read_text() if rest else ""
         first = msg.splitlines()[0] if msg.splitlines() else ""
-        if GENERATED_SUBJECT_RX.match(first):
-            # git wrote this subject, not a person — and the [what]/[test]
+        op = _git_authored_commit(root)
+        if op:
+            # git wrote this message, not a person — and the [what]/[test]
             # blocks below are equally not the developer's to supply here.
+            print(f"socom gate commit-msg: skipped — git authored this message "
+                  f"({op} in progress).")
             return
-        if not COMMIT_RX.match(first):
+        # Validate what an autosquash TARGETS, not the generated prefix.
+        subject = AUTOSQUASH_RX.sub("", first)
+        if not COMMIT_RX.match(subject):
             # Print the RULE THAT FIRED, not a paraphrase of it. The old message
             # named the format 'type(scope): description' and then echoed back a
             # subject that WAS exactly that — rejected for a reason it never
@@ -2725,6 +2753,10 @@ def cmd_gate(args):
                      "description must be non-empty.\n"
                      "  e.g.   fix: restore the L0 fallback\n"
                      "         test(middleware/immer): add runtime tests")
+        if subject != first:
+            # A real autosquash: it is squashed away before it lands, and the
+            # blocks belong on the commit it targets, not on the fixup.
+            return
         missing = [b for b in ("[what]", "[test]") if b not in msg]
         if missing:
             log_breach(root, "commit-msg", f"amber: missing {missing} blocks")

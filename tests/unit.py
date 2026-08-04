@@ -294,14 +294,25 @@ check("COMMIT_RX rejects a type that is only a prefix of a real one",
 # The rejection must name the rule that fired — the old error printed a format
 # the rejected subject already satisfied, so the real rule was unlearnable
 # without grepping the binary.
-# Subjects git generates: the gate must not RED-block a merge the developer
-# never typed (verified: `git merge --no-ff` aborted with "Not committing merge").
-for _g in ('Merge branch \'side\'', 'Merge pull request #12 from x/y',
-           'Revert "feat: a thing"', 'fixup! feat: a thing', 'squash! fix: y'):
-    check(f"GENERATED_SUBJECT_RX exempts git's own subject: {_g[:28]!r}",
-          socom.GENERATED_SUBJECT_RX.match(_g) is not None)
-check("GENERATED_SUBJECT_RX does NOT exempt an ordinary subject",
-      socom.GENERATED_SUBJECT_RX.match("merge the configs by hand") is None)
+# Merge/revert/cherry-pick are detected from REPO STATE (_git_authored_commit),
+# not from the subject text. Matching a leading "Merge " made the whole gate
+# bypassable by typing it — verified: "Merge in my sloppy change with no blocks
+# at all" committed cleanly. So the subject below must NOT be exempt here; the
+# real merge path is covered by an integration test, not a regex.
+check("a 'Merge '-prefixed subject is NOT exempt by text (the bypass)",
+      socom.COMMIT_RX.match("Merge in my sloppy change with no blocks") is None)
+check("AUTOSQUASH_RX strips a fixup! prefix",
+      socom.AUTOSQUASH_RX.sub("", "fixup! feat(x): a thing") == "feat(x): a thing")
+check("AUTOSQUASH_RX strips repeated prefixes",
+      socom.AUTOSQUASH_RX.sub("", "squash! fixup! fix: y") == "fix: y")
+check("AUTOSQUASH_RX leaves an ordinary subject alone",
+      socom.AUTOSQUASH_RX.sub("", "feat: a thing") == "feat: a thing")
+# The strip must not launder a bad subject: what the autosquash TARGETS is what
+# gets validated, so `fixup! sloppy` is still rejected.
+check("a fixup! of a NON-conventional subject is still rejected",
+      socom.COMMIT_RX.match(socom.AUTOSQUASH_RX.sub("", "fixup! sloppy change")) is None)
+check("a fixup! of a conventional subject is accepted",
+      socom.COMMIT_RX.match(socom.AUTOSQUASH_RX.sub("", "fixup! fix: real")) is not None)
 check("COMMIT_TYPES is the published set, not a private one",
       set(socom.COMMIT_TYPES) >= {"feat", "fix", "docs", "chore", "refactor",
                                   "test", "perf", "ci", "build", "style",
