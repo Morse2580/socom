@@ -161,17 +161,59 @@ written down here. **That row is still unrun, and it is still the work.**
   **Falsifiable acceptance:** a rejection prints the rule and the allowed set;
   and ≥90% of the adopting repo's last 100 subjects pass on a repo that follows
   conventional commits. **Files:** `src/socom/gate.py`.
-  **VERIFIED-FIXED.** `COMMIT_RX` is now the Conventional Commits v1.0.0 shape —
-  optional scope, `[^()]+` scope charset, optional `!`, and the spec's type set
-  plus `revert`/`wip`. The RED message prints the rule, the full type list, and
-  two examples. Last-100 acceptance, measured on the shipped binary:
-  angular/angular 48%→**96%**, vuejs/core 79%→**93%**, electron/electron
-  1%→**100%**, socom itself 75%→**100%** — acceptance met on every repo that
-  actually follows the convention. The five cohort repos stay below 90%
-  (zustand 40→67, axum 17→50, petl 0→78, descheduler 7→75, requests 1→12)
-  because they genuinely do not follow it — release commits (`5.0.14`), bare
-  sentences. Widening further to admit those is the BLOCKED knob
-  [[SUBSTRATE-COMMIT-TYPES-CONFIGURABLE-01]], not this repair.
+  **VERIFIED-FIXED.** `COMMIT_RX` is now close to the Conventional Commits
+  v1.0.0 shape — optional scope, `[^()]+` scope charset, optional `!`, the
+  spec's type set plus `revert`/`wip`, and a description that must contain a
+  non-space character. The RED message prints the rule, the full type list, and
+  two examples.
+
+  **Acceptance, measured honestly.** Merge commits are identified by **parent
+  count** — what git itself uses — and excluded, because at commit time they are
+  skipped via `MERGE_HEAD`, not via anything about their text. Percentages are
+  over ORDINARY (single-parent) commits in each repo's last 100:
+
+  | repo | commits | merges | ordinary | pass |
+  |---|---|---|---|---|
+  | electron/electron | 100 | 0 | 100 | **100%** |
+  | socom (self) | 100 | 21 | 79 | **100%** |
+  | nestjs/nest | 100 | 50 | 50 | **98%** |
+  | angular/angular | 100 | 0 | 100 | **96%** |
+  | angular/components | 100 | 0 | 100 | **95%** |
+  | vuejs/core | 100 | 0 | 100 | **92%** |
+  | ionic-team/ionic-framework | 100 | 12 | 88 | **73%** ← counterexample |
+  | pmndrs/zustand | 100 | 0 | 100 | 66% |
+
+  ⚠️ **An earlier draft of this row reported the rate over all 100 subjects with
+  merges waved through by a SUBJECT-TEXT exemption.** That was contaminated —
+  a text exemption is spoofable, so on a merge-heavy repo the number could not
+  fail, and socom's own headline "75%→100%" was partly measuring the exemption
+  rather than the fix. The exemption is now state-based (see the ⚠️⚠️ note
+  below), and the table above re-derives every figure by parent count. The fix
+  is independently real: on the zero-merge repos, where no exemption of any kind
+  applies, angular went 48→96% and electron 1→100%.
+
+  ⚠️ **The acceptance criterion as written is falsified, and this is the honest
+  statement of it.** `ionic-team/ionic-framework` **does** follow the convention
+  — `docs/CONTRIBUTING.md`: *"We follow the [Conventional Commits
+  specification]"*, CI-enforced — and scores **73%**, not ≥90%. Its 23 rejects
+  are exactly two shapes: **12 × `chore():`** (an EMPTY scope) and **11 ×
+  `v8.8.16`** (a bare version subject). Neither is sanctioned by the spec, and
+  admitting them is the BLOCKED knob
+  [[SUBSTRATE-COMMIT-TYPES-CONFIGURABLE-01]] — so the *repair* is not at fault,
+  but "≥90% on a repo that follows conventional commits" is too strong as a
+  criterion. It holds only for repos whose subjects are themselves conventional.
+  A repo can follow the convention *as policy* and still emit release and
+  lockfile commits that are not.
+
+  ⚠️ **Known divergence from the spec, stated rather than papered over.** The
+  spec says the units of information *"MUST NOT be treated as case-sensitive"*,
+  so `Fix: correct a typo` is spec-valid and socom RED-blocks it. socom matches
+  commitlint's `config-conventional` here (`type-case: lower-case`) rather than
+  the spec text, which is defensible tooling behaviour — but it means "implements
+  Conventional Commits v1.0.0" is an overstatement on that clause.
+
+  The cohort repos stay below 90% (zustand 66, axum, petl, descheduler,
+  requests) because they genuinely do not follow the convention.
   ⚠️ **Scope call made during the repair, flagged rather than assumed.** The
   hook fires on `git merge` too, so the gate RED-blocked merge commits on a
   subject git writes itself — reproduced: `git merge --no-ff side` aborted with
