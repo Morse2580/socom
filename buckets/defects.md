@@ -69,10 +69,19 @@ written down here. **That row is still unrun, and it is still the work.**
   `src/socom/install.py`, `src/socom/cli.py`, `PILOT.md`.
   **VERIFIED-FIXED.** `_wire_hooks` now returns `wired|foreign|nogit` instead of
   a bool — the three cases were never interchangeable, and collapsing them is
-  what hid the destructive one. On a repo with `core.hooksPath=.husky` and a
-  hook that prints `HOST SECRET SCANNER RAN`: after `socom adopt`,
-  `core.hooksPath` reads `.husky` (unchanged), `socom.priorhookspath` reads
-  `.husky`, and a real `git commit` still printed `HOST SECRET SCANNER RAN`.
+  what hid the destructive one. Verified against a **real `husky@9.1.7`
+  install** (`npm i -D husky && npx husky init`), not a hand-written stand-in:
+  | binary | `core.hooksPath` after `adopt` | husky's hook on next commit |
+  |---|---|---|
+  | PRE-FIX | `.husky/_` → **`.githooks`** | **silent — never ran** |
+  | SHIPPED | `.husky/_` (unchanged) | ran |
+  `socom.priorhookspath` records `.husky/_`.
+  ⚠️ **Why the real install mattered.** The first pass used a fixture written by
+  hand that set `core.hooksPath=.husky`. Real husky v9 sets **`.husky/_`** — the
+  fixture had guessed the value wrong. The repair keys on "non-empty and not
+  ours" so its behaviour was identical either way, but the fixture could not have
+  shown that, and a fixture the author wrote is not evidence about a tool the
+  author did not write.
   adopt reports the refusal on stderr with both ways forward. New `socom
   unadopt`: restored `.husky` after a deliberate switch (host hook ran again),
   and on a plain repo returned `core.hooksPath` to **unset** with 0 residual
@@ -146,10 +155,23 @@ written down here. **That row is still unrun, and it is still the work.**
   **Falsifiable acceptance:** adopt on a repo whose format check is green; it is
   still green immediately after `quickstart`, with no hand edits.
   **Files:** `src/socom/lifecycle.py`, `src/socom/install.py`, `templates/`.
-  **VERIFIED-FIXED.** Re-ran the 4-cell experiment on a fresh `pmndrs/zustand`
-  clone (upstream HEAD `beca84e`) with real `prettier@3.8.3`: pristine → 0 files
-  listed, RC=0. After `socom quickstart` on the SHIPPED binary → **0 files
-  listed, RC=0.** Was 16. `adopt` now writes a marked block into
+  **VERIFIED-FIXED.** Re-ran the experiment on a fresh `pmndrs/zustand` clone
+  (upstream HEAD `beca84e`) with the dependencies really installed
+  (`pnpm install --frozen-lockfile`), driving the repo's **own `npm test`** —
+  not just the `test:format` sub-check:
+  | cell | `npm test` |
+  |---|---|
+  | pristine | **RC=0** — 13 files, 214 tests passed; spec/types/format/lint all Done |
+  | adopted, PRE-FIX binary | **RC=1** — `test:format: Failed`, listing socom's own files |
+  | adopted, SHIPPED binary | **RC=0** — 214 tests passed, all four sub-checks Done |
+  The middle cell is the discriminating control: same command, same clone, only
+  the binary differs, so the green is attributable to the repair and not to a
+  quirk of the checkout.
+  ⚠️ **An earlier draft of this line said "re-ran the 4-cell experiment" while
+  having actually run only `prettier . --list-different`** — the exact body of
+  the `test:format` script, but one of four cells. The claim was ahead of the
+  evidence; the table above is the real thing. Recorded rather than quietly
+  overwritten, because this bucket's rows are the substrate's own audit trail. `adopt` now writes a marked block into
   `.prettierignore` naming the 14 socom-generated paths it found. Root fix, not
   a formatting patch: socom emits files into someone else's repo and had never
   told that repo's tools which files are socom's — so the same mechanism serves
