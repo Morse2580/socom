@@ -51,7 +51,21 @@ nothing in `build.md` can move it. Only rows here can.
   forecloses the substitution: cheap, fast, needs no humans, **and cannot move
   the D-tier**. Reaching for it again instead of this row is proxy selection.
 
-  **Files:** `PILOT.md` (unchanged, as instrument), `bench/`.
+  **Files:** `PILOT.md` (the instrument), `bench/`.
+
+  ⚠️ **The instrument moved once, on 2026-08-03, and this is the disclosure.**
+  `PILOT.md`'s "Is it safe?" section was amended by
+  [[DEF-HOOKS-HIJACK-NO-UNADOPT-01]], which listed it in its own **Files** because
+  the defect **falsified the bolded claim there** — socom did clobber a git
+  config, and for a repo already on husky, "wires git hooks that run *your own*
+  commands" was false. The amendment enumerates every write socom makes to
+  something already yours and names `socom unadopt`. **This is not "improving
+  `PILOT.md` first."** The instruction that the instrument stays as-is protects
+  the finding *where it confuses a stranger*; it cannot require handing five
+  strangers a safety claim known to be untrue. Confusion is the measurement —
+  a false claim is a defect. Nothing else in `PILOT.md` was touched: no
+  clarification, no reordering, no smoothing of a rough step. A participant who
+  stalls still stalls exactly where they would have.
 
 - `EV-TRIAL-PROTOCOL-CONFOUND-01` **READY P2** — **The blackboard trial protocol
   produces uninterpretable rows when the session prompt names the paths that
