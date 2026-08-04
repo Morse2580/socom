@@ -21,10 +21,15 @@ say *"walk me through this on this repo"* — see [With Claude Code](#with-claud
   unless you explicitly pass `--exec`.
 - **Exactly what it writes that is already yours** — the whole list, so the claim
   above is checkable rather than trusted:
-  - `core.hooksPath`, the one git setting it sets. **If your repo already points
-    it somewhere** (husky, lefthook, your own convention) **SOCOM refuses and
-    changes nothing**, because repointing it would not fail your existing hooks,
-    it would silently *stop* them. It records the prior value either way.
+  - `core.hooksPath`, the one git setting it sets. **If your repo already has
+    hooks, SOCOM refuses and changes nothing** — because repointing them would
+    not *fail* your existing hooks, it would silently *stop* them. That covers
+    both ways a repo can have hooks: `core.hooksPath` already pointing somewhere
+    (husky sets it to `.husky/_`), **and** real hooks sitting in the default
+    `.git/hooks/` with `core.hooksPath` unset — which is where **lefthook**
+    installs, and where a hand-written hook lives. An unset `core.hooksPath`
+    means "use the default location", not "no hooks". SOCOM records the prior
+    value either way.
   - a **marked block** in `.gitignore` (its own machine-local runtime state, so
     `git add -A` can't sweep it into your commit) and, if you use prettier, in
     `.prettierignore` (its own generated files, so adopting SOCOM can't turn a

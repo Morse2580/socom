@@ -26,7 +26,21 @@ re-verified against source and re-run from primary artifacts. Claims marked
 
 ---
 
-## Done — the pre-exposure P0 budget (all four, 2026-08-03)
+## Done — the pre-exposure P0 budget (all four, 2026-08-03/04)
+
+> ⚠️ **These four were marked DONE once prematurely, and adversarial
+> verification reopened one of them.** `DEF-HOOKS-HIJACK-NO-UNADOPT-01` was
+> closed against the sub-case it was written from (`core.hooksPath` already SET)
+> while **the same defect was still fully live for a repo whose hooks are in the
+> default `.git/hooks/`** — which is where lefthook installs. `PILOT.md` shipped
+> a safety claim naming lefthook that was false at the time it was written.
+> Three further defects (an adopt crash, silent deletion of a user's
+> `.gitignore` rule, and `unadopt` performing the very clobber it exists to
+> undo) were introduced by the repairs themselves. All are now fixed and
+> regression-tested; the audit trail is in each row.
+> **The lesson is in the ordering:** every one of these survived `gate full`,
+> `build.py --check`, and a 323-test suite. Green gates measured the half of the
+> change that had tests. The half that touched the adopter's repo had none.
 
 Repaired and verified in one session. Each row keeps its original text; the
 **VERIFIED-FIXED** line at the end of each is the evidence against its own
@@ -82,6 +96,37 @@ written down here. **That row is still unrun, and it is still the work.**
   ours" so its behaviour was identical either way, but the fixture could not have
   shown that, and a fixture the author wrote is not evidence about a tool the
   author did not write.
+
+  ⚠️⚠️ **REOPENED 2026-08-04 by adversarial verification, then closed properly.**
+  Everything above was true and the row was still **not fixed**, because the
+  guard keyed on `core.hooksPath` being non-empty — i.e. it treated *unset* as
+  "this repo has no hooks". Unset means **"use the default `.git/hooks/`"**, and
+  that is where **lefthook installs** and where a hand-written hook lives.
+  REPRODUCED on the shipped binary: a `.git/hooks/pre-commit` that blocked a
+  commit before adopt stopped running after it, adopt printed
+  `✓ git hooks wired — local gates live`, and the commit landed. Confirmed
+  again against a real `lefthook@2.1.10` install. The row's own problem
+  statement names lefthook, and `PILOT.md` asserted socom "refuses and changes
+  nothing" for it — **false as shipped.**
+  **Fix:** `_default_hooks_present` — executable non-`.sample` files under
+  `git rev-parse --git-path hooks`. Unset + real hooks present is now `foreign`,
+  with its own message. Verified: `.git/hooks` repo → refused, host hook still
+  fires; real lefthook → refused, lefthook blocks the commit (rc=1, no commit
+  object); ordinary repo with no hooks → still wires normally (non-vacuity).
+  **Two more defects the repairs themselves introduced, both found by
+  verification and both fixed:**
+  · **`unadopt` performed the exact clobber it exists to undo.** It restored
+    from `socom.priorhookspath` without checking the current value was still
+    socom's, and the record is written once and never invalidated. REPRODUCED:
+    adopt, then `git config core.hooksPath .husky`, then `unadopt` — husky
+    silently disabled, while printing *"it was unset before adopt"* as if it
+    described the present. Now refuses unless `core.hooksPath == .githooks` and
+    prints the recorded value plus the exact command to apply it by hand.
+  · **Scope infidelity.** `_git_hooks_path` reads the EFFECTIVE value across
+    global/system, but the record and restore write LOCAL — so a repo inheriting
+    a global hooks path got that value pinned into its local config by
+    `unadopt`, silently detaching it from the org setting it should keep
+    following. Now records `--local` only.
   adopt reports the refusal on stderr with both ways forward. New `socom
   unadopt`: restored `.husky` after a deliberate switch (host hook ran again),
   and on a plain repo returned `core.hooksPath` to **unset** with 0 residual
@@ -227,6 +272,26 @@ written down here. **That row is still unrun, and it is still the work.**
   lease shard, `git add -A` staged **0** runtime-state files (32 staged, all
   substrate source). `git check-ignore`: `breaches.log`, `vectors.json`,
   `chunks.jsonl`, the lease shard → IGNORED.
+  ⚠️⚠️ **Two defects the repair itself introduced, found by verification,
+  both fixed and regression-tested.** `_ensure_ignore_block` checked only that
+  both markers were PRESENT, then split on the first of each:
+  · **adopt CRASHED** (`ValueError: not enough values to unpack`) when the
+    markers were out of order — which a plain `sort` on `.gitignore` produces,
+    since `<` sorts before `>`. It died *before* hook wiring, so every retry
+    failed at the same line: an adopter in that state could never wire hooks,
+    with no message saying why.
+  · **It SILENTLY DELETED user-authored lines.** Delete the END marker (one
+    edit) and the next adopt appends a second block; the adopt after that
+    rewrites everything between the first BEGIN and the first END — eating any
+    rule in between. REPRODUCED: a user rule present after adopt #2 was gone
+    after adopt #3, with the only output being the green *"`git add -A` is
+    safe"* checkmark. The docstring claimed content outside the markers was
+    left byte-for-byte; it was not.
+  **Fix:** count the markers before any surgery. Exactly one of each, in order,
+  or the file is `malformed` and socom **touches nothing** and says so loudly on
+  stderr — an ignore file belongs to the adopter, and the only safe failure is
+  to leave it alone. 13 regression tests in `tests/unit.py` cover reversed,
+  duplicated, and half-deleted markers, plus the happy paths.
   ⚠️ **The `.socom/` split is the load-bearing part of this repair, and the
   reason it is not just Akili's line copied in.** Akili's hand-written
   `.gitignore` ignores **all** of `.socom/`; socom must not, because canon,

@@ -289,6 +289,12 @@ check("COMMIT_RX rejects a bare version subject (not conventional)",
       socom.COMMIT_RX.match("5.0.14") is None)
 check("COMMIT_RX rejects an empty description",
       socom.COMMIT_RX.match("feat: ") is None)
+# The gate PRINTS "the description must be non-empty"; `: .+` did not enforce it.
+for _w in ("feat:  ", "feat:    ", "feat: \t", "feat: \t  "):
+    check(f"COMMIT_RX rejects an all-whitespace description: {_w!r}",
+          socom.COMMIT_RX.match(_w) is None)
+check("COMMIT_RX still accepts extra spacing before a real description",
+      socom.COMMIT_RX.match("feat:  a real thing") is not None)
 check("COMMIT_RX rejects a type that is only a prefix of a real one",
       socom.COMMIT_RX.match("fixup: y") is None)
 # The rejection must name the rule that fired — the old error printed a format
@@ -1222,6 +1228,50 @@ _help = socom.__doc__ or ""
 _listed = set(re.findall(r'^  (\w+)\s', _help, re.M))
 _unlisted = sorted(c for c in socom.COMMANDS if c not in _listed)
 check(f"help lists every registered command (unlisted: {_unlisted})", not _unlisted)
+
+# ── ignore-block surgery: must never crash and never delete (regressions) ─────
+# Both cases below were live defects: a plain `sort` on .gitignore reorders the
+# markers ('<' sorts before '>') and crashed adopt outright, and a half-deleted
+# block silently ate a user-authored rule on the second adopt.
+import tempfile as _tf
+_B, _E = socom.IGNORE_BEGIN, socom.IGNORE_END
+_pats, _why = ["a/", "b/"], "why text"
+_good_body = "\n".join([f"# {_why}", *_pats])
+
+
+def _blk(text):
+    """Run _ensure_ignore_block over `text`, return (result, new_text)."""
+    with _tf.TemporaryDirectory() as d:
+        f = Path(d) / ".gitignore"
+        f.write_text(text)
+        return socom._ensure_ignore_block(f, _pats, _why), f.read_text()
+
+
+_r, _t = _blk(f"user/\n{_E}\n{_good_body}\n{_B}\n")
+check("reversed markers -> 'malformed', no crash", _r == "malformed")
+check("reversed markers -> file left byte-identical",
+      _t == f"user/\n{_E}\n{_good_body}\n{_B}\n")
+
+_dup = f"user/\n{_B}\n{_good_body}\nMY-RULE/\n{_B}\n{_good_body}\n{_E}\n"
+_r, _t = _blk(_dup)
+check("duplicated BEGIN -> 'malformed', no rewrite", _r == "malformed")
+check("duplicated BEGIN -> user's own rule SURVIVES", "MY-RULE/" in _t)
+
+_r, _t = _blk(f"user/\n{_B}\n{_good_body}\nMY-RULE/\n")
+check("missing END marker -> 'malformed', no rewrite", _r == "malformed")
+check("missing END marker -> user's own rule SURVIVES", "MY-RULE/" in _t)
+
+_r, _t = _blk("node_modules/\n")
+check("no markers -> appends a block", _r == "updated" and _B in _t)
+check("no markers -> user content preserved", "node_modules/" in _t)
+
+_r, _t = _blk(f"node_modules/\n\n{_B}\n{_good_body}\n{_E}\n")
+check("well-formed + current -> 'unchanged'", _r == "unchanged")
+
+_r, _t = _blk(f"keep-me/\n\n{_B}\n# stale\nold/\n{_E}\ntrailing/\n")
+check("well-formed + stale -> rewritten in place", _r == "updated" and "old/" not in _t)
+check("rewrite preserves content before AND after the block",
+      "keep-me/" in _t and "trailing/" in _t)
 
 # ── summary ──────────────────────────────────────────────────────────────────
 print(f"unit: {_PASS} passed, {_FAIL} failed")

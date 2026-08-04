@@ -385,14 +385,46 @@ def _git_hooks_path(root: Path) -> str:
 HOOKS_PRIOR_KEY = "socom.priorhookspath"
 
 
-def _git_config_get(root: Path, key: str):
+def _git_config_get(root: Path, key: str, local: bool = False):
     """The configured value for `key`, or None if the key is UNSET. Distinct
     from "": a key deliberately recorded as empty means "core.hooksPath was
     unset before adopt", and `unadopt` has to tell that apart from "socom never
-    recorded anything here" to restore the right state."""
-    p = subprocess.run(["git", "config", "--get", key], cwd=root,
-                       capture_output=True, text=True)
+    recorded anything here" to restore the right state.
+
+    `local=True` reads ONLY this repo's config. That distinction is load-bearing:
+    a value inherited from --global or --system is not this repo's to save and
+    restore, and writing it back locally would PIN the repo to a stale copy of a
+    setting the operator can still change globally."""
+    cmd = ["git", "config"] + (["--local"] if local else []) + ["--get", key]
+    p = subprocess.run(cmd, cwd=root, capture_output=True, text=True)
     return p.stdout.rstrip("\n") if p.returncode == 0 else None
+
+
+def _default_hooks_present(root: Path) -> list:
+    """Executable, non-`.sample` hooks in the repo's DEFAULT hook directory.
+
+    An unset `core.hooksPath` does NOT mean "this repo has no hooks" — it means
+    "hooks live in the default place", which is exactly where `git init` seeds
+    the `.sample` files and where **lefthook installs real ones**. Treating unset
+    as nobody-home is what let adopt silently disable a repo's whole hook set
+    while printing a green checkmark (verified: a `.git/hooks/pre-commit` that
+    blocked before adopt stopped running after it, and the commit landed).
+    `.sample` files are inert by definition and are not evidence of hooks."""
+    p = subprocess.run(["git", "rev-parse", "--git-path", "hooks"], cwd=root,
+                       capture_output=True, text=True)
+    if p.returncode:
+        return []
+    d = Path(p.stdout.strip())
+    if not d.is_absolute():
+        d = root / d
+    if not d.is_dir():
+        return []
+    try:
+        return sorted(f.name for f in d.iterdir()
+                      if f.is_file() and not f.name.endswith(".sample")
+                      and os.access(f, os.X_OK))
+    except OSError:
+        return []
 
 
 def _record_binpath(root: Path):
@@ -429,12 +461,19 @@ def _wire_hooks(root: Path) -> str:
     # Record the pre-adopt value BEFORE touching anything, and only once — a
     # second `adopt` must not overwrite the record with socom's own value, or
     # `unadopt` would faithfully "restore" the repo to socom.
+    # Record the LOCAL value, not the effective one: a global/system setting is
+    # not this repo's to save, and writing it back locally would pin the repo to
+    # a stale copy of a setting the operator can still change globally.
     if _git_config_get(root, HOOKS_PRIOR_KEY) is None:
-        subprocess.run(["git", "config", "--local", HOOKS_PRIOR_KEY, cur],
+        subprocess.run(["git", "config", "--local", HOOKS_PRIOR_KEY,
+                        _git_config_get(root, "core.hooksPath", local=True) or ""],
                        cwd=root, capture_output=True)
     if cur:
         return "foreign"
-    subprocess.run(["git", "config", "core.hooksPath", HOOKS_DIR],
+    # An unset core.hooksPath is NOT "no hooks" — see _default_hooks_present.
+    if _default_hooks_present(root):
+        return "foreign"
+    subprocess.run(["git", "config", "--local", "core.hooksPath", HOOKS_DIR],
                    cwd=root, capture_output=True)
     _record_binpath(root)
     return "wired" if _git_hooks_path(root) == HOOKS_DIR else "nogit"
@@ -495,6 +534,11 @@ def _has_prettier(root: Path) -> bool:
         d = json.loads(pkg.read_text())
     except (ValueError, OSError):
         return False
+    # A package.json whose top level is a list/null/number is still valid JSON,
+    # and `"prettier" in d` raises TypeError on it — a crash the try/except above
+    # was written to prevent but does not cover.
+    if not isinstance(d, dict):
+        return False
     return ("prettier" in d
             or "prettier" in (d.get("devDependencies") or {})
             or "prettier" in (d.get("dependencies") or {}))
@@ -532,21 +576,36 @@ def _ensure_ignore_block(f: Path, patterns: list, why: str) -> str:
     itself is rewritten when the pattern set changes, so a later socom version
     adding an artifact does not append a second block. Returns 'wrote',
     'updated' or 'unchanged'."""
-    block = "\n".join([IGNORE_BEGIN, f"# {why}", *patterns, IGNORE_END])
+    body = "\n".join([f"# {why}", *patterns])
+    block = "\n".join([IGNORE_BEGIN, body, IGNORE_END])
     if not f.exists():
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_text(block + "\n")
         return "wrote"
-    text = f.read_text()
-    if IGNORE_BEGIN in text and IGNORE_END in text:
-        pre, rest = text.split(IGNORE_BEGIN, 1)
-        _old, post = rest.split(IGNORE_END, 1)
-        if _old.strip("\n") == "\n".join([f"# {why}", *patterns]):
-            return "unchanged"
-        f.write_text(pre + block + post)
+    try:
+        text = f.read_text()
+    except OSError:
+        return "malformed"
+
+    # Marker arithmetic BEFORE any surgery. The previous version checked only
+    # that both markers were PRESENT, then split on the first of each — which
+    # crashed outright when they were out of order (a plain `sort` on .gitignore
+    # reorders them, since '<' sorts before '>'), and SILENTLY DELETED whatever
+    # sat between a duplicated BEGIN and the first END. Both verified.
+    # An ignore file is the adopter's, and the only safe failure here is to
+    # touch nothing and say so.
+    n_begin, n_end = text.count(IGNORE_BEGIN), text.count(IGNORE_END)
+    if n_begin == 0 and n_end == 0:
+        sep = "" if text.endswith("\n") else "\n"
+        f.write_text(text + sep + "\n" + block + "\n")
         return "updated"
-    sep = "" if text.endswith("\n") else "\n"
-    f.write_text(text + sep + "\n" + block + "\n")
+    if n_begin != 1 or n_end != 1 or text.index(IGNORE_BEGIN) > text.index(IGNORE_END):
+        return "malformed"
+    pre, rest = text.split(IGNORE_BEGIN, 1)
+    _old, post = rest.split(IGNORE_END, 1)
+    if _old.strip("\n") == body:
+        return "unchanged"
+    f.write_text(pre + block + post)
     return "updated"
 
 
@@ -558,7 +617,13 @@ def _wire_ignores(root: Path):
         "machine-local socom runtime state: regenerable, per-machine, and a "
         "merge conflict on every branch if shared. The rest of .socom/ (canon, "
         "probes, lessons, memory) is SOURCE — keep it committed.")
-    if git_res != "unchanged":
+    if git_res == "malformed":
+        print(f"  ! .gitignore: socom's marked block is malformed (duplicated, "
+              f"out of order, or half-deleted) — LEFT UNTOUCHED. Machine-local "
+              f"runtime state is NOT ignored, so `git add -A` can commit it. "
+              f"Fix by deleting every '{IGNORE_BEGIN}'…'{IGNORE_END}' block by "
+              f"hand, then re-run `socom adopt`.", file=sys.stderr)
+    elif git_res != "unchanged":
         print(f"  ✓ .gitignore: socom runtime state ignored "
               f"({len(GITIGNORE_PATTERNS)} patterns) — `git add -A` is safe")
 
@@ -572,7 +637,12 @@ def _wire_ignores(root: Path):
         "socom-generated files. They are not written to your prettier config, "
         "and they are not yours to format — excluded so adopting socom cannot "
         "turn a green format check red.")
-    if p_res != "unchanged":
+    if p_res == "malformed":
+        print(f"  ! .prettierignore: socom's marked block is malformed — LEFT "
+              f"UNTOUCHED. Your format check may go red on socom's generated "
+              f"files. Delete the marked block by hand and re-run `socom adopt`.",
+              file=sys.stderr)
+    elif p_res != "unchanged":
         print(f"  ✓ .prettierignore: {len(arts)} socom-generated path(s) "
               f"excluded — your format check stays green")
 
@@ -927,6 +997,26 @@ def cmd_adopt(args):
         print(f"  ✓ git hooks wired (core.hooksPath={HOOKS_DIR}) — local gates live")
     elif state == "foreign":
         prior = _git_hooks_path(root)
+        if not prior:
+            # The default-location case: core.hooksPath is unset, but the repo
+            # HAS hooks where git looks by default (lefthook, or hand-installed).
+            found = _default_hooks_present(root)
+            print(f"  ! hooks NOT wired — this repo already has git hooks in "
+                  f"the default location: {', '.join(found)}.\n"
+                  f"    Nothing was changed. core.hooksPath is unset, which "
+                  f"means 'use .git/hooks' — not 'no hooks'. Setting it would "
+                  f"silently STOP every one of those.\n"
+                  f"    Two ways forward:\n"
+                  f"      keep yours — do nothing. socom's gates still run in "
+                  f"CI, and `socom gate <name>` runs any of them by hand.\n"
+                  f"      switch     — git config core.hooksPath {HOOKS_DIR}\n"
+                  f"                   (`socom unadopt` unsets it again; your "
+                  f"hook files are never touched)",
+                  file=sys.stderr)
+            state, nxt = adoption_rung(root)
+            print(f"  {adoption_bar(state)}")
+            print(f"  rung: {state}\n  next: {nxt}")
+            return
         print(f"  ! hooks NOT wired — this repo already routes git hooks to "
               f"{prior!r}.\n"
               f"    Nothing was changed. Repointing it would not fail your "
@@ -968,6 +1058,23 @@ def cmd_unadopt(args):
         print(f"socom unadopt: no pre-adopt core.hooksPath on record — socom "
               f"never wired this repo (or a previous unadopt already ran). "
               f"core.hooksPath is {cur or '<unset>'}; left as-is.")
+    elif cur != HOOKS_DIR:
+        # The record says what the repo had BEFORE adopt; it does not say what
+        # the repo has NOW. If hooks no longer point at socom, someone moved
+        # them after adopting, and restoring blind would silently disable THAT
+        # — the exact clobber this command exists to undo, performed by the undo.
+        # Verified: adopt, then `git config core.hooksPath .husky`, then unadopt
+        # unset husky and reported "it was unset before adopt" as if current.
+        print(f"socom unadopt: core.hooksPath is {cur or '<unset>'}, which is "
+              f"not socom's ({HOOKS_DIR}) — it was changed after adopt. "
+              f"Refusing to overwrite it; that would be the same silent clobber "
+              f"unadopt exists to undo.\n"
+              f"  socom recorded {prior or '<unset>'} as the pre-adopt value. "
+              f"If you really want it back:\n"
+              f"    " + (f"git config --local core.hooksPath {prior}" if prior
+                         else "git config --local --unset core.hooksPath") + "\n"
+              f"  To drop socom's record: git config --unset {HOOKS_PRIOR_KEY}")
+        return
     elif prior == "":
         subprocess.run(["git", "config", "--unset", "core.hooksPath"],
                        cwd=root, capture_output=True)

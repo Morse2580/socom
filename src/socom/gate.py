@@ -75,7 +75,12 @@ def run_check(cmd: str, root: Path) -> int:
 # the published standard permits.
 COMMIT_TYPES = ("build", "chore", "ci", "docs", "feat", "fix", "perf",
                 "refactor", "revert", "style", "test", "wip")
-COMMIT_RX = re.compile(r"^(?:" + "|".join(COMMIT_TYPES) + r")(?:\([^()]+\))?!?: .+")
+# `: .*\S` — colon, space, and at least one NON-SPACE somewhere after it. The
+# previous `: .+` accepted an all-whitespace description, so `feat:    ` passed
+# a gate whose own error message had just told the developer "the description
+# must be non-empty". A rule the gate states and does not enforce is worse than
+# an unstated one: it teaches the wrong contract.
+COMMIT_RX = re.compile(r"^(?:" + "|".join(COMMIT_TYPES) + r")(?:\([^()]+\))?!?: .*\S")
 
 # Autosquash subjects: `git commit --fixup=<sha>` writes `fixup! <subject>`.
 # The prefix is STRIPPED and the remainder still validated, so a real autosquash
