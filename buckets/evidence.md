@@ -53,6 +53,28 @@ nothing in `build.md` can move it. Only rows here can.
 
   **Files:** `PILOT.md` (the instrument), `bench/`.
 
+  ⚠️ **AMENDED 2026-08-04: `n=5` is not what the root gate authorized, and the
+  inflation is why this row keeps not running.** The gate (quoted in
+  [`0001`](../decisions/0001-exposure-before-capability.md):19-20) permitted
+  *"run the adoption experiment on socom **as it stands**, **one non-author
+  engineer**, observed."* **One.** The "five" comes from §14.4 — *"Ship R1 alone,
+  put it in front of five people"* — i.e. five **after R1 ships**. This row fused
+  the two and kept the expensive half of each: five people AND socom as it
+  stands. Nobody decided that; it is an artifact of merging two quotes.
+  Compounding it, `n=5` is the **usability-testing** convention for surfacing
+  *defects*. This row's headline metric is **voluntary second use**, an adoption
+  signal, where five is noise — "five people, zero second uses" is not the
+  "valid and complete result" claimed above, not at that n, for that metric.
+  **Run `n=1` now.** The stall point is the richest datum and does not need five;
+  the falsification asymmetry holds at one (a tool that defeats one motivated
+  engineer is not rescued by four more). What `n=1` cannot give is a confident
+  *yes* — which is not needed yet, and is what §14.4's five-after-R1 is for.
+  The four prohibitions (no demo · no favours · no doc fixes first · no agent
+  substitute) are each defensible and collectively made this heavy enough to
+  defer for three days while six commits of other work landed. **If a
+  measurement is hedged until it never runs, the hedging is the defect** — the
+  repo's own §Initiative Framing doctrine, pointed inward.
+
   ⚠️ **The instrument moved once, on 2026-08-03, and this is the disclosure.**
   `PILOT.md`'s "Is it safe?" section was amended by
   [[DEF-HOOKS-HIJACK-NO-UNADOPT-01]], which listed it in its own **Files** because
