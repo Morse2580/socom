@@ -66,9 +66,20 @@ RE-VERIFIED 2026-08-05 (sixth pass, at e642787 — the field run + 0004).
   UNCHANGED proof tier ...... D0 — after three P0 repairs, eleven field findings,
             one decision document and a protocol line. Six passes of this header
             now say the same thing: only the run moves it.
+
+REWRITTEN 2026-08-05 (seventh pass, at 099c45a — ONE NEW P0, found in the wild).
+  REWRITTEN defects ......... 7 DONE P0 / **1 READY P0** / 9 READY P1
+            DEF-HANDWRITTEN-CLAUDE-MD-WEDGES-THE-LADDER-01 — clear it FIRST
+  VERIFIED  decisions ....... 0001 + 0002 + 0003 + 0004 + **0005** (5 files)
+  VERIFIED  the wedge ....... REPRODUCED deterministically; `--force` clobber
+            measured ("Do not delete" -> 0 occurrences)
+  VERIFIED  suites .......... unit 348 / r1corpus 146 / gate full PASS
+  VERIFIED  public URL ...... 421735 bytes, 1bc70ac4f16c (no code since 2fd2b5d)
+  UNCHANGED EV row .......... EV-NONAUTHOR-EXPOSURE-01 READY P0, STILL UNRUN
+  UNCHANGED proof tier ...... D0
 -->
 
-# Next session — stop building. Run the n=1 exposure.
+# Next session — clear ONE P0, then run the n=1 exposure.
 
 **Row:** `EV-NONAUTHOR-EXPOSURE-01` (`buckets/evidence.md`), **READY P0**, `n=1`.
 **Governed by** `decisions/0001-exposure-before-capability.md`.
@@ -85,6 +96,46 @@ no MRs. Commit **directly to `main`**, push, watch with `gh run watch`.
 `python3 build.py`, commit both (`python3 build.py --check` is a CI gate).
 socom's own hooks are not wired in its checkout, so run `./bin/socom gate full`
 yourself before every push.
+
+## FIRST — clear the one open P0. It takes the morning, not the session.
+
+`DEF-HANDWRITTEN-CLAUDE-MD-WEDGES-THE-LADDER-01` **READY P0** (`buckets/defects.md`).
+**A repo that already has a hand-written `CLAUDE.md` can never leave `T1`, and
+socom's `next:` step is one it has already refused to allow.**
+
+- `write_generated` (`core.py:137`) refuses to overwrite a `CLAUDE.md` without a
+  `socom:generated` header — HR2 no-clobber, and correct.
+- `adoption_rung` (`lifecycle.py:927-929`) returns `T1 → run socom compile`
+  *because* that header is absent.
+- So `compile` refuses, the header never appears, the rung never advances, and
+  the instruction repeats forever.
+
+**FOUND IN THE WILD** on `aaif-goose/goose`, build `1bc70ac4f16c`, `PILOT.md`
+followed verbatim: the operator ran `compile` **four times** and `adopt` once for
+byte-identical output, and typed `socom compie` twice in between. **A recorded
+stall point, produced by the author, on his own tool.**
+
+⚠️ **The population is socom's OWN.** A repo has a `CLAUDE.md` because it uses
+Claude Code, and `PILOT.md` says *"SOCOM is built for Claude Code."* Every repo
+tested earlier that day lacked one, which is the only reason this went unseen.
+**A participant on any agent-driven repo meets it inside 60 seconds.**
+
+⚠️ **The only exit socom offers is the clobber the refusal exists to prevent.**
+MEASURED: `compile --force` overwrote the hand-written file (`Do not delete` →
+**0 occurrences**) and the rung advanced. `doctor` separately calls the user's own
+file *"hand-written or tampered"*.
+
+**Falsifiable acceptance:** on a repo with a hand-written `CLAUDE.md`, socom
+either advances past `T1` without touching that file, or says plainly that it will
+not advance and why — and **never prints a `next:` step it has already refused in
+the same run**. `--force` stays available and stays destructive; it must stop
+being the only exit. Reproduce in 30 seconds: `git init`, write a `CLAUDE.md` by
+hand, `socom quickstart`, then `socom compile` twice.
+
+⚠️ **This is rule 2, not rule 3.** `PILOT.md` asks *"did a metric mislead you?"* —
+not *"did the tool hand you an instruction it refuses to let you complete?"*
+Fixing it deletes no finding. **Fix it, verify it, then run the exposure the same
+week — not fix it and call that the session.**
 
 ## The one thing this session is for
 
@@ -389,6 +440,9 @@ informing it — and it needs no code change, only that line.
   `DEF-STATUS-CLAIMS-UNLABELLED-01` is P1 **on purpose** — `PILOT.md` asks *"did
   a metric mislead you?"*, so repairing it first deletes a finding the
   participant is meant to generate (`0001` §Amendment 1 rule 3).
+- **Do not let the P0 above become the session.** It is a morning. If it grows
+  past that, ship the smallest honest version — socom must not print a `next:`
+  step it just refused — and go and find the engineer.
 - **Do not build any capability.** Everything except R1 reads BLOCKED.
 - **Do not build R1 either**, unless the exposure has happened. If you do, ship
   it **standalone** — own binary, zero adoption, zero git-config writes, no
@@ -453,8 +507,8 @@ addresses, tool quality is irrelevant and that is worth knowing before R1.
 
 | Thing | State |
 |---|---|
-| socom `main` | state below re-verified at `e642787` (the three P0 repairs + their evidence, CI `success`); the closeout commit that lands this prompt sits on top of it. `git log --oneline -3` and re-probe rather than trusting either SHA. Clean, pushed, CI green. |
-| Buckets | `defects.md` **7 DONE P0 + 0 READY P0** + **9** READY P1 · `build.md` 1 READY (R1) + **8** BLOCKED · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** |
+| socom `main` | state below re-verified at `099c45a` (the three P0 repairs + their evidence, CI `success`); the closeout commit that lands this prompt sits on top of it. `git log --oneline -3` and re-probe rather than trusting either SHA. Clean, pushed, CI green. |
+| Buckets | `defects.md` **7 DONE P0 + 1 READY P0** (the CLAUDE.md wedge — clear it first) + **9** READY P1 · `build.md` 1 READY (R1) + **8** BLOCKED · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** |
 | Proof tier | **D0 — ASSUMED**, unchanged since 2026-08-01 |
 | Suite | `unit: 348 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean |
 | Exposure prep | `bench/exposure/{README,TEMPLATE}.md` landed; URL preflighted at **421735** bytes, build **`1bc70ac4f16c`**; sheet has a build-under-test row fed by `socom version` |
