@@ -144,11 +144,65 @@ running when socom is not.**
 | B | fail closed when unresolvable | blocks `git commit` on a missing tool; users `--no-verify` permanently | **very high** | easy to revert, impossible to un-teach | **Rejected** — inverts `psychological-acceptability` |
 | C | detector inside socom only | fires only when socom runs — i.e. never in the failing state | none | trivial | **Rejected — MEASURED dead** (run C) |
 | D | shell-side trace + socom-side reconcile | a bad shell line breaks every commit in every adopted repo | **high at U1**, low elsewhere | fully reversible | **Chosen**, with U1 bound |
+| E | sequenced records — a gap is a positive signal | a format contract on durable records, cut at D0; migration of existing records | medium, but **one-way** on the record format | hard — records already written cannot be retro-sequenced | **OPTION, not chosen** — see below; D1 cap binds |
 
 **Future-session blast radius:** already-adopted repos keep their old hook
 scripts until re-adopted. A later session reading "the trace is recorded" will be
 wrong for every repo adopted before this lands. That is the contagion row below,
 and it is the part most likely to be dropped.
+
+#### Candidate E — sequenced records (OPTION, recorded 2026-08-05, not chosen)
+
+**The idea:** give every append-only record class a monotonic sequence (or a hash
+chain to its predecessor) so that a **missing** record is a positive signal rather
+than an absence.
+
+**Why it is not a restatement of D.** D records the breach on the **writer**
+side — and `log_breach` (`core.py:94`) writes `.socom/gates/breaches.log`, a
+**local** file. The party that needs to know is a different session on a different
+machine, which never sees it. E is the only candidate here that acts on the
+**reader** side, which is the half a local log structurally cannot reach.
+
+**The failure it targets, stated precisely.** A hash detects **modification**. It
+cannot detect **omission** — there is nothing to hash. `tests/ledgercheck.py` has
+the same blind spot by construction: it validates the shape of every row present
+and is incapable of noticing a row that is not. Same for `bb_fetch`, which fails
+OPEN, so *"no leases held"* and *"I could not fetch"* are the same value. A
+sequence converts "I got nothing" into "I got a gap between 7 and 9" — a
+**detectable** breach, which is `compromise-recording` (`canon/residuality.xml:95-99`)
+doing its job instead of being violated.
+
+**Precedent, in-repo.** socom already runs the *modification* half of this idea and
+it works: `canonical_hash()` (`core.py:111`) hashes the canon + `socom.yaml`, the
+compiled view carries `source=<hash>`, and `gate session-start` / `precond`
+recompute and compare (`gate.py:216`, `lifecycle.py:784`) — emitting
+`P0 DRIFT — compiled views stale`. The pattern is proven here. It is simply not
+generalized to the ledger, the blackboard shards, or findings, and the canon case
+is the easy one: **both sides are local**, so nothing has to survive a remote.
+
+**Precedent, outside.** Two independent standards bodies converged on sequence as
+the omission-detector: SCITT's ledger is a linear, irrevocable statement sequence,
+and TUF §5.4.3.1 requires the timestamp version to strictly increase. Per
+`decisions/0003` **neither is adopted** and neither should be cited as a reason to
+build — but the convergence is evidence about the *shape*, which is worth having.
+
+**Why it stays an option and is not chosen.**
+- It is a **format contract on durable records** cut at proof tier **D0** — exactly
+  what the D1 cap in Step 0b exists to prevent. Candidate D is bounded by a U1
+  spike; E has had no spike at all.
+- It is the **least reversible** candidate in the table. Records already written
+  cannot be retro-sequenced, so a wrong sequence design is inherited permanently by
+  every record that follows it.
+- It solves a defect (`DEF-BLACKBOARD-GRANTS-ON-UNREACHABLE-REMOTE-01`) whose own
+  verification needs **two concurrent sessions**, which have never been run.
+
+**What the spike must now weigh.** The Step 0b spike question was sharpened on
+2026-08-05 to: *can the writer half ship alone, or does a durable `published` flag
+force the reader-side join immediately?* E supplies a second answer to that
+question — if the reader-side join is forced anyway, a sequence may be **cheaper
+and more honest** than a provisional-flag patch, because it fixes detection rather
+than annotating it. Weigh D-with-flag against E on that axis. **Do not build
+either before U1.**
 
 ---
 
