@@ -14,8 +14,10 @@ Commands:
   claim    claim PATHS before you touch them: returns every outstanding
            finding on them, any finding later RETRACTED as untrue, who else
            holds them, and a lease with a TTL. --scan lists live leases. A
-           socom.yaml domain name expands to its paths (R2)
-  release  release a lease (<path|lease-id> or --all)
+           socom.yaml domain name expands to its paths (R2). LOCAL until
+           socom.yaml `blackboard.sync: true` opts into sharing it on a remote
+  release  release a lease (<path|lease-id> or --all). RED, never a quiet 0,
+           if a matching lease is live but held by another session
   attest   record a finding against an artifact, incl. "this is broken" —
            delivered to whoever claims that artifact next, even tomorrow
   findings read outstanding + retracted findings for an artifact (read-only)
@@ -82,7 +84,8 @@ Commands:
            core.hooksPath the repo already set — it refuses and says so
   unadopt  the repo-level exit: restore core.hooksPath to its pre-adopt value
            (or unset), drop socom's local git config. Leaves planted files —
-           it lists them rather than deleting anything
+           it lists them rather than deleting anything. DURABLE: it records the
+           exit, no later heal re-wires hooks, and only `adopt` takes it back
   install  symlink this checkout onto PATH (~/.local/bin) so `socom` just works
   uninstall remove the socom symlink (only if it points at this checkout).
            Machine-level only — run `unadopt` in each adopted repo first
@@ -338,12 +341,38 @@ def bb_sanitize(value, cap: int = BB_FIELD_CAP) -> str:
     return text[:cap]
 
 
-def bb_author() -> str:
-    """Stable per-session identity — and the shard FILENAME, which is the whole
-    concurrency design: one writer per file means no session ever writes
-    another's, so the union of shards is always well-defined and there is no
-    merge strategy to get wrong."""
-    raw = os.environ.get("SOCOM_SESSION") or f"{socket.gethostname()}-{os.getppid()}"
+def bb_author(root: Path | None = None) -> str:
+    """Stable identity — and the shard FILENAME, which is the whole concurrency
+    design: one writer per file means no session ever writes another's, so the
+    union of shards is always well-defined and there is no merge strategy to get
+    wrong.
+
+    The unit is the WORKING TREE, derived and never stored. It was
+    `hostname-<ppid>` until 2026-08-05, and that silently broke `release`
+    (DEF-RELEASE-NEVER-RELEASES-01): every one-shot invocation gets a fresh
+    parent shell, so the session that claimed a path was already a different
+    author by the time it tried to release it — `release` reported "no live lease
+    held by this session", exited 0, and leaked the lease for the full TTL. One
+    shell per command is exactly how an agent runtime drives this tool, so the
+    common case was the broken one. Identity that changes between two commands
+    the user experiences as one session is not identity.
+
+    A tree is also the boundary a lease is actually ABOUT: clones, worktrees and
+    machines stay distinct, while two agents inside ONE checkout share the files
+    themselves and would clobber each other on disk whatever the blackboard said.
+    ⚠️ The residue is real and deliberate — two sessions in one tree now share an
+    author and will not conflict with each other. Set `SOCOM_SESSION` to split
+    them apart; `release` fails loudly rather than silently when the identity
+    does not match, which is what keeps the residue recoverable.
+
+    Derived, not persisted: no state file to seed, reap, gitignore or lose."""
+    raw = os.environ.get("SOCOM_SESSION")
+    if not raw:
+        tree = (root or repo_root()).resolve()
+        # The digest goes BEFORE the human-readable tail so the 64-char cap can
+        # only ever eat the part that is decoration.
+        digest = hashlib.sha256(str(tree).encode()).hexdigest()[:8]
+        raw = f"{socket.gethostname()}-{digest}-{tree.name}"
     safe = "".join(c if (c.isalnum() or c in "-_.") else "-" for c in raw)
     return safe[:64] or "anonymous"
 
@@ -549,11 +578,24 @@ def bb_read_local(root: Path, kind: str) -> list:
 # ── git sync ─────────────────────────────────────────────────────────────
 
 def bb_cfg(cfg: dict) -> dict:
+    """⚠️ `sync` defaults to FALSE — publishing to a remote is OPT-IN.
+
+    It defaulted to true until 2026-08-05, and `claim` — a local bookkeeping act,
+    on the first-run path in PILOT.md — therefore pushed `refs/socom/blackboard`
+    to the ADOPTED REPO'S OWN origin, unprompted (DEF-CLAIM-PUSHES-TO-HOST-REMOTE-01).
+    Writing to a remote a stranger shares with colleagues is not a default any
+    tool gets to take; it only ever failed where the user lacked push rights.
+    Sharing the surface over git is still the design — `blackboard.sync: true`
+    in socom.yaml is how you say so, and `remote:` says where.
+
+    `sync_declared` keeps "off because you said so" distinguishable from "off
+    because nobody asked", so the two get different messages."""
     bb = (cfg or {}).get("blackboard") or {}
     return {"ref": bb.get("ref", BB_REF),
             "remote": bb.get("remote", "origin"),
             "policy": bb.get("policy", "lease"),
-            "sync": bb.get("sync", True),
+            "sync": bool(bb.get("sync", False)),
+            "sync_declared": "sync" in bb,
             "ttl_s": int(bb.get("ttl_s", BB_TTL_S))}
 
 
@@ -614,21 +656,35 @@ def bb_push(root: Path, conf: dict, attempts: int = 3):
     `--no-verify` is deliberate: the commit contains only
     findings/<author>.jsonl and leases/<author>.jsonl, no source, so the host
     repo's code gates do not apply to it — the same posture as a claim marker
-    branch. `blackboard.sync: false` in socom.yaml turns publishing off
-    entirely for a repo that refuses direct ref writes.
+    branch.
 
-    Returns (ok, ref_used, detail)."""
+    ⚠️ Publishing is OPT-IN (`blackboard.sync: true`) and this function is the
+    ONE place that writes to someone else's remote — so it is also the one place
+    that has to SAY where, before it writes. See bb_cfg."""
     if not conf["sync"]:
-        return (False, None, "sync disabled (socom.yaml blackboard.sync)")
+        if conf.get("sync_declared"):
+            return (False, None, "sync disabled (socom.yaml blackboard.sync: false)")
+        return (False, None,
+                f"publishing is opt-in — the blackboard is local-only until "
+                f"`blackboard.sync: true` in socom.yaml says to share it on "
+                f"{conf['remote']!r}")
     # No remote is a NORMAL state, not a failure: a solo repo, a fresh clone, an
     # air-gapped box. It must degrade to a local-only blackboard in silence.
     # Shouting "the forge refused the namespace" at someone who simply has no
     # origin is a scary first run, and the first run is the only moment adoption
     # is ever won or lost.
-    if subprocess.run(["git", "remote", "get-url", conf["remote"]], cwd=root,
-                      capture_output=True, text=True).returncode != 0:
+    url = subprocess.run(["git", "remote", "get-url", conf["remote"]], cwd=root,
+                         capture_output=True, text=True)
+    if url.returncode != 0:
         return (False, None, f"no git remote {conf['remote']!r} — blackboard is local-only")
-    author = bb_author()
+    # Named BEFORE the write, not after. The opt-in is a config line someone set
+    # once, possibly on a different day than the push that acts on it; "socom is
+    # about to write to the remote your colleagues share" is only useful at the
+    # moment it is true. stderr, so it never contaminates --json.
+    print(f"socom blackboard: publishing to {conf['remote']} "
+          f"({url.stdout.strip()}) as {conf['ref']} "
+          f"— blackboard.sync is on in socom.yaml", file=sys.stderr)
+    author = bb_author(root)
     shards = [(k, bb_shard(root, k, author)) for k in BB_KINDS]
     shards = [(k, p) for k, p in shards if p.exists()]
     if not shards:
@@ -721,7 +777,7 @@ def bb_do_claim(root: Path, conf: dict, paths, intent: str, sync: bool = True) -
     paths = [bb_norm(p) for p in paths if bb_norm(p)][:BB_MAX_PATHS]
     if not paths:
         return {"ok": False, "error": "no paths given"}
-    author, ts = bb_author(), _now_iso()
+    author, ts = bb_author(root), _now_iso()
     snap = bb_snapshot(root, conf, sync)
     held = bb_conflicts(paths, bb_live_leases(snap[BB_LEASES]), author, conf["policy"])
     findings = bb_findings_for(bb_open_findings(snap[BB_FINDINGS]), paths)
@@ -752,7 +808,7 @@ def bb_do_attest(root: Path, conf: dict, artifact: str, claim: str,
     artifact, claim = bb_norm(artifact), bb_sanitize(claim)
     if not artifact or not claim:
         return {"ok": False, "error": "attest needs both an artifact and a claim"}
-    author, ts = bb_author(), _now_iso()
+    author, ts = bb_author(root), _now_iso()
     evidence = bb_sanitize(evidence)
     # `tier` is derived, never self-declared: an agent asserting its own claim
     # is verified is the self-assessment that arXiv 2310.01798 (ICLR 2024) shows
@@ -804,7 +860,7 @@ def bb_do_resolve(root: Path, conf: dict, finding_id: str, note: str = "",
         return {"ok": False,
                 "error": f"no finding {finding_id!r} on this blackboard — nothing "
                          f"was resolved. Run `socom findings` for the live ids."}
-    author, ts = bb_author(), _now_iso()
+    author, ts = bb_author(root), _now_iso()
     rec = {"kind": "resolve", "author": author, "ts": ts, "verdict": verdict,
            "ref": finding_id, "note": bb_sanitize(note, 512)}
     rec["id"] = bb_id("resolve", author, ts, finding_id)
@@ -819,17 +875,47 @@ def bb_do_resolve(root: Path, conf: dict, finding_id: str, note: str = "",
 
 def bb_do_release(root: Path, conf: dict, target: str = "", all_: bool = False,
                   sync: bool = True) -> dict:
-    author, ts = bb_author(), _now_iso()
-    mine = [l for l in bb_live_leases(bb_snapshot(root, conf, sync)[BB_LEASES])
-            if l.get("author") == author]
-    if not all_:
-        if not target:
-            return {"ok": False, "error": "release needs a path/lease id, or --all"}
-        mine = [l for l in mine
-                if l.get("id") == target
-                or any(bb_overlap(target, p) for p in l.get("paths", []))]
+    """Retire this session's leases — and NEVER report success while the surface
+    still holds a lease the caller asked to release.
+
+    The old shape filtered to `author == mine` FIRST and then said "no live lease
+    held by this session" with ok:True for everything that fell out, so a lease
+    written under a drifted identity produced a confident exit 0 while
+    `claim --scan` went on listing it (DEF-RELEASE-NEVER-RELEASES-01). The
+    identity drift behind that is fixed in bb_author; the reporting was the worse
+    half and is fixed on its own terms, because an identity scheme can always be
+    wrong again and a false confirmation is unrecoverable. Matching happens
+    first, and a match this session cannot retire is an ERROR naming the holder —
+    never a silent no-op wearing the shape of success. Only "nothing on the board
+    matches" is ok:True with an empty release, and there `--scan` agrees."""
+    author, ts = bb_author(root), _now_iso()
+    if not all_ and not target:
+        return {"ok": False, "error": "release needs a path/lease id, or --all"}
+    live = bb_live_leases(bb_snapshot(root, conf, sync)[BB_LEASES])
+    matched = [l for l in live
+               if all_
+               or l.get("id") == target
+               or any(bb_overlap(target, p) for p in l.get("paths", []))]
+    mine = [l for l in matched if l.get("author") == author]
     if not mine:
-        return {"ok": True, "released": [], "note": "no live lease held by this session"}
+        others = [l for l in matched if l.get("author") != author]
+        if others:
+            holders = sorted({str(l.get("author")) for l in others})
+            return {"ok": False, "author": author,
+                    "holders": [{"author": l.get("author"), "id": l.get("id"),
+                                 "paths": l.get("paths", []), "ts": l.get("ts")}
+                                for l in others],
+                    "error": (f"{len(others)} live lease(s) match "
+                              f"{target or '--all'} and this session ({author}) "
+                              f"holds none of them — held by {', '.join(holders)}. "
+                              f"Nothing was changed: a session releases only its "
+                              f"own shard. If one of those is you under another "
+                              f"identity, re-run as `SOCOM_SESSION=<author> socom "
+                              f"release …`; otherwise ask the holder or wait out "
+                              f"the TTL.")}
+        return {"ok": True, "released": [], "author": author,
+                "note": f"no live lease on this blackboard matches "
+                        f"{target or '--all'} — nothing to release"}
     for lease in mine:
         rec = {"kind": "release", "author": author, "ts": ts, "ref": lease.get("id")}
         rec["id"] = bb_id("release", author, ts, str(lease.get("id")))
@@ -845,7 +931,7 @@ def bb_do_release(root: Path, conf: dict, target: str = "", all_: bool = False,
 
 def bb_live_for_session(root: Path, conf: dict, sync: bool = False) -> list:
     """Live leases held by THIS session — what session-end asks about."""
-    author = bb_author()
+    author = bb_author(root)
     return [l for l in bb_live_leases(bb_snapshot(root, conf, sync)[BB_LEASES])
             if l.get("author") == author]
 
@@ -927,7 +1013,7 @@ def cmd_claim(args):
         if _bb_emit({"leases": leases}, as_json):
             return
         for l in leases:
-            mine = " (this session)" if l.get("author") == bb_author() else ""
+            mine = " (this session)" if l.get("author") == bb_author(root) else ""
             print(f"  {l.get('author')}{mine}: {' '.join(l.get('paths', []))} "
                   f"— {l.get('intent', '')} [{l.get('id')}]")
         print(f"socom claim: {len(leases)} live lease(s)")
@@ -980,9 +1066,13 @@ def cmd_release(args):
     if _bb_emit(out, as_json):
         return
     if not out.get("ok"):
+        # Non-zero, and it names who holds what. Exiting 0 here is the defect.
+        for h in out.get("holders", []):
+            print(f"socom release: HELD by {h['author']} since {h['ts']} "
+                  f"({' '.join(h.get('paths', []))}) [{h['id']}]", file=sys.stderr)
         sys.exit(f"socom release: {out.get('error')}")
     if not out["released"]:
-        print("socom release: no live lease held by this session")
+        print(f"socom release: {out.get('note')}")
         return
     print(f"socom release: released {len(out['released'])} lease(s) "
           f"({' '.join(out.get('paths', []))})")
@@ -3563,10 +3653,15 @@ def cmd_init(args):
             domains:                 # a NAME for a set of paths — claims are
               core: "src/**"         # per-PATH; EDIT so `socom claim core` covers
                                      # what you mean. Also lesson granularity.
-            blackboard:              # findings + path leases, shared over git
+            blackboard:              # findings + path leases, local by default
               ref: refs/socom/blackboard   # a directly-pushed ref, NOT an MR —
               remote: origin               # a finding must arrive at claim time
-              sync: true             # false = local-only, never pushes
+              sync: false            # ⚠️ OPT-IN. true = socom PUSHES the ref
+                                     # above to the remote above — YOUR repo's
+                                     # origin, which your colleagues share.
+                                     # Turn it on when you want the surface
+                                     # shared across clones; leave it off and
+                                     # the blackboard is a local notebook.
               policy: lease          # the conflict-policy seam
               ttl_s: 28800           # 8h; a dead session never wedges a path
             checks:                  # bind to commands that really run here
@@ -3884,6 +3979,17 @@ def _git_hooks_path(root: Path) -> str:
 # live beside the single writer so "what adopt did to your config" has one home.
 HOOKS_PRIOR_KEY = "socom.priorhookspath"
 
+# The durable record that the operator LEFT — the other half of `unadopt`.
+# unadopt restored core.hooksPath and then erased every trace of itself, so the
+# next `precond` read an unwired repo, could not tell "never adopted" from
+# "adopted and left", called it drift, healed it, and scored the reversal as
+# `1 healed` under a PASS verdict without ever printing the word "adopt"
+# (DEF-PRECOND-SILENTLY-REVERSES-UNADOPT-01). An exit that a later command
+# silently undoes is not an exit — and it is worse than shipping no exit at all,
+# because the user believes they left. Set by unadopt, honoured by the single
+# hook-wiring writer, and cleared by exactly one thing: an explicit `socom adopt`.
+HOOKS_OPTOUT_KEY = "socom.unadopted"
+
 
 def _git_config_get(root: Path, key: str, local: bool = False):
     """The configured value for `key`, or None if the key is UNSET. Distinct
@@ -3945,15 +4051,25 @@ def _wire_hooks(root: Path) -> str:
     Returns the outcome, which the caller MUST report — the three cases are not
     interchangeable and collapsing them to a bool is what let the destructive
     one go unnoticed:
-      'wired'   — the repo's hooks are socom's (idempotent no-op if already)
-      'foreign' — the repo already routes hooks elsewhere; NOTHING was changed
-      'nogit'   — not a git repo, nothing to wire (CI re-asserts regardless)
+      'wired'     — the repo's hooks are socom's (idempotent no-op if already)
+      'foreign'   — the repo already routes hooks elsewhere; NOTHING was changed
+      'unadopted' — the operator ran `unadopt`; NOTHING was changed, and only an
+                    explicit `adopt` clears that record
+      'nogit'     — not a git repo, nothing to wire (CI re-asserts regardless)
 
     Why 'foreign' refuses rather than overwrites: a repo on husky has its
     lint-staged, its commit-msg validator and its secret scanner behind
     core.hooksPath. Repointing it does not make those gates fail — it makes them
     silently PASS, which is the one failure mode a gate must never have. socom
-    declines and says so; the adopter can switch deliberately with one command."""
+    declines and says so; the adopter can switch deliberately with one command.
+
+    Why 'unadopted' refuses: an unset core.hooksPath is ambiguous — it is both
+    "socom was never here" and "socom was here and I asked it to leave". Healing
+    on that ambiguity is how the documented exit got silently reversed. The
+    record disambiguates it, and it is checked HERE, at the single writer, so no
+    caller can heal around it (§least-common-mechanism)."""
+    if _git_config_get(root, HOOKS_OPTOUT_KEY) is not None:
+        return "unadopted"
     cur = _git_hooks_path(root)
     if cur == HOOKS_DIR:
         _record_binpath(root)
@@ -4171,7 +4287,16 @@ def cmd_doctor(args):
             problems.append(f"socom.yaml checks.{k} is unbound (placeholder)")
 
     try:
-        if _git_hooks_path(root) != HOOKS_DIR:
+        left = _git_config_get(root, HOOKS_OPTOUT_KEY)
+        if _git_hooks_path(root) == HOOKS_DIR:
+            pass
+        elif left is not None:
+            # Not a finding. The operator unadopted this repo on purpose, and
+            # reporting their own decision back as a defect is how a tool talks
+            # someone into re-adopting it. State it; do not fail on it.
+            print(f"socom doctor — INFO: unadopted on {left or 'an unrecorded date'}"
+                  f" — hooks intentionally unwired; `socom adopt` re-arms them")
+        else:
             problems.append(f"git core.hooksPath not set to {HOOKS_DIR} — gates not wired")
     except FileNotFoundError:
         problems.append("git not available")
@@ -4221,6 +4346,10 @@ def cmd_precond(args):
     cfg = load_cfg(root)
     rows = []  # (mark, text) ; mark in ✓ ~ ! ✗
     blocks = warns = healed = 0
+    # Heals that write the HOST REPO'S OWN config are counted apart from heals
+    # that only touch socom's own dirs. They are not the same act, and collapsing
+    # them is what let a git-config write land inside `PASS … 0 warning(s)`.
+    cfg_heals = 0
 
     # 1. Substrate dirs — heal-on: mkdir; heal-off: block (work writes will fail).
     missing = [d for d in SUBSTRATE_DIRS
@@ -4254,7 +4383,19 @@ def cmd_precond(args):
         state = _wire_hooks(root)
         if state == "wired":
             healed += 1
-            rows.append(("~", f"healed: git config core.hooksPath {HOOKS_DIR}"))
+            cfg_heals += 1
+            warns += 1   # a write to the host's git config is never a quiet PASS
+            rows.append(("~", f"healed: WROTE YOUR GIT CONFIG — core.hooksPath="
+                              f"{HOOKS_DIR} (reverse it with `socom unadopt`, "
+                              f"which precond now honours durably)"))
+        elif state == "unadopted":
+            warns += 1
+            rows.append(("!", f"WARN: this repo was UNADOPTED on "
+                              f"{_git_config_get(root, HOOKS_OPTOUT_KEY) or 'an unrecorded date'}"
+                              f" — hooks left unwired and precond will not re-arm "
+                              f"them. `socom adopt` is the way back in, and the only "
+                              f"thing that clears the record. CI re-asserts every "
+                              f"gate meanwhile."))
         elif state == "foreign":
             warns += 1
             rows.append(("!", f"WARN: core.hooksPath is {_git_hooks_path(root)!r}, "
@@ -4297,7 +4438,7 @@ def cmd_precond(args):
             rows.append(("✓", f"paths claimed by you: {mine}"))
         else:
             warns += 1
-            rows.append(("!", f"WARN: no paths claimed by you ({bb_author()}) — "
+            rows.append(("!", f"WARN: no paths claimed by you ({bb_author(root)}) — "
                               "parallel seats need a claim, and claiming is how "
                               "you receive the findings on what you are about to "
                               "touch (R2)"))
@@ -4308,7 +4449,8 @@ def cmd_precond(args):
     for mark, text in rows:
         print(f"  {mark} {text}")
     verdict = "RED" if blocks else "PASS"
-    extra = f", {healed} healed" if healed else ""
+    extra = (f", {healed} healed" if healed else "") + \
+            (f" ({cfg_heals} WROTE GIT CONFIG)" if cfg_heals else "")
     print(f"-> {verdict} ({ms}ms): {blocks} blocker(s), {warns} warning(s){extra}")
     if blocks:
         sys.exit(1)
@@ -4492,6 +4634,16 @@ def cmd_adopt(args):
     # After compile, because the artifact set adopt must declare to the host's
     # tools is only complete once the adapters are rendered.
     _wire_ignores(root)
+    # `adopt` is the explicit re-entry, and the ONLY thing that clears the exit
+    # record. That asymmetry — one command sets it, one command clears it, every
+    # other command honours it — is the whole of what makes `unadopt` durable.
+    left = _git_config_get(root, HOOKS_OPTOUT_KEY)
+    if left is not None:
+        subprocess.run(["git", "config", "--unset", HOOKS_OPTOUT_KEY],
+                       cwd=root, capture_output=True)
+        print(f"  · re-adopting: you unadopted this repo on "
+              f"{left or 'an unrecorded date'} — that record is now cleared and "
+              f"socom may wire hooks again")
     state = _wire_hooks(root)
     if state == "wired":
         print(f"  ✓ git hooks wired (core.hooksPath={HOOKS_DIR}) — local gates live")
@@ -4589,6 +4741,15 @@ def cmd_unadopt(args):
                        cwd=root, capture_output=True)
         subprocess.run(["git", "config", "--unset", "socom.binpath"],
                        cwd=root, capture_output=True)
+
+    # Record the exit DURABLY, and do it on every path that got this far — the
+    # "socom never wired this" branch included, because the operator asked to
+    # leave either way and the next `precond` must not read the result as drift.
+    # Erasing every trace of itself is what made unadopt reversible-by-accident.
+    subprocess.run(["git", "config", "--local", HOOKS_OPTOUT_KEY, _now_iso()],
+                   cwd=root, capture_output=True)
+    print(f"  ✓ exit recorded ({HOOKS_OPTOUT_KEY}) — no socom command re-wires "
+          f"hooks from here; `socom adopt` is the only way back in")
 
     # Read back rather than assert — the restore is the whole product of this
     # command, so it states what git now reports, not what it just tried to set.

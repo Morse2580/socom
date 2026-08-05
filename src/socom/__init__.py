@@ -13,8 +13,10 @@ Commands:
   claim    claim PATHS before you touch them: returns every outstanding
            finding on them, any finding later RETRACTED as untrue, who else
            holds them, and a lease with a TTL. --scan lists live leases. A
-           socom.yaml domain name expands to its paths (R2)
-  release  release a lease (<path|lease-id> or --all)
+           socom.yaml domain name expands to its paths (R2). LOCAL until
+           socom.yaml `blackboard.sync: true` opts into sharing it on a remote
+  release  release a lease (<path|lease-id> or --all). RED, never a quiet 0,
+           if a matching lease is live but held by another session
   attest   record a finding against an artifact, incl. "this is broken" —
            delivered to whoever claims that artifact next, even tomorrow
   findings read outstanding + retracted findings for an artifact (read-only)
@@ -81,7 +83,8 @@ Commands:
            core.hooksPath the repo already set — it refuses and says so
   unadopt  the repo-level exit: restore core.hooksPath to its pre-adopt value
            (or unset), drop socom's local git config. Leaves planted files —
-           it lists them rather than deleting anything
+           it lists them rather than deleting anything. DURABLE: it records the
+           exit, no later heal re-wires hooks, and only `adopt` takes it back
   install  symlink this checkout onto PATH (~/.local/bin) so `socom` just works
   uninstall remove the socom symlink (only if it points at this checkout).
            Machine-level only — run `unadopt` in each adopted repo first

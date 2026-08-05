@@ -12,7 +12,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 from socom.blackboard import bb_author, bb_cfg, bb_live_for_session
-from socom.core import CANON_FILES, HOOKS_DIR, SOCOM_DIR, SOCOM_VERSION, canonical_hash, load_cfg, md_text, parse_canon, repo_root, resource, write_generated
+from socom.core import CANON_FILES, HOOKS_DIR, SOCOM_DIR, SOCOM_VERSION, _now_iso, canonical_hash, load_cfg, md_text, parse_canon, repo_root, resource, write_generated
 
 # === BODY ===
 
@@ -63,10 +63,15 @@ def cmd_init(args):
             domains:                 # a NAME for a set of paths — claims are
               core: "src/**"         # per-PATH; EDIT so `socom claim core` covers
                                      # what you mean. Also lesson granularity.
-            blackboard:              # findings + path leases, shared over git
+            blackboard:              # findings + path leases, local by default
               ref: refs/socom/blackboard   # a directly-pushed ref, NOT an MR —
               remote: origin               # a finding must arrive at claim time
-              sync: true             # false = local-only, never pushes
+              sync: false            # ⚠️ OPT-IN. true = socom PUSHES the ref
+                                     # above to the remote above — YOUR repo's
+                                     # origin, which your colleagues share.
+                                     # Turn it on when you want the surface
+                                     # shared across clones; leave it off and
+                                     # the blackboard is a local notebook.
               policy: lease          # the conflict-policy seam
               ttl_s: 28800           # 8h; a dead session never wedges a path
             checks:                  # bind to commands that really run here
@@ -384,6 +389,17 @@ def _git_hooks_path(root: Path) -> str:
 # live beside the single writer so "what adopt did to your config" has one home.
 HOOKS_PRIOR_KEY = "socom.priorhookspath"
 
+# The durable record that the operator LEFT — the other half of `unadopt`.
+# unadopt restored core.hooksPath and then erased every trace of itself, so the
+# next `precond` read an unwired repo, could not tell "never adopted" from
+# "adopted and left", called it drift, healed it, and scored the reversal as
+# `1 healed` under a PASS verdict without ever printing the word "adopt"
+# (DEF-PRECOND-SILENTLY-REVERSES-UNADOPT-01). An exit that a later command
+# silently undoes is not an exit — and it is worse than shipping no exit at all,
+# because the user believes they left. Set by unadopt, honoured by the single
+# hook-wiring writer, and cleared by exactly one thing: an explicit `socom adopt`.
+HOOKS_OPTOUT_KEY = "socom.unadopted"
+
 
 def _git_config_get(root: Path, key: str, local: bool = False):
     """The configured value for `key`, or None if the key is UNSET. Distinct
@@ -445,15 +461,25 @@ def _wire_hooks(root: Path) -> str:
     Returns the outcome, which the caller MUST report — the three cases are not
     interchangeable and collapsing them to a bool is what let the destructive
     one go unnoticed:
-      'wired'   — the repo's hooks are socom's (idempotent no-op if already)
-      'foreign' — the repo already routes hooks elsewhere; NOTHING was changed
-      'nogit'   — not a git repo, nothing to wire (CI re-asserts regardless)
+      'wired'     — the repo's hooks are socom's (idempotent no-op if already)
+      'foreign'   — the repo already routes hooks elsewhere; NOTHING was changed
+      'unadopted' — the operator ran `unadopt`; NOTHING was changed, and only an
+                    explicit `adopt` clears that record
+      'nogit'     — not a git repo, nothing to wire (CI re-asserts regardless)
 
     Why 'foreign' refuses rather than overwrites: a repo on husky has its
     lint-staged, its commit-msg validator and its secret scanner behind
     core.hooksPath. Repointing it does not make those gates fail — it makes them
     silently PASS, which is the one failure mode a gate must never have. socom
-    declines and says so; the adopter can switch deliberately with one command."""
+    declines and says so; the adopter can switch deliberately with one command.
+
+    Why 'unadopted' refuses: an unset core.hooksPath is ambiguous — it is both
+    "socom was never here" and "socom was here and I asked it to leave". Healing
+    on that ambiguity is how the documented exit got silently reversed. The
+    record disambiguates it, and it is checked HERE, at the single writer, so no
+    caller can heal around it (§least-common-mechanism)."""
+    if _git_config_get(root, HOOKS_OPTOUT_KEY) is not None:
+        return "unadopted"
     cur = _git_hooks_path(root)
     if cur == HOOKS_DIR:
         _record_binpath(root)
@@ -671,7 +697,16 @@ def cmd_doctor(args):
             problems.append(f"socom.yaml checks.{k} is unbound (placeholder)")
 
     try:
-        if _git_hooks_path(root) != HOOKS_DIR:
+        left = _git_config_get(root, HOOKS_OPTOUT_KEY)
+        if _git_hooks_path(root) == HOOKS_DIR:
+            pass
+        elif left is not None:
+            # Not a finding. The operator unadopted this repo on purpose, and
+            # reporting their own decision back as a defect is how a tool talks
+            # someone into re-adopting it. State it; do not fail on it.
+            print(f"socom doctor — INFO: unadopted on {left or 'an unrecorded date'}"
+                  f" — hooks intentionally unwired; `socom adopt` re-arms them")
+        else:
             problems.append(f"git core.hooksPath not set to {HOOKS_DIR} — gates not wired")
     except FileNotFoundError:
         problems.append("git not available")
@@ -721,6 +756,10 @@ def cmd_precond(args):
     cfg = load_cfg(root)
     rows = []  # (mark, text) ; mark in ✓ ~ ! ✗
     blocks = warns = healed = 0
+    # Heals that write the HOST REPO'S OWN config are counted apart from heals
+    # that only touch socom's own dirs. They are not the same act, and collapsing
+    # them is what let a git-config write land inside `PASS … 0 warning(s)`.
+    cfg_heals = 0
 
     # 1. Substrate dirs — heal-on: mkdir; heal-off: block (work writes will fail).
     missing = [d for d in SUBSTRATE_DIRS
@@ -754,7 +793,19 @@ def cmd_precond(args):
         state = _wire_hooks(root)
         if state == "wired":
             healed += 1
-            rows.append(("~", f"healed: git config core.hooksPath {HOOKS_DIR}"))
+            cfg_heals += 1
+            warns += 1   # a write to the host's git config is never a quiet PASS
+            rows.append(("~", f"healed: WROTE YOUR GIT CONFIG — core.hooksPath="
+                              f"{HOOKS_DIR} (reverse it with `socom unadopt`, "
+                              f"which precond now honours durably)"))
+        elif state == "unadopted":
+            warns += 1
+            rows.append(("!", f"WARN: this repo was UNADOPTED on "
+                              f"{_git_config_get(root, HOOKS_OPTOUT_KEY) or 'an unrecorded date'}"
+                              f" — hooks left unwired and precond will not re-arm "
+                              f"them. `socom adopt` is the way back in, and the only "
+                              f"thing that clears the record. CI re-asserts every "
+                              f"gate meanwhile."))
         elif state == "foreign":
             warns += 1
             rows.append(("!", f"WARN: core.hooksPath is {_git_hooks_path(root)!r}, "
@@ -797,7 +848,7 @@ def cmd_precond(args):
             rows.append(("✓", f"paths claimed by you: {mine}"))
         else:
             warns += 1
-            rows.append(("!", f"WARN: no paths claimed by you ({bb_author()}) — "
+            rows.append(("!", f"WARN: no paths claimed by you ({bb_author(root)}) — "
                               "parallel seats need a claim, and claiming is how "
                               "you receive the findings on what you are about to "
                               "touch (R2)"))
@@ -808,7 +859,8 @@ def cmd_precond(args):
     for mark, text in rows:
         print(f"  {mark} {text}")
     verdict = "RED" if blocks else "PASS"
-    extra = f", {healed} healed" if healed else ""
+    extra = (f", {healed} healed" if healed else "") + \
+            (f" ({cfg_heals} WROTE GIT CONFIG)" if cfg_heals else "")
     print(f"-> {verdict} ({ms}ms): {blocks} blocker(s), {warns} warning(s){extra}")
     if blocks:
         sys.exit(1)
@@ -992,6 +1044,16 @@ def cmd_adopt(args):
     # After compile, because the artifact set adopt must declare to the host's
     # tools is only complete once the adapters are rendered.
     _wire_ignores(root)
+    # `adopt` is the explicit re-entry, and the ONLY thing that clears the exit
+    # record. That asymmetry — one command sets it, one command clears it, every
+    # other command honours it — is the whole of what makes `unadopt` durable.
+    left = _git_config_get(root, HOOKS_OPTOUT_KEY)
+    if left is not None:
+        subprocess.run(["git", "config", "--unset", HOOKS_OPTOUT_KEY],
+                       cwd=root, capture_output=True)
+        print(f"  · re-adopting: you unadopted this repo on "
+              f"{left or 'an unrecorded date'} — that record is now cleared and "
+              f"socom may wire hooks again")
     state = _wire_hooks(root)
     if state == "wired":
         print(f"  ✓ git hooks wired (core.hooksPath={HOOKS_DIR}) — local gates live")
@@ -1089,6 +1151,15 @@ def cmd_unadopt(args):
                        cwd=root, capture_output=True)
         subprocess.run(["git", "config", "--unset", "socom.binpath"],
                        cwd=root, capture_output=True)
+
+    # Record the exit DURABLY, and do it on every path that got this far — the
+    # "socom never wired this" branch included, because the operator asked to
+    # leave either way and the next `precond` must not read the result as drift.
+    # Erasing every trace of itself is what made unadopt reversible-by-accident.
+    subprocess.run(["git", "config", "--local", HOOKS_OPTOUT_KEY, _now_iso()],
+                   cwd=root, capture_output=True)
+    print(f"  ✓ exit recorded ({HOOKS_OPTOUT_KEY}) — no socom command re-wires "
+          f"hooks from here; `socom adopt` is the only way back in")
 
     # Read back rather than assert — the restore is the whole product of this
     # command, so it states what git now reports, not what it just tried to set.

@@ -10,6 +10,7 @@ The CLI is a single file named `socom` (no .py); load it by path. Its
 `if __name__ == "__main__"` guard (bin/socom) means importing runs no command.
 """
 import importlib.util
+import os
 import re
 import tempfile
 import xml.etree.ElementTree as ET
@@ -250,6 +251,48 @@ eq("conflicts: your OWN lease is never a conflict with yourself",
 eq("conflicts: a disjoint path is free", socom.bb_conflicts(["infra/x"], _live, "zz"), [])
 check("the policy seam is a real dispatch point (lease is registered)",
       "lease" in socom.BB_POLICIES)
+
+# ── blackboard: publishing is OPT-IN (DEF-CLAIM-PUSHES-TO-HOST-REMOTE-01) ────
+# `sync` defaulted to true, so `claim` pushed a ref to the ADOPTED repo's own
+# origin unasked. The default is the whole defect: writing to a remote someone
+# shares with colleagues is not a thing a tool gets to assume.
+eq("bb_cfg: an ABSENT blackboard block does not publish",
+   socom.bb_cfg({})["sync"], False)
+eq("bb_cfg: an absent sync key does not publish",
+   socom.bb_cfg({"blackboard": {"remote": "origin"}})["sync"], False)
+eq("bb_cfg: sync: true is the explicit opt-in (sharing still works)",
+   socom.bb_cfg({"blackboard": {"sync": True}})["sync"], True)
+check("bb_cfg: 'off because you said so' stays distinct from 'nobody asked'",
+      socom.bb_cfg({"blackboard": {"sync": False}})["sync_declared"] is True
+      and socom.bb_cfg({})["sync_declared"] is False)
+
+# ── blackboard: identity is per-TREE, not per-PID ────────────────────────────
+# (DEF-RELEASE-NEVER-RELEASES-01) `hostname-<ppid>` changed on every one-shot
+# invocation, so the session that claimed a path could never release it.
+def _author(tree=None, session=None):
+    """bb_author with SOCOM_SESSION forced to a known state — the ambient value
+    would otherwise decide which branch is under test."""
+    prev = os.environ.pop("SOCOM_SESSION", None)
+    if session is not None:
+        os.environ["SOCOM_SESSION"] = session
+    try:
+        return socom.bb_author(tree)
+    finally:
+        os.environ.pop("SOCOM_SESSION", None)
+        if prev is not None:
+            os.environ["SOCOM_SESSION"] = prev
+
+
+eq("bb_author: the same tree yields the same author, invocation to invocation",
+   _author(Path("/tmp/some/tree")), _author(Path("/tmp/some/tree")))
+check("bb_author: different trees stay distinct (clones/worktrees/machines)",
+      _author(Path("/tmp/tree-a")) != _author(Path("/tmp/tree-b")))
+check("bb_author: it no longer depends on the parent process",
+      str(os.getppid()) not in _author(Path("/tmp/some/tree")))
+eq("bb_author: SOCOM_SESSION still overrides (the deliberate split)",
+   _author(Path("/tmp/some/tree"), session="pinned"), "pinned")
+eq("bb_author: an author is sanitised into a safe shard FILENAME",
+   _author(session="../../etc/passwd"), "..-..-etc-passwd")  # no separator survives
 
 # ── blackboard: a corrupt shard must not blind the surface ───────────────────
 eq("bb_parse skips a corrupt line but keeps the good ones",

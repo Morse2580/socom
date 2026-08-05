@@ -173,6 +173,75 @@ mkdir -p .socom/claims && echo "2020-01-01T00:00:00+00:00	old" > .socom/claims/c
   && ok "reaper clears the superseded domain-claim store (R12)" \
   || bad "reaper left a second claim store in place (R12)"
 
+# 6b. claim -> release ROUND TRIP under the DEFAULT identity
+# (DEF-RELEASE-NEVER-RELEASES-01). Identity was `hostname-<ppid>`, so a lease
+# claimed by one invocation belonged to a stranger by the next one — `release`
+# said "no live lease held by this session", exited 0, and leaked the lease for
+# the full TTL. Every case above pins SOCOM_SESSION, which is exactly why none
+# of them caught it; these run with it UNSET, each command under its OWN parent
+# shell (`sh -c '…; :'` defeats the exec optimisation), which is how an agent
+# runtime drives this tool.
+# The trailing `s=$?; :; exit $s` is load-bearing twice over: the extra commands
+# stop `sh -c` from exec'ing socom in place (which would hand it the SCRIPT's
+# parent and hide the very drift under test), and re-exporting $s keeps the real
+# exit code, which `:` alone would swallow.
+RT() { env -u SOCOM_SESSION sh -c "\"\$0\" $* >/dev/null 2>&1; s=\$?; :; exit \$s" "$SOCOM"; }
+NLEASE() { env -u SOCOM_SESSION "$SOCOM" claim --scan --json \
+             | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["leases"]))'; }
+AUTHOR() { env -u SOCOM_SESSION sh -c "\"\$0\" release no-such-path --json; :" "$SOCOM" \
+             | python3 -c 'import json,sys; print(json.load(sys.stdin)["author"])'; }
+A1="$(AUTHOR 2>/dev/null)"; A2="$(AUTHOR 2>/dev/null)"
+{ [ -n "$A1" ] && [ "$A1" = "$A2" ]; } \
+  && ok "identity is STABLE across invocations with different parent shells" \
+  || bad "identity is empty or changed between invocations [$A1] vs [$A2]"
+RT 'claim rt.txt --intent "round trip"'
+[ "$(NLEASE)" = "1" ] && ok "round trip: claim -> --scan shows 1" \
+                      || bad "round trip: claim did not register a lease"
+RT "release rt.txt"; check "round trip: release exits 0" 0 $?
+[ "$(NLEASE)" = "0" ] && ok "round trip: release -> --scan shows 0 (the lease is GONE)" \
+                      || bad "release reported success and released nothing"
+# The other half: never exit 0 saying 'nothing held' while --scan disagrees.
+SOCOM_SESSION="smoke-other" "$SOCOM" claim rt.txt --intent "theirs" >/dev/null 2>&1
+RT "release rt.txt"
+check "release on ANOTHER session's live lease is RED, not a quiet 0" 1 $?
+RT "release --all"
+check "release --all is RED too when nothing matching is ours" 1 $?
+env -u SOCOM_SESSION sh -c "\"\$0\" release rt.txt 2>&1; :" "$SOCOM" \
+  | grep -q "smoke-other" \
+  && ok "the refusal NAMES the holder (actionable, not just a no)" \
+  || bad "release refused without naming who holds the lease"
+[ "$(NLEASE)" = "1" ] && ok "a refused release changes nothing" \
+                      || bad "a refused release mutated the surface"
+SOCOM_SESSION="smoke-other" "$SOCOM" release --all >/dev/null 2>&1
+
+# 6c. publishing is OPT-IN (DEF-CLAIM-PUSHES-TO-HOST-REMOTE-01). `claim` — a
+# local bookkeeping act on the first-run path — pushed refs/socom/blackboard to
+# the ADOPTED REPO'S OWN origin, unprompted. It only ever failed where the user
+# lacked push rights.
+BBR="$T/bb-bare"; git init -q --bare "$BBR"
+PR="$T/publish-repo"; mkdir -p "$PR"
+( cd "$PR" && git init -q -b main . && git remote add origin "$BBR" \
+  && "$SOCOM" init . >/dev/null 2>&1 )
+grep -q "sync: false" "$PR/socom.yaml" \
+  && ok "init plants blackboard.sync: false (sharing is asked for, not assumed)" \
+  || bad "init still plants a default that publishes to the host's remote"
+( cd "$PR" && SOCOM_SESSION="pub-a" "$SOCOM" claim a.txt --intent "x" >/dev/null 2>&1 )
+git ls-remote "$BBR" 2>/dev/null | grep -q "socom" \
+  && bad "claim pushed to the host repo's origin without being asked" \
+  || ok "claim does NOT write to the host's remote by default"
+( cd "$PR" && SOCOM_SESSION="pub-a" "$SOCOM" claim b.txt --intent "x" 2>&1 ) \
+  | grep -q "LOCAL ONLY" \
+  && ok "the local-only state is stated, never silent" \
+  || bad "claim hid the fact that nothing was published"
+sed -i.bak 's/^  sync: false.*/  sync: true/' "$PR/socom.yaml"
+( cd "$PR" && SOCOM_SESSION="pub-a" "$SOCOM" claim c.txt --intent "x" 2>&1 ) \
+  | grep -q "publishing to origin" \
+  && ok "with the opt-in on, socom NAMES the remote before writing to it" \
+  || bad "socom published without saying where"
+git ls-remote "$BBR" 2>/dev/null | grep -q "refs/socom/blackboard" \
+  && ok "the opt-in still publishes (sharing over git is intact)" \
+  || bad "blackboard.sync: true failed to publish"
+
 # 7. handoff + prompt + session-end gate
 "$SOCOM" gate session-end >/dev/null 2>&1; check "session-end RED without handoff" 1 $?
 "$SOCOM" handoff "smoke test session" >/dev/null; check "handoff skeleton" 0 $?
@@ -237,6 +306,43 @@ AR="$T/adopt-repo"; mkdir -p "$AR"; ( cd "$AR" && git init -q -b main . )
   || bad "adopt did not report a rung"
 ANG="$T/adopt-nongit"; mkdir -p "$ANG"
 ( cd "$ANG" && "$SOCOM" adopt . >/dev/null 2>&1 ); check "adopt in a non-git dir warns but never crashes" 0 $?
+
+# 9c. the exit is DURABLE (DEF-PRECOND-SILENTLY-REVERSES-UNADOPT-01).
+# unadopt restored core.hooksPath and erased every trace of itself, so the next
+# `precond` read the unwired repo as drift, re-armed the hooks, and scored the
+# reversal `1 healed` under PASS. An exit a later command silently undoes is
+# worse than no exit: the user believes they left.
+UR="$T/unadopt-repo"; mkdir -p "$UR"; ( cd "$UR" && git init -q -b main . )
+( cd "$UR" && "$SOCOM" adopt . >/dev/null 2>&1 )
+( cd "$UR" && "$SOCOM" unadopt . >/dev/null 2>&1 ); check "unadopt" 0 $?
+[ -z "$(git -C "$UR" config core.hooksPath || true)" ] \
+  && ok "unadopt unsets core.hooksPath" \
+  || bad "unadopt left hooks wired: [$(git -C "$UR" config core.hooksPath)]"
+[ -n "$(git -C "$UR" config socom.unadopted || true)" ] \
+  && ok "unadopt records the exit durably (socom.unadopted)" \
+  || bad "unadopt left no record — the next heal cannot tell it from drift"
+( cd "$UR" && "$SOCOM" precond >/dev/null 2>&1 )
+[ -z "$(git -C "$UR" config core.hooksPath || true)" ] \
+  && ok "precond does NOT re-arm hooks after unadopt (the exit holds)" \
+  || bad "precond silently reversed unadopt: [$(git -C "$UR" config core.hooksPath)]"
+( cd "$UR" && "$SOCOM" precond 2>&1 | grep -q "UNADOPTED" ) \
+  && ok "precond REPORTS the unadopted state instead of healing it" \
+  || bad "precond stayed silent about an unadopted repo"
+( cd "$UR" && "$SOCOM" doctor 2>&1 | grep -qi "unadopted" ) \
+  && ok "doctor reports unadopted as INFO, not as a defect to fix" \
+  || bad "doctor did not distinguish unadopted from never-adopted"
+( cd "$UR" && "$SOCOM" adopt . >/dev/null 2>&1 )
+[ "$(git -C "$UR" config core.hooksPath)" = ".githooks" ] \
+  && ok "an explicit re-adopt is the way back in (and clears the record)" \
+  || bad "adopt could not re-wire an unadopted repo"
+[ -z "$(git -C "$UR" config socom.unadopted || true)" ] \
+  && ok "re-adopt clears the exit record (only adopt may)" \
+  || bad "re-adopt left the unadopted record in place"
+# A heal that writes the HOST'S OWN git config is never a quiet PASS.
+git -C "$UR" config --unset core.hooksPath
+( cd "$UR" && "$SOCOM" precond 2>&1 | grep -q "WROTE GIT CONFIG" ) \
+  && ok "a git-config heal is named as a config write, not a silent 'healed'" \
+  || bad "precond wrote git config without saying so"
 
 "$SOCOM" baseline . >/dev/null;            check "baseline" 0 $?
 python3 - <<'EOF' && ok "chunk ids unique + full-path (STORAGE identity)" || bad "chunk identity violated"

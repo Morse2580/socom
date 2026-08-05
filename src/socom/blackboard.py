@@ -85,12 +85,38 @@ def bb_sanitize(value, cap: int = BB_FIELD_CAP) -> str:
     return text[:cap]
 
 
-def bb_author() -> str:
-    """Stable per-session identity — and the shard FILENAME, which is the whole
-    concurrency design: one writer per file means no session ever writes
-    another's, so the union of shards is always well-defined and there is no
-    merge strategy to get wrong."""
-    raw = os.environ.get("SOCOM_SESSION") or f"{socket.gethostname()}-{os.getppid()}"
+def bb_author(root: Path | None = None) -> str:
+    """Stable identity — and the shard FILENAME, which is the whole concurrency
+    design: one writer per file means no session ever writes another's, so the
+    union of shards is always well-defined and there is no merge strategy to get
+    wrong.
+
+    The unit is the WORKING TREE, derived and never stored. It was
+    `hostname-<ppid>` until 2026-08-05, and that silently broke `release`
+    (DEF-RELEASE-NEVER-RELEASES-01): every one-shot invocation gets a fresh
+    parent shell, so the session that claimed a path was already a different
+    author by the time it tried to release it — `release` reported "no live lease
+    held by this session", exited 0, and leaked the lease for the full TTL. One
+    shell per command is exactly how an agent runtime drives this tool, so the
+    common case was the broken one. Identity that changes between two commands
+    the user experiences as one session is not identity.
+
+    A tree is also the boundary a lease is actually ABOUT: clones, worktrees and
+    machines stay distinct, while two agents inside ONE checkout share the files
+    themselves and would clobber each other on disk whatever the blackboard said.
+    ⚠️ The residue is real and deliberate — two sessions in one tree now share an
+    author and will not conflict with each other. Set `SOCOM_SESSION` to split
+    them apart; `release` fails loudly rather than silently when the identity
+    does not match, which is what keeps the residue recoverable.
+
+    Derived, not persisted: no state file to seed, reap, gitignore or lose."""
+    raw = os.environ.get("SOCOM_SESSION")
+    if not raw:
+        tree = (root or repo_root()).resolve()
+        # The digest goes BEFORE the human-readable tail so the 64-char cap can
+        # only ever eat the part that is decoration.
+        digest = hashlib.sha256(str(tree).encode()).hexdigest()[:8]
+        raw = f"{socket.gethostname()}-{digest}-{tree.name}"
     safe = "".join(c if (c.isalnum() or c in "-_.") else "-" for c in raw)
     return safe[:64] or "anonymous"
 
@@ -296,11 +322,24 @@ def bb_read_local(root: Path, kind: str) -> list:
 # ── git sync ─────────────────────────────────────────────────────────────
 
 def bb_cfg(cfg: dict) -> dict:
+    """⚠️ `sync` defaults to FALSE — publishing to a remote is OPT-IN.
+
+    It defaulted to true until 2026-08-05, and `claim` — a local bookkeeping act,
+    on the first-run path in PILOT.md — therefore pushed `refs/socom/blackboard`
+    to the ADOPTED REPO'S OWN origin, unprompted (DEF-CLAIM-PUSHES-TO-HOST-REMOTE-01).
+    Writing to a remote a stranger shares with colleagues is not a default any
+    tool gets to take; it only ever failed where the user lacked push rights.
+    Sharing the surface over git is still the design — `blackboard.sync: true`
+    in socom.yaml is how you say so, and `remote:` says where.
+
+    `sync_declared` keeps "off because you said so" distinguishable from "off
+    because nobody asked", so the two get different messages."""
     bb = (cfg or {}).get("blackboard") or {}
     return {"ref": bb.get("ref", BB_REF),
             "remote": bb.get("remote", "origin"),
             "policy": bb.get("policy", "lease"),
-            "sync": bb.get("sync", True),
+            "sync": bool(bb.get("sync", False)),
+            "sync_declared": "sync" in bb,
             "ttl_s": int(bb.get("ttl_s", BB_TTL_S))}
 
 
@@ -361,21 +400,35 @@ def bb_push(root: Path, conf: dict, attempts: int = 3):
     `--no-verify` is deliberate: the commit contains only
     findings/<author>.jsonl and leases/<author>.jsonl, no source, so the host
     repo's code gates do not apply to it — the same posture as a claim marker
-    branch. `blackboard.sync: false` in socom.yaml turns publishing off
-    entirely for a repo that refuses direct ref writes.
+    branch.
 
-    Returns (ok, ref_used, detail)."""
+    ⚠️ Publishing is OPT-IN (`blackboard.sync: true`) and this function is the
+    ONE place that writes to someone else's remote — so it is also the one place
+    that has to SAY where, before it writes. See bb_cfg."""
     if not conf["sync"]:
-        return (False, None, "sync disabled (socom.yaml blackboard.sync)")
+        if conf.get("sync_declared"):
+            return (False, None, "sync disabled (socom.yaml blackboard.sync: false)")
+        return (False, None,
+                f"publishing is opt-in — the blackboard is local-only until "
+                f"`blackboard.sync: true` in socom.yaml says to share it on "
+                f"{conf['remote']!r}")
     # No remote is a NORMAL state, not a failure: a solo repo, a fresh clone, an
     # air-gapped box. It must degrade to a local-only blackboard in silence.
     # Shouting "the forge refused the namespace" at someone who simply has no
     # origin is a scary first run, and the first run is the only moment adoption
     # is ever won or lost.
-    if subprocess.run(["git", "remote", "get-url", conf["remote"]], cwd=root,
-                      capture_output=True, text=True).returncode != 0:
+    url = subprocess.run(["git", "remote", "get-url", conf["remote"]], cwd=root,
+                         capture_output=True, text=True)
+    if url.returncode != 0:
         return (False, None, f"no git remote {conf['remote']!r} — blackboard is local-only")
-    author = bb_author()
+    # Named BEFORE the write, not after. The opt-in is a config line someone set
+    # once, possibly on a different day than the push that acts on it; "socom is
+    # about to write to the remote your colleagues share" is only useful at the
+    # moment it is true. stderr, so it never contaminates --json.
+    print(f"socom blackboard: publishing to {conf['remote']} "
+          f"({url.stdout.strip()}) as {conf['ref']} "
+          f"— blackboard.sync is on in socom.yaml", file=sys.stderr)
+    author = bb_author(root)
     shards = [(k, bb_shard(root, k, author)) for k in BB_KINDS]
     shards = [(k, p) for k, p in shards if p.exists()]
     if not shards:
@@ -468,7 +521,7 @@ def bb_do_claim(root: Path, conf: dict, paths, intent: str, sync: bool = True) -
     paths = [bb_norm(p) for p in paths if bb_norm(p)][:BB_MAX_PATHS]
     if not paths:
         return {"ok": False, "error": "no paths given"}
-    author, ts = bb_author(), _now_iso()
+    author, ts = bb_author(root), _now_iso()
     snap = bb_snapshot(root, conf, sync)
     held = bb_conflicts(paths, bb_live_leases(snap[BB_LEASES]), author, conf["policy"])
     findings = bb_findings_for(bb_open_findings(snap[BB_FINDINGS]), paths)
@@ -499,7 +552,7 @@ def bb_do_attest(root: Path, conf: dict, artifact: str, claim: str,
     artifact, claim = bb_norm(artifact), bb_sanitize(claim)
     if not artifact or not claim:
         return {"ok": False, "error": "attest needs both an artifact and a claim"}
-    author, ts = bb_author(), _now_iso()
+    author, ts = bb_author(root), _now_iso()
     evidence = bb_sanitize(evidence)
     # `tier` is derived, never self-declared: an agent asserting its own claim
     # is verified is the self-assessment that arXiv 2310.01798 (ICLR 2024) shows
@@ -551,7 +604,7 @@ def bb_do_resolve(root: Path, conf: dict, finding_id: str, note: str = "",
         return {"ok": False,
                 "error": f"no finding {finding_id!r} on this blackboard — nothing "
                          f"was resolved. Run `socom findings` for the live ids."}
-    author, ts = bb_author(), _now_iso()
+    author, ts = bb_author(root), _now_iso()
     rec = {"kind": "resolve", "author": author, "ts": ts, "verdict": verdict,
            "ref": finding_id, "note": bb_sanitize(note, 512)}
     rec["id"] = bb_id("resolve", author, ts, finding_id)
@@ -566,17 +619,47 @@ def bb_do_resolve(root: Path, conf: dict, finding_id: str, note: str = "",
 
 def bb_do_release(root: Path, conf: dict, target: str = "", all_: bool = False,
                   sync: bool = True) -> dict:
-    author, ts = bb_author(), _now_iso()
-    mine = [l for l in bb_live_leases(bb_snapshot(root, conf, sync)[BB_LEASES])
-            if l.get("author") == author]
-    if not all_:
-        if not target:
-            return {"ok": False, "error": "release needs a path/lease id, or --all"}
-        mine = [l for l in mine
-                if l.get("id") == target
-                or any(bb_overlap(target, p) for p in l.get("paths", []))]
+    """Retire this session's leases — and NEVER report success while the surface
+    still holds a lease the caller asked to release.
+
+    The old shape filtered to `author == mine` FIRST and then said "no live lease
+    held by this session" with ok:True for everything that fell out, so a lease
+    written under a drifted identity produced a confident exit 0 while
+    `claim --scan` went on listing it (DEF-RELEASE-NEVER-RELEASES-01). The
+    identity drift behind that is fixed in bb_author; the reporting was the worse
+    half and is fixed on its own terms, because an identity scheme can always be
+    wrong again and a false confirmation is unrecoverable. Matching happens
+    first, and a match this session cannot retire is an ERROR naming the holder —
+    never a silent no-op wearing the shape of success. Only "nothing on the board
+    matches" is ok:True with an empty release, and there `--scan` agrees."""
+    author, ts = bb_author(root), _now_iso()
+    if not all_ and not target:
+        return {"ok": False, "error": "release needs a path/lease id, or --all"}
+    live = bb_live_leases(bb_snapshot(root, conf, sync)[BB_LEASES])
+    matched = [l for l in live
+               if all_
+               or l.get("id") == target
+               or any(bb_overlap(target, p) for p in l.get("paths", []))]
+    mine = [l for l in matched if l.get("author") == author]
     if not mine:
-        return {"ok": True, "released": [], "note": "no live lease held by this session"}
+        others = [l for l in matched if l.get("author") != author]
+        if others:
+            holders = sorted({str(l.get("author")) for l in others})
+            return {"ok": False, "author": author,
+                    "holders": [{"author": l.get("author"), "id": l.get("id"),
+                                 "paths": l.get("paths", []), "ts": l.get("ts")}
+                                for l in others],
+                    "error": (f"{len(others)} live lease(s) match "
+                              f"{target or '--all'} and this session ({author}) "
+                              f"holds none of them — held by {', '.join(holders)}. "
+                              f"Nothing was changed: a session releases only its "
+                              f"own shard. If one of those is you under another "
+                              f"identity, re-run as `SOCOM_SESSION=<author> socom "
+                              f"release …`; otherwise ask the holder or wait out "
+                              f"the TTL.")}
+        return {"ok": True, "released": [], "author": author,
+                "note": f"no live lease on this blackboard matches "
+                        f"{target or '--all'} — nothing to release"}
     for lease in mine:
         rec = {"kind": "release", "author": author, "ts": ts, "ref": lease.get("id")}
         rec["id"] = bb_id("release", author, ts, str(lease.get("id")))
@@ -592,7 +675,7 @@ def bb_do_release(root: Path, conf: dict, target: str = "", all_: bool = False,
 
 def bb_live_for_session(root: Path, conf: dict, sync: bool = False) -> list:
     """Live leases held by THIS session — what session-end asks about."""
-    author = bb_author()
+    author = bb_author(root)
     return [l for l in bb_live_leases(bb_snapshot(root, conf, sync)[BB_LEASES])
             if l.get("author") == author]
 
@@ -674,7 +757,7 @@ def cmd_claim(args):
         if _bb_emit({"leases": leases}, as_json):
             return
         for l in leases:
-            mine = " (this session)" if l.get("author") == bb_author() else ""
+            mine = " (this session)" if l.get("author") == bb_author(root) else ""
             print(f"  {l.get('author')}{mine}: {' '.join(l.get('paths', []))} "
                   f"— {l.get('intent', '')} [{l.get('id')}]")
         print(f"socom claim: {len(leases)} live lease(s)")
@@ -727,9 +810,13 @@ def cmd_release(args):
     if _bb_emit(out, as_json):
         return
     if not out.get("ok"):
+        # Non-zero, and it names who holds what. Exiting 0 here is the defect.
+        for h in out.get("holders", []):
+            print(f"socom release: HELD by {h['author']} since {h['ts']} "
+                  f"({' '.join(h.get('paths', []))}) [{h['id']}]", file=sys.stderr)
         sys.exit(f"socom release: {out.get('error')}")
     if not out["released"]:
-        print("socom release: no live lease held by this session")
+        print(f"socom release: {out.get('note')}")
         return
     print(f"socom release: released {len(out['released'])} lease(s) "
           f"({' '.join(out.get('paths', []))})")
