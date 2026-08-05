@@ -409,6 +409,51 @@ written down here. **That row is still unrun, and it is still the work.**
   actually ran, asserted by `tests/ledgercheck.py`. **Files:**
   `src/socom/ledger.py`, `tests/ledgercheck.py`.
 
+- `DEF-QUICKSTART-REPORTS-ADOPTION-IN-NON-GIT-REPO-01` **READY P1** — **The
+  adoption percentage and rung count what socom PLANTED, not what socom can
+  ENFORCE. In a non-git directory `quickstart` detects it cannot wire hooks, says
+  so once, and then proceeds to plant 33 files and report `socom ███░░░░░░░ 33%
+  · rung: T2 — compiled` — a third of the way adopted, with enforcement capability
+  of exactly zero.**
+  **MEASURED 2026-08-05, `5f93c45`, empty non-git dir:** `quickstart` prints
+  `! hooks NOT wired: not a git repo` and continues through the full ladder.
+  End state: **33 files**, `.gitignore` + `.githooks/` + `CLAUDE.md` + `AGENTS.md`
+  + `.cursor/rules/` + 7 `.claude/agents/` + CI configs for **three** forges
+  (`.github/workflows/socom-gates.yml`, `.gitlab-ci.yml`,
+  `.socom/ci/azure-socom-gates.yml`) written unconditionally, and
+  `.claude/settings.json` rewritten to point `statusLine` at socom. Two
+  independent reasons nothing can be caught — no hooks (no git) **and** no bound
+  checks (`! no test command detected`) — and the readout is 33%.
+  ⚠️ **The `.gitignore` line is false in context**, not merely useless: socom
+  prints `✓ .gitignore: socom runtime state ignored (6 patterns) — `git add -A`
+  is safe` in a directory where `git add` cannot run at all.
+  **The non-git case is the extreme, not the whole defect.** The same decoupling
+  fires in an ordinary git repo: bound-check detection fails → `checks unbound` →
+  gates assert vacuously (`gate.py:297`, [[DEF-UNRESOLVABLE-GATE-LEAVES-NO-TRACE-01]])
+  → and the rung still reads **T2, 33%**. A first-time user in a normal repo gets
+  the same "a third adopted" for zero enforcement. That version **can** hit a
+  single pilot participant; the non-git version needs an unusual setup.
+  ⚠️ **NOT the [[DEF-UNRESOLVABLE-GATE-LEAVES-NO-TRACE-01]] class — checked, and
+  it is detected.** `doctor` correctly reports `✗ git core.hooksPath not set to
+  .githooks — gates not wired`. The capability gap is observable; what is wrong is
+  that a *different* surface (the rung ladder, the percentage, `socom value`)
+  reports progress the detected gap contradicts, and neither surface reads the
+  other. This is a sibling of [[DEF-STATUS-CLAIMS-UNLABELLED-01]] — a status claim
+  derived from artifact presence rather than from capability — and belongs with
+  that row's scope, not with the no-trace class.
+  ⚠️ **P1 and deliberately NOT repaired before exposure.** `PILOT.md`'s report
+  list asks *"did a metric mislead you?"* — a participant meeting `33%` on a
+  substrate that can enforce nothing is exactly the finding the exposure exists to
+  collect. Repairing it first deletes that finding (`0001` §Amendment 1 rule 3),
+  identically to `DEF-STATUS-CLAIMS-UNLABELLED-01`.
+  **Falsifiable acceptance:** the reported rung/percentage cannot exceed what the
+  substrate can enforce — an install with no wired hooks and no bound checks reads
+  0%, or reads its number alongside an explicit "enforcing: nothing" — and
+  `quickstart` in a non-git directory either stops or states plainly that the
+  files it is about to plant are inert until `git init`.
+  **Files:** `src/socom/lifecycle.py` (`adoption_rung`, quickstart ladder,
+  `_ensure_ignore_block`), `src/socom/value.py`.
+
 - `DEF-BLACKBOARD-GRANTS-ON-UNREACHABLE-REMOTE-01` **READY P1 — highest-severity
   P1 in this bucket** — **When the remote is unreachable, `claim` grants a lease
   it would have refused, and the record it writes is byte-identical to a
