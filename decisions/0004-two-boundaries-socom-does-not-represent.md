@@ -214,3 +214,98 @@ to `bin/socom`, digest reproduced by `shasum -a 256`. Every code reference
 re-grepped at `7b73efd`. The `kept your statusLine` self-reference and the
 `vectors.json`/`eval.json` gap were measured directly, not inferred from the rows
 that first reported them.
+
+---
+
+## Appendix — proposed repairs, for when they are unblocked
+
+⚠️ **This is design, not a plan.** Nothing here is scheduled. Decision §4 stands:
+the repair order is set by what the participant stops on, not by this document.
+An appendix that reads as a backlog is how a diagnosis turns into a build lane
+under another name — which is the failure `0001` §Amendment 1 exists to prevent.
+
+### Neither class needs new machinery
+
+Both fixes are already implemented in this tree, for other purposes. socom does
+not lack the primitives; it does not point them at itself. VERIFIED at `f97a6e2`:
+
+| Primitive already in the tree | Used for | **Not** used for |
+|---|---|---|
+| `shutil.which` (`install.py:251`, `spawn.py:413`, `lifecycle.py:781`) | checking a **runtime** binary resolves | the check binding asserted at **`install.py:284` — 33 lines below, same file, same import** |
+| `.socom/assertions/log.jsonl` — append-only `(command, exit)` rows (`lesson.py:350-399`) | `introspect`, over a handoff's `<evidence>` | any claim socom makes about **itself** |
+| `write_generated`'s ownership test (`core.py:135-147`, HR2) | files — *"never clobber a file we didn't generate"* | git config, remotes, directories, the binary's own location |
+
+That `shutil.which` sits 33 lines above the false claim it would have refuted, in
+the same file, under the same import, is the tightest statement of Class A
+available: the tool had the probe, used it for the thing it does not claim about,
+and asserted the thing it does.
+
+### Class A — every fix has two versions, in two different lanes
+
+`DEF-STATUS-CLAIMS-UNLABELLED-01` scopes itself to **labelling only** and routes
+"changing what a claim derives from" to [[SUBSTRATE-STATUS-TIER-SWEEP-01]],
+BLOCKED. So each surface has a cheap version that makes the sentence honest, and
+a real version that makes the underlying claim true. They are not alternatives —
+the first is a stopgap the second retires.
+
+| Surface | **Honest today** — labelling, in-bucket | **True tomorrow** — derivation, capability |
+|---|---|---|
+| `install.py:284` bind | `✓ bound → 'pytest -q' (bound, not verified — run 'socom gate fast')` | `shutil.which` the binary; print `verified on PATH` or `will fail: pytest not found` |
+| `lifecycle.py:941` T6 | `T6 — L1 index present (not evaluated)` | read `eval.json`'s `passed`; hold at T5 if `eval` never ran |
+| `value.py:128` catches | `N amber breaches logged (all proceeded)` | record RED blocks as well, after which *"stopped"* is true |
+| `lifecycle.py:922` rung | print `enforcing: nothing` beside the percentage | each rung tests a capability, not a file's existence |
+| `lifecycle.py:362` statusLine | `left socom's statusLine in place` | track the prior value; say *"kept yours"* only when it was yours |
+| `gate.py:297` unbound | already honest in itself — the **rung** ignores it | an unbound gate contributes 0 to the rung |
+
+**The class fix, distinct from all six instance fixes:** one
+`assert_capability(surface, evidence)` helper that refuses to render a capability
+word — `live`, `operational`, `runs`, `wired`, `safe`, `stopped` — without an
+`(command, exit)` record, writing through the assertion log that already exists;
+plus a test asserting no capability verb is printed outside it. **Only this one
+stops the class regrowing**, and only this one makes rank 1 bind socom the way it
+binds every other participant. The six rows above are instance repairs and should
+be recognised as such — see §What the morning's three repairs prove.
+
+### Class B — one mechanism replacing three
+
+```
+host_write(root, target, kind, apply_fn):
+    1. is this ours or theirs?   generalise core.py:141 beyond files
+    2. record the prior value    socom.restore.<key> — ONE namespace
+    3. announce at write time    "socom is setting <target>; `unadopt` reverses it"
+    4. register the reversal     unadopt walks the record; no per-case branches
+```
+
+This collapses `socom.priorhookspath` (`lifecycle.py:390`), `socom.unadopted`
+(`lifecycle.py:401`) and the `blackboard.sync` opt-in (`blackboard.py:341`) into
+one concept. Without it, `.claude/settings.json` and the binary's location become
+the fourth and fifth ad-hoc keys, each correct in isolation and each proving the
+class again.
+
+**The split that ends the measurement corruption:** `repo_root()` (`core.py:81`)
+fails soft and returns cwd. That is right for readers and wrong for a command
+that writes 33 files. Writers take `repo_root_strict()`, which refuses in a
+directory that is neither a git repo nor an existing socom root, and names the
+path it was about to plant into. Every writing command prints its target root on
+its **first** line — `repo:` currently appears on line 3, inside the logo block,
+which is why a wrong-directory adopt read as a normal one.
+
+### Cost
+
+⚠️ **HYPOTHESIS — estimated, not measured.** No spike has been run on any of it.
+
+| Work | Estimate | Lane |
+|---|---|---|
+| Class A, labelling column (6 surfaces) | ~2 h | repair — in `DEF-STATUS-CLAIMS-UNLABELLED-01`'s stated scope |
+| Class A, derivation column | ~0.5 d | capability — `SUBSTRATE-STATUS-TIER-SWEEP-01`, BLOCKED |
+| `assert_capability` + its test | ~1 d | capability, BLOCKED |
+| `host_write` + `unadopt` rewrite | ~1–2 d | capability, BLOCKED |
+| `repo_root_strict` + target-root on line 1 | ~2 h | borderline; a new refusal path, so treat as capability |
+
+### Why even the two-hour column is held
+
+The labelling column is cheap, in-bucket, and still **not** repaired before the
+exposure — because five of its six surfaces are exactly what `PILOT.md` asks the
+participant about (*"did a metric mislead you?"*). Cheapness is not the test.
+Whether a repair **deletes a finding** is the test, and this column deletes five.
+The only pre-exposure action remains the protocol line in Decision §2.
