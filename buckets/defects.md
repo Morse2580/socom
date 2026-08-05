@@ -409,6 +409,74 @@ written down here. **That row is still unrun, and it is still the work.**
   actually ran, asserted by `tests/ledgercheck.py`. **Files:**
   `src/socom/ledger.py`, `tests/ledgercheck.py`.
 
+- `DEF-UNRESOLVABLE-GATE-LEAVES-NO-TRACE-01` **READY P1** — **When a gate cannot
+  run at all, socom records nothing — so a repo whose `core.hooksPath` still
+  declares socom's gates can commit ungated indefinitely, and no socom surface
+  can ever say so.** The class: *enforcement whose declaration is durable, whose
+  capability is resolved through a referent socom does not own, and whose
+  resolution failure degrades open without leaving a trace.*
+  **MEASURED (n=1 controlled A/B, throwaway repo, 2026-08-05, `caa677a`).**
+  Same repo, same bound-and-failing `checks.medium`, one variable — whether the
+  binary resolves:
+  - **A, reachable:** `pre-commit: AMBER — failed (rc=1); breach logged`;
+    `.socom/gates/breaches.log` 2 → 4 lines. Visible to `socom breach`.
+  - **B, unreachable** (the downloaded file deleted; symlink AND `socom.binpath`
+    both dangle — `install` symlinks at the file you ran and `adopt` records that
+    same path, so the two resolution tiers die together): commit proceeds,
+    `breaches.log` **4 → 4**, `find .socom -newermt '-20 seconds'` returns
+    **nothing**. One stderr line, and `core.hooksPath` still reads `.githooks`.
+  - **C, detector:** with socom restored, `doctor` prints 5 findings — compiled-view
+    drift and unbound checks — and **nothing** about the three commits that had
+    just gone through ungated.
+  **The generative structure, and why C is not an oversight:** every detector
+  socom has (`doctor`, `value`, `gate session-start`) runs *inside* socom, so
+  socom's own unreachability is the one condition they structurally cannot
+  observe. The contrast proves the class boundary is real: drift in an **owned**
+  referent (compiled views vs `canonical_hash`) is caught and exits P0; the
+  reachability of the binary — an **unowned** referent — is caught by nothing.
+  **Not the fail-open.** Fail-open-locally is deliberate doctrine
+  (`canon/residuality.xml` `fail-safe-defaults` + `psychological-acceptability`,
+  the published-gate model). What it fails is that same file's
+  **`compromise-recording`** — *"a detectable breach beats a silent one. **Fail
+  it when a fail-open path leaves no trace.**"* socom names this exact class in
+  its own constitution and the code fails the principle it wrote.
+  **socom already handles this class correctly elsewhere**, which is why this
+  reads as an inconsistency rather than a philosophy: `spawn --exec` resolves the
+  same *kind* of unowned referent (a runtime binary on PATH) and exits **loudly**
+  (`spawn.py:413`, "R6: degrade loudly"), with a preflight that surfaces it at
+  onboarding (`install.py:200`). The precedent exists; the hook path predates it.
+  **Class sweep — three instances, one detected:**
+  | Instance | Site | Degrade | Detector |
+  |---|---|---|---|
+  | binary unreachable | `HOOK_RESOLVER` → `exit 0` | stderr only | **none, and none possible in-process** |
+  | `checks.*` unbound | `gate.py:297` *"unbound — passing"* | returns, **no `log_breach`** | partial — `doctor`/`value` warn |
+  | `uninstall` without `unadopt` | `install.py` prints a NOTE | every adopted repo ungated | none |
+  Note `gate.py:297` against `gate.py:312`: a check that **fails** is recorded;
+  a check that **cannot run** is not. The breach ledger records exactly one of
+  three outcomes.
+  **Relation to [[DEF-STATUS-CLAIMS-UNLABELLED-01]] — adjacent, not duplicate.**
+  That row's second instance shows RED paths (`sys.exit`) recording nothing, so
+  `breaches.log` cannot contain a *stopped* slip. This row is the third
+  population: gates that were never *assessed at all*. Together: of {blocked,
+  proceeded-after-assessment, never-assessed}, only the middle is recorded.
+  **Why P1, not P0.** It needs time to materialize — the file must be moved or
+  cleaned *after* install — so a single pilot session will not hit it. It does
+  not compete with [[EV-NONAUTHOR-EXPOSURE-01]] and is not an argument to delay
+  it. Found by reading, not by exposure.
+  ⚠️ **Do not "fix" this by swapping the symlink for a copy** — that is the
+  instance, not the class; PATH can break from a login-shell reorder, an
+  `uninstall`, or a moved checkout with no symlink involved. ⚠️ **Do not fail
+  closed** — a hook that blocks because socom is missing is the exact shape
+  `psychological-acceptability` says gets `--no-verify`'d permanently.
+  ⚠️ The stderr line asserts *"CI re-asserts"*; nothing verifies that the repo
+  **has** CI. In the repro it did not.
+  **Falsifiable acceptance:** re-run the A/B above; in run B, a socom surface
+  names the ungated invocations — count and time window — after the binary
+  returns. Blocked on a spiked fix mechanism, see
+  [`decisions/0002`](../decisions/0002-unresolvable-enforcement-must-record.md).
+  **Files:** `src/socom/gate.py` (`HOOK_RESOLVER`, `:297`), `src/socom/install.py`,
+  `src/socom/lifecycle.py`.
+
 - `DEF-STATUS-CLAIMS-UNLABELLED-01` **READY P1** — **socom derives a
   `verified`/`asserted` tier for every finding an agent records, and applies that
   discipline to nothing it says about itself.** VERIFIED at
