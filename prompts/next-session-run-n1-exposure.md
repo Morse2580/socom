@@ -18,6 +18,18 @@ line above was re-run, not carried: SHA/clean-tree, 4/7/1/8 bucket counts,
 EV row still READY P0 unrun, unit 339 / r1corpus 146, curl http=200
 bytes=408964 byte-identical to bin/socom. NOTHING MOVED. The standards research
 below added one document and zero capability -- which is the point of recording it.
+
+REWRITTEN 2026-08-05 (third pass, at b7b6a32). `socom version` shipped, so
+bin/socom changed and the byte count above is SUPERSEDED:
+  REWRITTEN public curl URL ... 408964 -> **411152** bytes, still http=200 and
+            byte-identical to bin/socom; /tmp/socom.pre version -> b80c5efc6013
+  VERIFIED  digest is content-bound  negative control: appending one comment to
+            a copy moved it b80c5efc6013 -> d2ef64b7fa0c
+  VERIFIED  suites after the change  unit 339 / r1corpus 146, gate full PASS,
+            build.py --check up to date, CI success on b7b6a32
+  UNCHANGED buckets 4/7/1/8, EV row READY P0 unrun, proof tier D0
+⚠️ The byte count changes on ANY merge touching bin/socom. Re-run the preflight;
+never carry it forward.
 -->
 
 # Next session — stop building. Run the n=1 exposure.
@@ -66,13 +78,22 @@ scarce participant on nothing):
 curl -fsSL -o /tmp/socom.pre \
   https://raw.githubusercontent.com/Morse2580/socom/main/bin/socom \
   -w 'http=%{http_code} bytes=%{size_download}\n'
-chmod +x /tmp/socom.pre && /tmp/socom.pre --help | head -3
+chmod +x /tmp/socom.pre && /tmp/socom.pre --help | head -3 && /tmp/socom.pre version
 ```
 
-Verified 2026-08-05: `http=200`, 408964 bytes, byte-identical to `bin/socom`,
-`--help` prints the command list. **Also confirm the participant is on
+Verified 2026-08-05 (re-run after `b7b6a32`): `http=200`, **411152 bytes**,
+byte-identical to `bin/socom`, `--help` prints the command list, and `version`
+reports build `b80c5efc6013`. **Also confirm the participant is on
 macOS/Linux/WSL** — native Windows is unsupported and finding out mid-session
 wastes the run.
+
+⚠️ **Record the `version` output on the sheet.** `socom version` landed
+2026-08-05 for exactly this: the digest is a sha256 of the running file, so it
+identifies the build a participant actually ran — which the static `0.1` version
+string cannot, and which the sheet previously asked for as a *commit* the
+participant has no way to know. A result that cannot name its build is not
+reproducible evidence. The byte count above **will change on any merge that
+touches `bin/socom`** — re-run the preflight, do not trust this number.
 
 ## What changed on 2026-08-05
 

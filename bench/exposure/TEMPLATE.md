@@ -13,7 +13,8 @@
 | Drives AI agents on a real repo? | |
 | Platform (macOS / Linux / WSL) | |
 | Repo they will use — theirs, real? | |
-| socom commit at run time | |
+| **Build under test** — paste `socom version` output | |
+| socom commit at run time (observer fills; the digest above is authoritative) | |
 | Preflight `curl` + `--help` clean? | |
 | Mode | live screen-share, observer muted / async |
 
