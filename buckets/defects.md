@@ -782,12 +782,95 @@ colleagues. A participant hitting any of them is burned on something recorded he
   **Falsifiable acceptance:** each of the seven surfaces either derives its claim
   from an execution record or states that it is reporting presence.
   **Files:** `src/socom/{value,lifecycle,install}.py`.
+  **THIRD-PARTY A/B REPRODUCTION — 2026-08-05, build `1bc70ac4f16c`, two real
+  repos, one variable.** The 5-substrate sweep inferred this asymmetry across
+  five agents; this is it measured directly, same build, same day, differing only
+  in whether a test command is DETECTABLE. Neither repo was chosen to produce it.
+  | | `httpie/cli` @ `5b604c3` (shallow clone, third-party) | `cargo-applications` (operator's own project) |
+  |---|---|---|
+  | detection | binds `checks.*` = `make test` | **no test command found** — refuses to invent one |
+  | `socom value` | **`100% · T6 — operational (L1 retrieval live)`** | `33% · T2 — compiled, checks unbound` |
+  | `socom doctor` | **`clean`, exit 0** | `FINDINGS: checks.fast/medium/full unbound`, **exit 1** |
+  | `socom gate fast` | **`RED — checks.fast failed (rc=2)`**; `make test` → `venv/bin/python: No such file or directory`, **Error 127** | not run — nothing bound to run |
+  | verdict | **misleading** — two surfaces green, the only executing surface red | **honest** — every surface agrees, loudly |
+  **The right-hand column is socom working exactly as designed** and is the
+  behaviour `PILOT.md` promises ("If it stalls at T2, that's honest — it found no
+  test command and refused to invent one"). The left-hand column is the defect,
+  and it is the **common** case: most real repos have a detectable test command,
+  so `100% · operational` over a command that exits 127 is what a participant
+  actually meets. `doctor` calling that `clean` is the sharpest single instance
+  in this row — `gate fast` had already returned RED on the same binding, in the
+  same shell, seconds earlier.
+  ⚠️ **Still NOT repaired, and this reproduction does not change that.** It
+  strengthens the row's evidence; the reason for holding is unchanged (0001
+  §Amendment 1 rule 3 — `PILOT.md` asks *"did a metric mislead you?"* and this is
+  the answer a participant is supposed to generate). Recorded so the repair, when
+  it comes, has a measured before-state on real repos rather than synthetic ones.
+
+- `DEF-INSTALLED-BINARY-LANDS-INSIDE-THE-ADOPTED-REPO-01` **READY P1** — **The
+  documented 5-minute path leaves a 421 KB untracked binary in the user's repo,
+  unignored, with the PATH symlink pointing into that repo.** OBSERVED on the
+  operator's own machine, 2026-08-05, following `PILOT.md` §"The 5-minute path"
+  verbatim from inside the target repo:
+  ```
+  ~/projects/G1-Stack/cargo-applications $ curl -fsSLO …/bin/socom
+  ~/projects/G1-Stack/cargo-applications $ chmod +x socom && ./socom install
+  socom install: linked /home/akili/.local/bin/socom
+                 → /home/akili/projects/G1-Stack/cargo-applications/socom
+  ```
+  REPRODUCED here: after `adopt`, `git status --porcelain` shows `?? socom`, and
+  `git check-ignore socom` finds **no rule** — socom's own generated `.gitignore`
+  block covers `.socom/blackboard/`, `.socom/claims/`, the breach logs and the two
+  index artifacts, and **not the binary the install path just put beside them**.
+  Two consequences, both cheap to hit: `git add -A` stages a 421 KB executable
+  into the adopter's history, and deleting or moving the repo silently breaks
+  `socom` for the whole machine, because `~/.local/bin/socom` resolves into it.
+  ⚠️ **The doc invites this.** The block reads `curl` → `chmod +x` → `./socom
+  install` → **then** `cd ~/your-repo`, so it is written for a user who is
+  somewhere else first; a user already sitting in the repo they want to adopt —
+  the overwhelmingly likely state when reading a guide that says "run it on one
+  repo you care about" — lands the binary in the repo. Neither `install` nor
+  `quickstart` says a word about where the binary now lives.
+  **P1, not P0:** it is untidy and recoverable, not destructive — nothing is
+  clobbered, and the ignore-block gap is a one-line fix. It does not corrupt the
+  n=1 measurement.
+  **Falsifiable acceptance:** following the documented path from inside a repo
+  either does not leave an unignored binary in it, or says where the binary went
+  and that the symlink now depends on that location. **Files:**
+  `src/socom/install.py` (`cmd_install`), `src/socom/lifecycle.py`
+  (`_wire_ignores`), `PILOT.md` §The 5-minute path.
+
+- `DEF-GITLAB-CI-REFUSAL-READS-AS-AN-ERROR-01` **READY P1** — **A correct
+  no-clobber refusal is printed in the same register as a failure.** OBSERVED on
+  the operator's own machine, 2026-08-05, mid-`quickstart`:
+  ```
+  wrote   …/.github/workflows/socom-gates.yml
+  REFUSED …/.gitlab-ci.yml: exists and is not socom-generated (hand-written?).
+          Re-run with --force to adopt it.
+  wrote   …/.socom/ci/azure-socom-gates.yml
+  ```
+  The behaviour is **right** — HR2 no-clobber, socom declining to overwrite a
+  hand-written pipeline. But `REFUSED` in caps, sandwiched between two `wrote`
+  lines in a 60-line wall, reads as the one thing that went wrong in an install
+  that otherwise succeeded. It is the opposite: it is the guarantee `PILOT.md`
+  sells ("plants files, never clobbers your edits") being honoured out loud.
+  **P1 and labelling-only:** the word and its framing, not the decision. Adjacent
+  to [[DEF-STATUS-CLAIMS-UNLABELLED-01]] — that row is about claims that are too
+  confident, this is about a correct act that reads as a fault. Both are surface
+  wording; neither changes what socom does.
+  ⚠️ **Do not repair before the exposure.** Whether this reads as reassurance or
+  as alarm is a first-contact reaction, and §4 of `bench/exposure/TEMPLATE.md`
+  exists to capture exactly that. Fixing the wording first answers the question on
+  the participant's behalf.
+  **Falsifiable acceptance:** the refusal states that it is a guarantee being
+  kept, distinguishably from the failure lines around it.
+  **Files:** `src/socom/lifecycle.py` (the CI-adapter write path).
 
 ## Done
 
-The four P0 rows above. No P1 row has been worked, deliberately — see the P1
-section's own reasons, and decision 0001 §Amendment 1 rule 3 for
-`DEF-STATUS-CLAIMS-UNLABELLED-01` in particular.
+The seven P0 rows above — four on 2026-08-03/04, three on 2026-08-05. No P1 row
+has been worked, deliberately — see the P1 section's own reasons, and decision
+0001 §Amendment 1 rule 3 for `DEF-STATUS-CLAIMS-UNLABELLED-01` in particular.
 
 ---
 
