@@ -4,6 +4,12 @@
 > ground truth before building."* This directory **is** that ground truth — a fixed,
 > committed task set and a captured baseline that every later claim diffs against.
 
+> **`bench/exposure/` is a different instrument and outranks this one.** Everything
+> below measures socom against a yardstick *the author built and runs*. It cannot
+> move the proof tier off **D0 — ASSUMED**, because the blocking claim is adoption
+> by a non-author (`decisions/0001`). `bench/exposure/` is where that is recorded,
+> and every row in `buckets/build.md` is blocked on it — not on this bench.
+
 ## Why this exists
 
 Phase 3 (`ROADMAP.md`) replaces *"the ceremony probably helps"* with measured
