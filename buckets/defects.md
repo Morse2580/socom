@@ -616,6 +616,46 @@ colleagues. A participant hitting any of them is burned on something recorded he
   files it is about to plant are inert until `git init`.
   **Files:** `src/socom/lifecycle.py` (`adoption_rung`, quickstart ladder,
   `_ensure_ignore_block`), `src/socom/value.py`.
+  ⚠️⚠️ **FIRED IN THE WILD 2026-08-05 — and the row's own severity note was
+  wrong.** The paragraph above says the non-git version "needs an unusual setup".
+  It does not. The operator hit it by accident on their own machine, on build
+  `1bc70ac4f16c`, inside two minutes, following `PILOT.md` verbatim:
+  ```
+  ~/test-repos $ git clone …/monarch-hris-platform.git     # clone lands in a SUBdir
+  ~/test-repos $ curl -fsSLO …/bin/socom
+  ~/test-repos $ chmod +x socom && ./socom install --force
+  ~/test-repos $ socom quickstart                          # ← still in the PARENT
+  ```
+  End state: 33 files planted into `~/test-repos`, a scratch directory that is not
+  a repo and never will be; `repo: test-repos`; `! hooks NOT wired: not a git
+  repo`; `✓ .gitignore: … `git add -A` is safe`; and **`33% · T2 — compiled`**.
+  The actual project, one directory down, was never touched. The operator read
+  the result as socom repeating itself rather than as a wrong-directory adopt —
+  which is the point: **nothing in the output says which directory is being
+  adopted except the word `test-repos` on line 3 of 110.**
+  **The generating pattern is `clone → cd nothing → run`, and it is the norm, not
+  an unusual setup.** `PILOT.md`'s own 5-minute path reads `curl` → `chmod +x` →
+  `./socom install` → `cd ~/your-repo`, so the guide has the user standing OUTSIDE
+  a repo at the moment they have a working `socom` on PATH. Combined with
+  [[DEF-INSTALLED-BINARY-LANDS-INSIDE-THE-ADOPTED-REPO-01]] (same session, same
+  cause), the documented path actively steers a first-time user into the failing
+  configuration.
+  ⚠️ **`repo_root()` (`core.py:81`) is why**: it walks up from cwd for `.git` or
+  `socom.yaml` and, finding neither, **returns cwd** and plants there. Failing
+  soft is right for `doctor`; for a command that writes 33 files into someone's
+  filesystem it is the wrong default. Note the second-order trap this creates —
+  once `socom.yaml` exists in `~/test-repos`, every socom command run from ANY
+  subdirectory without its own marker now resolves to that scratch root.
+  ⚠️ **Severity is now contested and it is an OPERATOR CALL, not a session's.**
+  The case for P0 under §Amendment 1 rule 2: it fires before a non-author's stall
+  point, it writes 33 files somewhere the user did not intend, and a participant
+  who does this spends the entire session measuring a directory instead of their
+  repo — which corrupts [[EV-NONAUTHOR-EXPOSURE-01]] rather than informing it.
+  The case for holding at P1: the *metric* half is a finding the exposure is meant
+  to generate (rule 3), and repairing the readout deletes it. **Those two halves
+  are separable and that is probably the resolution** — refusing to plant in a
+  non-git directory is not the same repair as fixing what the percentage means.
+  Recorded, not acted on.
 
 - `DEF-BLACKBOARD-GRANTS-ON-UNREACHABLE-REMOTE-01` **READY P1 — highest-severity
   P1 in this bucket** — **When the remote is unreachable, `claim` grants a lease
