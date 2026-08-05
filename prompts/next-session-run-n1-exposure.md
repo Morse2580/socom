@@ -51,6 +51,19 @@ REWRITTEN 2026-08-05 (fifth pass, at 9e9cb79 — the three P0s are FIXED).
   UNCHANGED build.md ........ 1 READY (R1) + 8 BLOCKED
   UNCHANGED EV row .......... EV-NONAUTHOR-EXPOSURE-01 READY P0, STILL UNRUN
   UNCHANGED proof tier ...... D0. Three repairs moved nothing. That is the point.
+
+RE-VERIFIED 2026-08-05 (sixth pass, at e642787 — the field run + 0004).
+  VERIFIED  defects ......... 7 DONE P0 / 0 READY P0 / **9** READY P1
+  VERIFIED  build.md ........ 1 READY (R1) + 8 BLOCKED, unchanged
+  VERIFIED  EV row .......... EV-NONAUTHOR-EXPOSURE-01 READY P0, STILL UNRUN
+  VERIFIED  decisions ....... 0001 + 0002 + 0003 + **0004** (4 files)
+  VERIFIED  suites .......... unit 348 / r1corpus 146 / gate full PASS
+  VERIFIED  public URL ...... http=200, 421735 bytes, cmp-identical, 1bc70ac4f16c,
+            digest reproduced by shasum -a 256 (NO code shipped since 2fd2b5d)
+  VERIFIED  session-end ..... PASS — handoff filled, prompt claim-verified
+  UNCHANGED proof tier ...... D0 — after three P0 repairs, eleven field findings,
+            one decision document and a protocol line. Six passes of this header
+            now say the same thing: only the run moves it.
 -->
 
 # Next session — stop building. Run the n=1 exposure.
@@ -322,6 +335,43 @@ to keep: nobody has used the gates either, and this sweep showed them bound to
    of 576 statements name a checkable referent, and actual drift is ~0. R1's hard
    problem is precision, not detection.
 
+## What the 2026-08-05 field run found — read `decisions/0004`, do not re-derive it
+
+socom was run on **three real repos across two machines** (build `1bc70ac4f16c`):
+`httpie/cli` @ `5b604c3`, `cargo-applications`, `monarch-hris-platform`. Eleven
+findings. `0004` names the two classes they belong to and **repairs neither**.
+
+- **Class A — socom reports what it WROTE, not what took EFFECT.** Nine surfaces.
+  `T6 — operational` fires on `vectors.json` existing while `eval.json`'s real
+  `passed` boolean is never read; `✓ gates now run YOUR tests` printed over a
+  command that returned **127 on 3 of 3 repos**; `kept your statusLine` defers to
+  a file socom wrote 30 s earlier. Indicted by socom's own **rank-1** principle,
+  `verify-never-claim` — which `quickstart` **prints**, as result #4 of its demo
+  query, in the same run where it violates it.
+- **Class B — socom writes what it does not own, and no code represents "own".**
+  `core.hooksPath`, the remote, the working directory, `.claude/settings.json`,
+  the binary's location. `core.py:141` is the one place ownership IS tested, and
+  the one place socom behaved correctly.
+- **`0002`'s class is their intersection**, not a third thing.
+
+⚠️ **The A/B is the strongest evidence on file for the metric row**, measured not
+inferred: with a detectable test command → `100% · T6`, `doctor clean`, `gate
+fast` **RED**; without one → `33% · T2`, `doctor` exit 1. The right-hand column
+is socom working as designed. The left is the defect, and it is the **common**
+case.
+
+⚠️ **`0004`'s appendix has the proposed repairs, including a ~2h labelling column
+that is IN-BUCKET and still HELD** — five of its six surfaces are what `PILOT.md`
+asks the participant. Cheapness is not the test; whether a repair deletes a
+finding is.
+
+⚠️ **Step 3 of `bench/exposure/README.md` is new and load-bearing.** Confirm
+`git rev-parse --show-toplevel` before the participant runs anything. The
+operator adopted a **non-git scratch directory** by accident on 2026-08-05,
+following `PILOT.md` verbatim, and read the result as socom repeating itself.
+That is the one finding of eleven that **voids** the measurement instead of
+informing it — and it needs no code change, only that line.
+
 ## Do NOT do these
 
 - **Do not run a sixth agent cohort.** One ran 2026-08-03 (cold-run, ~30 defects)
@@ -344,6 +394,10 @@ to keep: nobody has used the gates either, and this sweep showed them bound to
 - **Do not run another agent cohort.** It cannot move the D-tier.
 - **Do not run a second participant to get a nicer answer.** `n=1` is what the
   root gate authorised; a confident *yes* is what §14.4's five-after-R1 is for.
+- **Do not repair either class in `decisions/0004` — including the cheap half.**
+  The labelling column is ~2 hours and in-bucket, and it is held anyway, because
+  it deletes five of the findings the sheet exists to collect. The classes are
+  named so they are not re-derived, not so they are worked.
 - **Do not adopt a standard, and do not re-run the standards research.** Seven
   were evaluated 2026-08-05 and none survived; `decisions/0003` records each
   verdict with its primary-source citation. A well-argued external critique is
@@ -386,12 +440,12 @@ addresses, tool quality is irrelevant and that is worth knowing before R1.
 
 | Thing | State |
 |---|---|
-| socom `main` | state below re-verified at `9e9cb79` (the three P0 repairs + their evidence, CI `success`); the closeout commit that lands this prompt sits on top of it. `git log --oneline -3` and re-probe rather than trusting either SHA. Clean, pushed, CI green. |
-| Buckets | `defects.md` **7 DONE P0 + 0 READY P0** + **7** READY P1 · `build.md` 1 READY (R1) + **8** BLOCKED · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** |
+| socom `main` | state below re-verified at `e642787` (the three P0 repairs + their evidence, CI `success`); the closeout commit that lands this prompt sits on top of it. `git log --oneline -3` and re-probe rather than trusting either SHA. Clean, pushed, CI green. |
+| Buckets | `defects.md` **7 DONE P0 + 0 READY P0** + **9** READY P1 · `build.md` 1 READY (R1) + **8** BLOCKED · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** |
 | Proof tier | **D0 — ASSUMED**, unchanged since 2026-08-01 |
 | Suite | `unit: 348 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean |
 | Exposure prep | `bench/exposure/{README,TEMPLATE}.md` landed; URL preflighted at **421735** bytes, build **`1bc70ac4f16c`**; sheet has a build-under-test row fed by `socom version` |
-| Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork (Accepted, adopts nothing) |
+| Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork (Accepted, adopts nothing) · **`0004` two-boundaries-socom-does-not-represent** (Accepted, diagnosis only, repairs nothing) |
 
 Probes: `./bin/socom gate full` · `python3 build.py --check` ·
 `python3 tests/unit.py` · `python3 tests/r1corpus.py` · `grep -c '^- \`' buckets/*.md`
