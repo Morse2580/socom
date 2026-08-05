@@ -34,13 +34,37 @@ Ladder reference: §14.2 of
   assertion count together, then argue about whether the recall is enough. ⚠️ **R1 must parse, and parsing can be wrong** — this is exactly why
   §20 preferred the blackboard, whose findings are authored and need no
   inference. Accept the inference cost here; it is the price of paying off to
-  one person. **Falsifiable acceptance:** on a repo whose `CLAUDE.md` names a
-  build command that was renamed, R1 reports it and exits non-zero; and it
-  scores against [[EV-R1-ACCEPTANCE-CORPUS-01]]'s mined corpus on **both recall
-  and precision**, with the per-defect result recorded — including a non-zero
-  assertion count on the honest-config control, so "reported nothing" cannot be
-  confused with "parsed nothing". **Size:** 1–2 wks. **Files:** `src/socom/`
-  (new module), `tests/`, `bin/socom` (rebuilt via `build.py`).
+  one person. ⚠️ **The referent usually still EXISTS — read this before choosing a
+  mechanism (corrected 2026-08-05).** This row previously illustrated acceptance
+  with *"a build command that was renamed"*, i.e. a referent that went missing.
+  **That is not what the corpus grades.** Measured against `corpus.jsonl`:
+  **18 of 19 defects are `subclass: paired-parent`** — the same repo, the same
+  config blob, the same referent present in *both* commits, differing only in
+  that the referent **was edited** between parent and defect commit, contradicting
+  a rule like `"Never edit these files: docs/reference/options.md"`
+  (`expected: at_defect_commit=FINDING, at_parent_commit=CLEAN`). Only **1 of 19**
+  (`declared-never-existed`) is the missing-referent case. **So R1 is graded on
+  history-aware contradiction, not on existence-checking.** An implementation that
+  only asks "does this path/script exist" scores ≈1/19 recall and cannot pass —
+  and it is also the slice already shipped by others (`giacomo/agents-lint`,
+  12★, unlicensed, dormant since 2026-03; verified 2026-08-05), whereas
+  git-history contradiction is that project's *unreleased* roadmap item and was
+  found in no shipped tool. The existence framing pointed R1 at the taken slice;
+  the corpus points it at the open one. **This also resolves the §14.2 "13% of
+  576 statements name a checkable referent, actual drift ≈0" probe** — that
+  measurement was existence-checking a maintained repo, which is why it found
+  nothing; it is not evidence about the contradiction case.
+  **Falsifiable acceptance:** on a repo whose `CLAUDE.md` declares a rule about a
+  file, and whose history shows that file changed in violation of it, R1 reports a
+  finding at the defect commit and reports **CLEAN at the parent commit** — the
+  paired form, since a detector that fires at both has learned nothing; and it
+  scores against [[EV-R1-ACCEPTANCE-CORPUS-01]]'s mined corpus on **recall,
+  precision and non-vacuity together** per `bench/r1-corpus/README.md` §How to
+  score R1 (`recall = defects reported / 19`, `precision = 1 − findings on the 11
+  controls / 11`, `non-vacuity = assertions extracted on C01, must be ≥ 20`), with
+  the per-defect result recorded — so "reported nothing" cannot be confused with
+  "parsed nothing". **Report all three or none.** **Size:** 1–2 wks. **Files:**
+  `src/socom/` (new module), `tests/`, `bin/socom` (rebuilt via `build.py`).
 
 ## Blocked
 
