@@ -46,6 +46,73 @@ Ladder reference: §14.2 of
 
 All blocked on [[EV-NONAUTHOR-EXPOSURE-01]] per decision 0001.
 
+- `BUILD-ACP-RUNTIME-SEAM-01` **BLOCKED P1** — blocked on
+  [[EV-NONAUTHOR-EXPOSURE-01]]. **Speak the Agent Client Protocol
+  ([agentclientprotocol.com](https://agentclientprotocol.com), JSON-RPC 2.0 over
+  stdio) instead of hand-rolling one vendor binding per agent — and evaluate
+  whether socom's right shape is an ACP *proxy* rather than an adopted
+  substrate.** Never considered: zero mentions of ACP anywhere in this repo, and
+  it is not a timing excuse — ACP shipped 2025-08, ~7 months before socom
+  started, and JetBrains, Google and GitHub had adopted it across 25+ agents.
+
+  **The narrow case (the seam).** `spawn.py:83` is
+  `RUNTIMES = {"claude-code": {"binary": "claude", "argv": _claude_argv, …}}` —
+  one vendor, a bespoke argv builder, under a comment promising *"a new runtime
+  is one entry here, never a fork of the launch logic."* **That table is a
+  hand-rolled mini-ACP**: precisely the per-agent fragmentation ACP exists to
+  delete, reinvented for n=1. A tool whose pitch is *"substrate for orchestrated,
+  contract-bound machines"* and whose thesis is multi-agent coordination cannot
+  orchestrate a second vendor without a new entry. That is a Claude Code wrapper
+  wearing the word substrate.
+
+  **The wide case, and the reason this is P1 rather than P3 — it is a candidate
+  answer to the entry-shape problem, which is what blocks adoption, which is what
+  blocks D0.** ACP is editor↔agent. socom is neither, but it is a *middlebox* —
+  it launches agents and governs them — and a middlebox is exactly what gets both
+  interfaces free from a client/agent protocol: **the editor speaks ACP to socom;
+  socom speaks ACP to the real agent; socom interposes the gates, the claims and
+  the ledger in between.** In that shape socom plants **zero files**, rewrites
+  **zero git config**, needs **no `.socom/`**, and works with any editor and any
+  agent. Compare what a stranger currently absorbs at first contact: ~32 planted
+  files and a `core.hooksPath` rewrite, which the 2026-08-04 scout assessment
+  says spends first-contact trust before earning any.
+  ⚠️ **It attacks the confound decision 0001 names as structural.** `0001`
+  records that *"a stranger cannot evaluate 'is drift-detection useful' without
+  also absorbing 'will this rewrite my git hooks' — two hypotheses, one test,
+  inseparable result."* Interposition **separates them**: governance can be
+  evaluated without adoption being consented to. That is the same property
+  `0001` §Do-NOT already demands of R1 (*"ship it standalone — own binary, zero
+  adoption, zero git-config writes, no `.socom/`"*), generalised from one
+  increment to the product's entry shape.
+
+  ⚠️ **This does NOT license building it, and does not substitute for the
+  exposure.** A better front door is still a guess about a house nobody has
+  entered. `0001` §2 blocks every increment beyond R1 until
+  [[EV-NONAUTHOR-EXPOSURE-01]] has a result, and this row is bound by that like
+  every other. Building a superior adoption model *before* one non-author has
+  tried the current one repeats the exact error `0001` was written to correct —
+  at one level up, which is what makes it tempting.
+
+  **Proof tier: D0 — ASSUMED.** Nothing here has been executed. The load-bearing
+  mechanism — *can socom interpose as an ACP proxy at all, preserving gate and
+  ledger semantics across the hop?* — has never been run. Per the root gate, no
+  contract, schema or wire format may be cut above D1, so the first action when
+  unblocked is a throwaway spike against a real ACP client, **not** a design.
+  ⚠️ Do not delete the git-hook layer if this ships: hooks bind the **repo**
+  (any actor, including a human with no editor), interposition binds the
+  **session**. They cover different populations —
+  [[DEF-UNRESOLVABLE-GATE-LEAVES-NO-TRACE-01]] is what happens when a
+  declaration outlives the capability that served it.
+
+  **Watch for it in the exposure run, free:** if the participant drives Cursor,
+  Codex or Gemini CLI rather than Claude Code, record what happens when they meet
+  the seat/runtime config (§4 of `bench/exposure/TEMPLATE.md`). That observation
+  costs nothing and is worth more than the feature.
+  **Falsifiable acceptance:** socom governs a session driven by an agent that has
+  no entry in `RUNTIMES`, with the gate and ledger semantics of a native run, and
+  with zero files planted and zero git config written in the target repo.
+  **Size:** 2–3 wk for the proxy shape; ~3 d for the narrow seam alone.
+
 - `R2-CLAIM-VERIFIER-HOOK-01` **BLOCKED P2** — commit/PR hook refusing claims
   that lack evidence: "tests pass" with no captured run, "verified" with no
   output. Turns verify-never-claim from a principle into a gate on your own
