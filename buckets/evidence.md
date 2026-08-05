@@ -12,9 +12,13 @@ nothing in `build.md` can move it. Only rows here can.
 
 ## Active
 
-- `EV-NONAUTHOR-EXPOSURE-01` **READY P0** — **Put socom in front of five
-  engineers who are not the author, one run each, and record where each one
-  stops.** This is permitted action (1) of the §10 root gate, named there as
+- `EV-NONAUTHOR-EXPOSURE-01` **READY P0** — **Put socom in front of ONE engineer
+  who is not the author, one run, observed, and record where they stop.**
+  *(Headline reconciled 2026-08-05 to the row's own ratified `n=1` amendment
+  below, which it contradicted — it still read "five engineers". The amendment
+  is the authority; this is transcription, not a re-decision. Record the run on
+  the sheet at [`bench/exposure/`](../bench/exposure/README.md).)*
+  This is permitted action (1) of the §10 root gate, named there as
   *"the experiment that raises the tier is cheap and has never been run"* — and
   it is still unrun as of 2026-08-03, two days later. Every other row in this
   repo is downstream of it. **The instrument is `PILOT.md` as it stands** — do
@@ -26,11 +30,16 @@ nothing in `build.md` can move it. Only rows here can.
   ⚠️ **Do not demo it to them.** A walked-through session measures the author's
   explanation, not the artifact. ⚠️ **Do not recruit only people who owe you a
   favour** — politeness produces a first use and never a second, which is
-  precisely the signal being read. **Falsifiable acceptance:** five recorded
-  stall points in `bench/`, and a yes/no per participant on voluntary second
-  use. A result of "five people, zero second uses" is a **valid and complete**
-  outcome of this row — it is the kill signal the Phase 3a trial cannot
-  produce.
+  precisely the signal being read. **Falsifiable acceptance** *(reconciled
+  2026-08-05 to `n=1`; the pre-amendment text read "five recorded stall points…
+  five people, zero second uses")*: **one** recorded stall point in
+  [`bench/exposure/<date>-<handle>.md`](../bench/exposure/TEMPLATE.md), and a
+  yes/no on voluntary second use. A result of **"one person, stopped at step 2,
+  zero second uses"** is a **valid and complete** outcome of this row — it is the
+  kill signal the Phase 3a trial cannot produce, and it closes the row exactly as
+  a positive result would. Do not run a second participant to get a nicer answer:
+  the amendment's own reasoning is that at `n=5` the headline metric is noise,
+  and a confident *yes* is what §14.4's five-after-R1 is for.
 
   ⚠️ **Agent cold runs cannot substitute for this row, and it was tried on
   2026-08-03.** Five agents with distinct engineering backgrounds were given only
@@ -91,7 +100,17 @@ nothing in `build.md` can move it. Only rows here can.
 
 - `EV-TRIAL-PROTOCOL-CONFOUND-01` **READY P2** — **The blackboard trial protocol
   produces uninterpretable rows when the session prompt names the paths that
-  carry findings.** MEASURED 2026-08-02, tally entry 2: the prompt specified
+  carry findings.**
+  ⚠️ **Second, independent confound found 2026-08-05:**
+  [[DEF-BLACKBOARD-GRANTS-ON-UNREACHABLE-REMOTE-01]] — with an unreachable remote
+  `claim` **grants** a lease it would have refused, and neither the record,
+  `--scan`, `doctor` nor the MCP response distinguishes it from a published one.
+  In the trial's stated 3+-person setting that makes a low tally
+  uninterpretable in a *second* way: it cannot separate "the thesis is wrong"
+  from "a participant's remote was refusing and their leases were invisible."
+  **Both confounds must close before Phase 3a runs for real**, or the tally
+  cannot fire its own kill criterion — the same disarmed-criterion shape
+  [`0001`](../decisions/0001-exposure-before-capability.md) already caught once. MEASURED 2026-08-02, tally entry 2: the prompt specified
   both the task and the two paths, so the two findings returned at claim time
   could only corroborate, never redirect — the row scores `B` by construction,
   and would have scored `A` for the wrong reason had the work gone differently.
