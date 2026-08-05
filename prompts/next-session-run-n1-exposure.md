@@ -350,6 +350,31 @@ to keep: nobody has used the gates either, and this sweep showed them bound to
   the most legitimate-looking reason yet to not run the exposure — it is still
   not a reason. Reopens only at fork > 0.
 
+- **Do not calm the first-contact output first — it was proposed, measured and
+  DEFERRED by the operator on 2026-08-05.** The instinct is right and the numbers
+  are real: `quickstart` on a fresh repo prints **92 lines / 7.6 KB**, **33
+  absolute paths in full**, an ASCII logo, and the rung meter **twice**, before
+  the user has done anything. Measured on build `1bc70ac4f16c`, throwaway git
+  repo, one Python file. Keep those numbers — they are the pre-exposure baseline
+  for whatever gets fixed afterwards. **The decision was to run the exposure
+  first and fix what the participant actually stopped on**, because taste picks
+  the wrong line to cut and §4 of `bench/exposure/TEMPLATE.md` was written to
+  capture precisely this reaction. ⚠️ Distinguish the two halves if it resurfaces:
+  output VOLUME is not the finding, but the ENTRY SHAPE it describes (files
+  planted, `core.hooksPath` rewritten) **is** what §4 measures — changing that
+  before the run deletes the measurement.
+  ⚠️ **A React/Ink rewrite was evaluated the same day and REFUTED on its own
+  goal.** It was proposed to make the tool "calmer to install"; it does the
+  opposite. socom installs today as ONE file — `curl` 421735 bytes of stdlib
+  Python, `chmod +x`, run — and Ink requires a Node runtime, `npm install`,
+  `node_modules` and a bundle step, so the install grows from one curl to
+  "install Node first" and **the 30-second preflight above stops existing**. It
+  is also a ~7,000-line cross-language rewrite, i.e. capability, not polish. The
+  design guidance that motivated it (ANSI degradation, non-TTY output,
+  light/dark, machine-readable modes) is framework-agnostic and applies to the
+  single Python file unchanged — nothing about it needs Node. Do not re-derive
+  this; if the CLI is ever restyled, it is restyled in place.
+
 ## Cheaper alternative if no engineer is reachable this week
 
 Test the *premise* instead of the tool: ask three engineers to describe their
