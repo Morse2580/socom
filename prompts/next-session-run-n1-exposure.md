@@ -39,6 +39,18 @@ RE-VERIFIED 2026-08-05 (fourth pass, at 5894df9 — the breakage sweep + two sco
   VERIFIED  suites .......... unit 339 / r1corpus 146 / gate full PASS
   VERIFIED  public URL ...... http=200, 411152 bytes, byte-identical, build b80c5efc6013
   UNCHANGED proof tier ...... D0
+
+REWRITTEN 2026-08-05 (fifth pass, at 9e9cb79 — the three P0s are FIXED).
+  REWRITTEN defects ......... **7 DONE P0 / 0 READY P0** / 7 READY P1
+  REWRITTEN public artifact . 411152 -> **421735** bytes, build b80c5efc6013 ->
+            **1bc70ac4f16c**, http=200, byte-identical to bin/socom
+  VERIFIED  suites .......... unit **348** / r1corpus 146 / gate full PASS /
+            build.py --check clean / CI success on 9e9cb79
+  VERIFIED  the fixes ....... 14 of the 21 new assertions FAIL against a
+            `git archive HEAD` of the pre-fix tree — the tests pin the defects
+  UNCHANGED build.md ........ 1 READY (R1) + 8 BLOCKED
+  UNCHANGED EV row .......... EV-NONAUTHOR-EXPOSURE-01 READY P0, STILL UNRUN
+  UNCHANGED proof tier ...... D0. Three repairs moved nothing. That is the point.
 -->
 
 # Next session — stop building. Run the n=1 exposure.
@@ -90,9 +102,9 @@ curl -fsSL -o /tmp/socom.pre \
 chmod +x /tmp/socom.pre && /tmp/socom.pre --help | head -3 && /tmp/socom.pre version
 ```
 
-Verified 2026-08-05 (re-run after `b7b6a32`): `http=200`, **411152 bytes**,
-byte-identical to `bin/socom`, `--help` prints the command list, and `version`
-reports build `b80c5efc6013`. **Also confirm the participant is on
+Verified 2026-08-05 (re-run after `9e9cb79`, the P0 repairs): `http=200`,
+**421735 bytes**, byte-identical to `bin/socom`, `--help` prints the command
+list, and `version` reports build `1bc70ac4f16c`. **Also confirm the participant is on
 macOS/Linux/WSL** — native Windows is unsupported and finding out mid-session
 wastes the run.
 
@@ -211,7 +223,7 @@ seam survives (~3 d). **The cheap way to separate `0001`'s two hypotheses is not
 that row — it is shipping R1 standalone, which is already the READY row.**
 Read the row's `EVALUATED` block before acting on any of it.
 
-## The 5-substrate breakage sweep — 2026-08-05, three P0s filed
+## The 5-substrate breakage sweep — 2026-08-05, three P0s filed and FIXED
 
 Five agents, five isolated shallow clones, one ecosystem each (Node/express ·
 Go/cobra · Rust/fd · Python/click · no-build/github-gitignore), each given only
@@ -220,21 +232,35 @@ failure or installing a toolchain to keep going. Build `b80c5efc6013`.
 
 **Zero crashes, zero hangs, 20+ subcommands. The tool is robust.** What it has is
 claims outrunning capability — and three that mutate state the user never agreed
-to. Those three are now **READY P0** in `defects.md`, each REPRODUCED by the
-primary session (local bare remote; nothing outbound), not taken on agent report:
+to. Those three were **READY P0** in `defects.md`, each REPRODUCED by the primary
+session (local bare remote; nothing outbound), not taken on agent report — and
+all three are **DONE** as of `2fd2b5d`, with the re-run evidence in each row:
 
-- `DEF-CLAIM-PUSHES-TO-HOST-REMOTE-01` — `claim` pushes `refs/socom/blackboard`
-  to the **adopted repo's own origin**, unprompted. It only failed on
-  `pallets/click` because that agent lacked push rights.
-- `DEF-PRECOND-SILENTLY-REVERSES-UNADOPT-01` — `unadopt` works; the next
-  `precond` silently re-sets `core.hooksPath` and scores it `PASS / 1 healed /
-  0 blockers`. Found independently by two agents. The documented exit is not durable.
-- `DEF-RELEASE-NEVER-RELEASES-01` — both forms exit **0** saying "no live lease
-  held" while `claim --scan` lists the lease before and after.
+- `DEF-CLAIM-PUSHES-TO-HOST-REMOTE-01` — `claim` pushed `refs/socom/blackboard`
+  to the **adopted repo's own origin**, unprompted. **FIXED:** `blackboard.sync`
+  now defaults to false and `init` plants it false; `bb_push` names the remote
+  and its URL on stderr before every write. ⚠️ **A multi-clone trial (Phase 3a)
+  must now set `blackboard.sync: true`** or every participant gets a private
+  notebook and every claim tallies `C — silent`. `PILOT.md` says so where the
+  trial is described.
+- `DEF-PRECOND-SILENTLY-REVERSES-UNADOPT-01` — `unadopt` worked; the next
+  `precond` silently re-set `core.hooksPath` and scored it `PASS / 1 healed /
+  0 blockers`. Found independently by two agents. **FIXED:** `unadopt` records
+  `socom.unadopted`, `_wire_hooks` (the single writer) honours it so no caller
+  can heal around it, and only an explicit `adopt` clears it. A heal that writes
+  the host's git config is now counted AND named as a warning.
+- `DEF-RELEASE-NEVER-RELEASES-01` — both forms exited **0** saying "no live lease
+  held" while `claim --scan` listed the lease before and after. **FIXED, and the
+  row's own diagnosis was incomplete:** identity was `hostname-<ppid>`, so every
+  one-shot invocation was a different author — the common case, because one shell
+  per command is how an agent runtime drives this tool. Identity is now derived
+  from the working tree, and `release` refuses loudly (naming the holder, exit 1)
+  rather than reporting a silent success.
 
-⚠️ **The P0 cap moved 4 → 7. That is not a licence to grow it** — see the §Note in
-`defects.md`. The same sweep produced a much longer list and every other finding
-went to P1 or nowhere.
+⚠️ **The P0 cap moved 4 → 7 and is now 7 DONE / 0 open. That is not a licence to
+grow it** — see the §Note in `defects.md`. The same sweep produced a much longer
+list and every other finding went to P1 or nowhere. **Nothing about these three
+repairs moved the proof tier**; the row below is still the work.
 
 **The asymmetry worth carrying** (it reframes the already-filed metric row):
 socom is **honest when detection FAILS and misleading when detection SUCCEEDS
@@ -302,9 +328,10 @@ to keep: nobody has used the gates either, and this sweep showed them bound to
   and a second ran 2026-08-05 (5-substrate breakage sweep, 3 P0s). Both were
   falsification and neither moved the D-tier by a millimetre — agents do not
   quit, and the stall point is the measurement. A third buys nothing.
-- **Do not repair the three new P0s *instead of* running the exposure.** They are
-  filed as pre-exposure because a participant hitting them is burned on something
-  already written down. Fix them, then run it — not fix them and call it a session.
+- **The three new P0s are already repaired (`2fd2b5d`, CI green). Do not treat
+  that as the session.** They were filed as pre-exposure because a participant
+  hitting them is burned on something already written down; that debt is paid and
+  the only thing left in the way of the run is the run.
 - **Do not work the P1 defects.** Seven are filed now, all cheaper and more
   interesting than the exposure, and they measure nothing.
   `DEF-STATUS-CLAIMS-UNLABELLED-01` is P1 **on purpose** — `PILOT.md` asks *"did
@@ -334,11 +361,11 @@ addresses, tool quality is irrelevant and that is worth knowing before R1.
 
 | Thing | State |
 |---|---|
-| socom `main` | state below re-verified at `5894df9` (the R1-prose correction, CI `success`); the closeout commit that lands this prompt sits on top of it. `git log --oneline -3` and re-probe rather than trusting either SHA. Clean, pushed, CI green. |
-| Buckets | `defects.md` 4 DONE P0 + **3 READY P0** + **7** READY P1 · `build.md` 1 READY (R1) + **8** BLOCKED · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** |
+| socom `main` | state below re-verified at `9e9cb79` (the three P0 repairs + their evidence, CI `success`); the closeout commit that lands this prompt sits on top of it. `git log --oneline -3` and re-probe rather than trusting either SHA. Clean, pushed, CI green. |
+| Buckets | `defects.md` **7 DONE P0 + 0 READY P0** + **7** READY P1 · `build.md` 1 READY (R1) + **8** BLOCKED · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** |
 | Proof tier | **D0 — ASSUMED**, unchanged since 2026-08-01 |
-| Suite | `unit: 339 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean |
-| Exposure prep | `bench/exposure/{README,TEMPLATE}.md` landed; URL preflighted at 411152 bytes, build `b80c5efc6013`; sheet has a build-under-test row fed by `socom version` |
+| Suite | `unit: 348 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean |
+| Exposure prep | `bench/exposure/{README,TEMPLATE}.md` landed; URL preflighted at **421735** bytes, build **`1bc70ac4f16c`**; sheet has a build-under-test row fed by `socom version` |
 | Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork (Accepted, adopts nothing) |
 
 Probes: `./bin/socom gate full` · `python3 build.py --check` ·

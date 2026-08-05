@@ -670,6 +670,16 @@ colleagues. A participant hitting any of them is burned on something recorded he
   is named distinctly from the push failure. **Files:**
   `src/socom/blackboard.py` (`bb_do_claim`, `bb_do_attest`, `bb_snapshot`,
   `bb_push`), `src/socom/mcp.py`.
+  ⚠️ **STILL OPEN, and its blast radius NARROWED (not shrank) on 2026-08-05.**
+  [[DEF-CLAIM-PUSHES-TO-HOST-REMOTE-01]] made publishing opt-in, so a repo that
+  never sets `blackboard.sync: true` is now local-only *by declaration* — which
+  is an honest state, not a degraded one, and it is what a `n=1` participant will
+  be in. **This changes nothing for Phase 3a**, which must set `sync: true` to
+  measure anything at all and therefore sits squarely in the failing
+  configuration. The A/B above still reproduces verbatim with the opt-in on. Do
+  not read the narrower default as partial repair: the defect is that an
+  unreachable remote is indistinguishable from a reachable one on the record, and
+  no line of that has been touched.
 
 - `DEF-UNRESOLVABLE-GATE-LEAVES-NO-TRACE-01` **READY P1** — **When a gate cannot
   run at all, socom records nothing — so a repo whose `core.hooksPath` still
