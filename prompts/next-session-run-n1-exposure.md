@@ -6,12 +6,18 @@ Every concrete claim in this prompt was re-run, not carried over.
   VERIFIED  build.md 1 READY + 8 BLOCKED ........ grep -cE '^- `.*(READY|BLOCKED)'
   VERIFIED  EV-NONAUTHOR-EXPOSURE-01 READY P0 ... grep, still unrun
   VERIFIED  bench/exposure/{README,TEMPLATE}.md . ls
-  VERIFIED  decisions/0001 + 0002 ............... ls
+  VERIFIED  decisions/0001 + 0002 + 0003 ........ ls
   VERIFIED  unit 339 passed / r1corpus 146 ...... python3 tests/{unit,r1corpus}.py
   VERIFIED  public curl URL 200, 408964 bytes ... curl -w, cmp against bin/socom
   VERIFIED  proof tier D0, unchanged ............ bench/exposure/ holds the template only
   REWRITTEN row headline read "five engineers" .. reconciled to n=1 this session
   HYPOTHESIS none.
+
+RE-VERIFIED 2026-08-05 (second pass, at d1b090e after the 0003 commit). Every
+line above was re-run, not carried: SHA/clean-tree, 4/7/1/8 bucket counts,
+EV row still READY P0 unrun, unit 339 / r1corpus 146, curl http=200
+bytes=408964 byte-identical to bin/socom. NOTHING MOVED. The standards research
+below added one document and zero capability -- which is the point of recording it.
 -->
 
 # Next session — stop building. Run the n=1 exposure.
@@ -107,6 +113,54 @@ sites checked clean, 2 bounded residues) is the appendix of
 mechanism is D0 and cuts a shell/Python format contract, which the root gate caps
 at D1. Do not build it. When it is time, step 1 is a one-hour spike of U1 alone.
 
+⚠️ **0003 sharpened 0002's spike question — read it before the spike, not during.**
+`bb_do_claim` (`blackboard.py:488-494`) **already detects** the publish failure and
+already returns `result["published"]` + `result["publish_error"]`. socom is not
+blind: the gap is **durability, not detection** — the record appended to the shard
+is byte-identical either way, while `published` lives only in the in-memory result.
+That is a smaller problem than the defect row reads as. But `log_breach`
+(`core.py:94`) writes `.socom/gates/breaches.log`, a **local file**, and the party
+the record exists to inform is a different session on a different machine — so the
+one mechanism socom already has does not reach across the boundary. The spike's
+question is therefore: **can the writer half ship alone, or does a durable
+`published` flag force the reader-side join immediately?** Answer it; do not assume
+it either way.
+
+## What ALSO happened on 2026-08-05 — a standards review, adopted nothing
+
+An external reviewer proposed seven standards for the attestation brief with a
+recommended sequencing (git notes + JSON Schema now; SCITT + TUF at first fork).
+Four bounded scouts ran, primary sources only, every load-bearing verdict
+re-verified directly. **Six of seven refuted or reframed. Nothing adopted. Zero
+code.** The verdict is `decisions/0003-no-standard-binds-a-fork.md` (Accepted).
+
+**Do not re-derive this, and do not act on the critique if it resurfaces.** The
+three things worth carrying:
+
+1. **No standard can make a party you cannot execute inside enforce your policy.**
+   SCITT/RFC 9943 was proposed as delivering fork inheritance; the RFC contains
+   **zero** occurrences of `federat*`, the TS *operator* owns the Registration
+   Policy (§5.1.1.2), and §12 gives the **relying party** the trust choice, not the
+   base an authority. TUF/OCI hit the same wall from another spec family. So
+   "fork inheritance" as framed is unachievable — the achievable shape is
+   **detect divergence and withdraw trust**. Reopens only at fork > 0.
+2. **The one surviving idea is already ratified here.** SCITT §5.1.1.2 ("make the
+   registration checks reproducible") is `canon/residuality.xml:95-99`
+   compromise-recording, in socom's own words, with the failure condition named.
+   An IETF RFC making it normative is **corroboration of the principle** — and an
+   indictment of the two open defects that violate it. It is **not** evidence
+   about socom, and must never be cited as such.
+3. **git notes is not the cheap move** — it does not propagate (zero notes
+   references in `git-push(1)`/`git-fetch(1)`), does not survive squash-merge
+   (`notes.rewrite.<command>` is *"currently amend or rebase"*; `notes.rewriteRef`
+   has no default), and its local-add/separate-push shape reproduces exactly the
+   `bb_append`→`bb_push` ordering behind the blackboard defect. Same defect, new
+   ref name.
+
+⚠️ **This proves nothing about whether socom is necessary.** The standards fail at
+an *adjacent* problem, and socom has the *same* cross-boundary limit it just found
+in SCITT and TUF. Necessity is an adoption question at D0. Only the exposure moves it.
+
 ⚠️ **The blackboard defect also breaks Phase 3a's instrument.** That trial needs
 3+ concurrent people — exactly when it fires — so a low tally could not
 distinguish "thesis wrong" from "a participant's remote was refusing and their
@@ -155,6 +209,11 @@ Read the row's `EVALUATED` block before acting on any of it.
 - **Do not run another agent cohort.** It cannot move the D-tier.
 - **Do not run a second participant to get a nicer answer.** `n=1` is what the
   root gate authorised; a confident *yes* is what §14.4's five-after-R1 is for.
+- **Do not adopt a standard, and do not re-run the standards research.** Seven
+  were evaluated 2026-08-05 and none survived; `decisions/0003` records each
+  verdict with its primary-source citation. A well-argued external critique is
+  the most legitimate-looking reason yet to not run the exposure — it is still
+  not a reason. Reopens only at fork > 0.
 
 ## Cheaper alternative if no engineer is reachable this week
 
@@ -167,11 +226,12 @@ addresses, tool quality is irrelevant and that is worth knowing before R1.
 
 | Thing | State |
 |---|---|
-| socom `main` | state below verified at `fa432bb`; the closeout commit that landed this prompt sits on top of it. `git log --oneline -3` and re-probe rather than trusting either SHA. Clean, pushed, CI green. |
+| socom `main` | state below re-verified at `d1b090e` (the 0003 commit, CI `success`); the closeout commit that lands this prompt sits on top of it. `git log --oneline -3` and re-probe rather than trusting either SHA. Clean, pushed, CI green. |
 | Buckets | `defects.md` 4 DONE P0 + **7** READY P1 · `build.md` 1 READY (R1) + **8** BLOCKED · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** |
 | Proof tier | **D0 — ASSUMED**, unchanged since 2026-08-01 |
 | Suite | `unit: 339 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean |
 | Exposure prep | `bench/exposure/{README,TEMPLATE}.md` landed; download URL preflighted |
+| Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork (Accepted, adopts nothing) |
 
 Probes: `./bin/socom gate full` · `python3 build.py --check` ·
 `python3 tests/unit.py` · `python3 tests/r1corpus.py` · `grep -c '^- \`' buckets/*.md`
@@ -179,8 +239,11 @@ Probes: `./bin/socom gate full` · `python3 build.py --check` ·
 ## The bound
 
 The tool is less broken than it was, the class behind two of its defects is now
-named and swept, and the recording sheet is written. **None of that moved the
-proof tier, because none of it is the blocking claim.**
+named and swept, the recording sheet is written, and seven candidate standards
+were evaluated against primary sources and none adopted. **None of that moved the
+proof tier, because none of it is the blocking claim.** The last one is the
+clearest case: a day of rigorous research produced one document, zero capability,
+and an explicit note that it says nothing about whether anyone would use this.
 
 A result of *"one person, stopped at step 2, never ran it again"* closes the row
 exactly as a positive result would. It is not a failed session.
