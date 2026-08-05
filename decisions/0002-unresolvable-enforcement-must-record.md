@@ -375,6 +375,60 @@ COVERED.
 **Next action is not "implement carefully."** It is the one-hour U1 spike — and
 it does not run before the exposure.
 
+---
+
+## Appendix — full codebase class sweep (2026-08-05, `caa677a`, 6915 lines)
+
+Swept every site matching condition (2) of the class — resolution through an
+unowned referent — and rated each on (3), the degrade. Two axes, and they are
+independent: **A** = unowned referent, **B** = degrades open with no durable
+trace. The strict class is A∧B.
+
+### Instances — A∧B
+
+| # | Site | Unowned referent | Degrade | Filed |
+|---|---|---|---|---|
+| 1 | `HOOK_RESOLVER` (`lifecycle.py:244`) | the socom binary on PATH | `exit 0`, stderr only | [[DEF-UNRESOLVABLE-GATE-LEAVES-NO-TRACE-01]] |
+| 2 | `gate.py:297` | the user's check command binding | *"unbound — passing"*, no `log_breach` | same row |
+| 3 | **`bb_do_claim` (`blackboard.py:485`)** | **the git remote** | **grants; record has no `published` field** | **[[DEF-BLACKBOARD-GRANTS-ON-UNREACHABLE-REMOTE-01]]** |
+| 4 | `bb_do_attest` | the git remote | records `(verified)`; peer sees `0 outstanding` | same row |
+| 5 | `mcp.py:218` | the git remote | returns `granted: true`, `isError: false` | same row |
+| 6 | `uninstall` without `unadopt` (`install.py`) | every adopted repo's hooks | printed NOTE, enforces nothing | row 1, C3 deferral |
+
+Instances 3–5 were found by this sweep and are **more severe than the instance
+that prompted it**: a lease's whole function is inter-session visibility, so a
+local-only lease is not degraded — it is a no-op reporting success.
+
+### Checked and clean — the class does NOT apply
+
+Recorded so a later session does not re-sweep them.
+
+| Site | Why clean |
+|---|---|
+| `import yaml` (`core.py:19`), `import fcntl` (`ledger.py:108`, `spawn.py:244`) | `sys.exit` with a named remedy — loud, R6-compliant |
+| `contract verify` (`ledger.py:228+`) | an unrunnable check returns non-zero → `FAIL`. **Fails closed**, the inverse of instance 2 |
+| `contract adequacy` | actively defends the *inverse* defect — flags a contract whose green verify would prove nothing |
+| malformed `socom.yaml` | **MEASURED**: parse error, 0 commits landed. Fails closed |
+| `spawn --exec` missing runtime (`spawn.py:413`) | `sys.exit` "R6: degrade loudly", plus `_runtime_preflight` (`install.py:200`) surfaces it at onboarding. **This is the precedent the instances above should follow** |
+| `query` vector index absent (`retrieval.py:252`) | prints the degrade **and** the L0 keyword floor is mandatory and functional — a real fallback, not a skip |
+
+### Bounded residue — known, documented, not silent
+
+| Site | Status |
+|---|---|
+| `_pid_alive` cross-host (`monarch.py:37-44`) | The pid ambiguity is named in a comment and mitigated by `RUN_STALE_HOURS = 72`; reaps log a breach (`monarch.py:178,295`). Run records carry **no host field**, so within the horizon a coincidental pid match on another host reads "running". Bounded and traced — not an instance, but the horizon is the only thing holding it. |
+| `bb_expired` unparseable → `True` (`blackboard.py:139`) | Fails **open** on collision prevention (a corrupt lease record is dropped, so a conflicting claim is granted) and logs nothing — condition **B without A**, since the record is socom-owned and therefore *detectable*. Below the filing bar alone; would be swept up by the same "record what you could not assess" rule. |
+
+### What the sweep changes about the design
+
+Nothing structural — instances 3–5 share the class and the fix shape (*record
+what you could not assess; reconcile when the referent returns*), but they need
+their own repair, because the durable marker belongs **on the record** (a
+`published` field) rather than in a side log, and because the **fetch** failure
+must be reported distinctly from the **push** failure. That is scoped in
+[[DEF-BLACKBOARD-GRANTS-ON-UNREACHABLE-REMOTE-01]], not here. This document
+remains the gate-path design.
+
 ## Alternatives rejected
 
 Candidates A (symlink→copy), B (fail closed) and C (in-socom detector) are tabled

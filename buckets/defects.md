@@ -409,6 +409,60 @@ written down here. **That row is still unrun, and it is still the work.**
   actually ran, asserted by `tests/ledgercheck.py`. **Files:**
   `src/socom/ledger.py`, `tests/ledgercheck.py`.
 
+- `DEF-BLACKBOARD-GRANTS-ON-UNREACHABLE-REMOTE-01` **READY P1 — highest-severity
+  P1 in this bucket** — **When the remote is unreachable, `claim` grants a lease
+  it would have refused, and the record it writes is byte-identical to a
+  published one. Two sessions end up both holding the same path, each `--scan`
+  reporting itself as the sole holder.** Same class as
+  [[DEF-UNRESOLVABLE-GATE-LEAVES-NO-TRACE-01]], applied to the collision-
+  prevention mechanism instead of the gates — and worse there, because a lease's
+  *entire function* is to be visible to other sessions. A local-only lease is not
+  a degraded lease; it is a no-op that reports success.
+  **MEASURED (n=1 controlled A/B, two clones of one bare remote, 2026-08-05,
+  `caa677a`).** Distinct `SOCOM_SESSION` authors, same path:
+  - **Control, remote reachable:** A acquires; B is refused —
+    `HELD by sessionA … not granted — yield, pick other paths, or wait for the TTL`.
+  - **Variable, B's remote unreachable:** B is **granted** —
+    `acquired src/other.py as sessionB [l-0ed53feab637] (LOCAL ONLY — not published: …)`,
+    **exit 0**. `claim --scan` then shows A holding it in A, B holding it in B.
+  - **The record on disk** (`.socom/blackboard/leases/<author>.jsonl`) carries
+    `kind/author/ts/paths/intent/ttl_s` and **no published field** — `bb_do_claim`
+    (`blackboard.py:485-493`) calls `bb_append` *before* `bb_push` and never
+    revisits the record. `published` lives only in the returned dict.
+  - `doctor` says **nothing** about an unpublished lease.
+  **The read failure is the severe half and is never stated.** The message names
+  the *write* it noticed ("not published"). The failure that actually invalidates
+  the grant is the **fetch** — `bb_snapshot` could not read peers' leases, so
+  `bb_conflicts` ran against an incomplete set. socom reports the symptom it saw
+  and stays silent about the one that makes the answer wrong.
+  **Second surface, same defect, measured:** `attest` on an unreachable remote
+  prints `recorded [f-…] against src/other.py (verified)` — a durable quality
+  tier — while the peer session's `socom findings src/other.py` returns
+  **`0 outstanding`**. A finding nobody can read is stamped `verified`.
+  **Third surface — the one that matters most:** the MCP front-end
+  (`mcp.py:218`) returns `bb_do_claim`'s dict verbatim with
+  `isError = not out["ok"]`. `ok` is `True`, so a local-only claim reaches an
+  agent as **`granted: true`, no error**, with `published: false` buried among
+  the fields. Agents are the blackboard's intended users and get the weakest
+  signal of the three front-ends.
+  **Why this is not pre-exposure P0** despite the severity: it cannot fire at
+  `n=1` — it needs two concurrent sessions. It does not compete with
+  [[EV-NONAUTHOR-EXPOSURE-01]].
+  ⚠️ **It does invalidate the Phase 3a blackboard trial's instrument.** That
+  trial's stated setting is *"three or more people running concurrent agents on a
+  shared repo"* — precisely the configuration in which this fires. A trial that
+  tallies zero category-A saves cannot distinguish "the thesis is wrong" from
+  "some participant's remote was refusing and their leases were never visible."
+  Repair this **before** Phase 3a runs in its real setting, or the tally is
+  uninterpretable — the same disarmed-kill-criterion shape decision
+  [`0001`](../decisions/0001-exposure-before-capability.md) already identified.
+  **Falsifiable acceptance:** re-run the A/B; in the variable run either the
+  grant is refused, or it is granted with a durable marker on the record that
+  `--scan`, `doctor` and the MCP response all surface — and the **fetch** failure
+  is named distinctly from the push failure. **Files:**
+  `src/socom/blackboard.py` (`bb_do_claim`, `bb_do_attest`, `bb_snapshot`,
+  `bb_push`), `src/socom/mcp.py`.
+
 - `DEF-UNRESOLVABLE-GATE-LEAVES-NO-TRACE-01` **READY P1** — **When a gate cannot
   run at all, socom records nothing — so a repo whose `core.hooksPath` still
   declares socom's gates can commit ungated indefinitely, and no socom surface
