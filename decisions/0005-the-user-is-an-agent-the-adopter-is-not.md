@@ -1,8 +1,10 @@
 # 0005 — The user is an agent; the adopter is not
 
-**Status:** **PROPOSED 2026-08-05 — not accepted.** Amending `0001` is reserved to
-the operator; this document argues the question and recommends a verdict, and one
-line flips it.
+**Status:** **Accepted 2026-08-05** — the operator ratified the recommendation
+below. **The amendment is refused and `EV-NONAUTHOR-EXPOSURE-01` stands
+unamended**; `0001`'s ordering is untouched. The population question is now
+**closed** and is not re-litigated without the reopening trigger at the foot of
+this document.
 **Supersedes:** nothing. **Resolves:** whether `EV-NONAUTHOR-EXPOSURE-01` names
 the wrong population — whether socom's user is an *agent*, in which case a
 non-author *human engineer* is the wrong instrument and the row should be

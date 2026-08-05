@@ -61,6 +61,8 @@ RE-VERIFIED 2026-08-05 (sixth pass, at e642787 — the field run + 0004).
   VERIFIED  public URL ...... http=200, 421735 bytes, cmp-identical, 1bc70ac4f16c,
             digest reproduced by shasum -a 256 (NO code shipped since 2fd2b5d)
   VERIFIED  session-end ..... PASS — handoff filled, prompt claim-verified
+  ADDED     decisions ....... **0005** Accepted — the population question is
+            CLOSED; the amendment was conceded in full and still refused
   UNCHANGED proof tier ...... D0 — after three P0 repairs, eleven field findings,
             one decision document and a protocol line. Six passes of this header
             now say the same thing: only the run moves it.
@@ -394,6 +396,17 @@ informing it — and it needs no code change, only that line.
 - **Do not run another agent cohort.** It cannot move the D-tier.
 - **Do not run a second participant to get a nicer answer.** `n=1` is what the
   root gate authorised; a confident *yes* is what §14.4's five-after-R1 is for.
+- **Do not re-argue whether the exposure is needed. `0005` closed it 2026-08-05.**
+  The strongest form of the argument — socom's *user* is an agent, so a human
+  engineer is the wrong population — was put, **conceded in full**, and still
+  refused: the root gate named *adoption*, adoption is a decision, and an agent
+  that runs `socom claim` because `CLAUDE.md` says so is producing compliance by
+  construction — the exact half the metric discards. Ten agents across two
+  cohorts have already demonstrated it: seven P0 rows, D0 moved by nothing.
+  ⚠️ The one thing `0005` DID license is an **agent-behaviour A/B** (same repo,
+  same task, one variable: socom present or absent) — author-runnable, no
+  recruit, and explicitly **supporting, not blocking**. Efficacy is not adoption.
+  Run it by hand if you want it; **building** a harness for it is capability.
 - **Do not repair either class in `decisions/0004` — including the cheap half.**
   The labelling column is ~2 hours and in-bucket, and it is held anyway, because
   it deletes five of the findings the sheet exists to collect. The classes are
@@ -445,7 +458,7 @@ addresses, tool quality is irrelevant and that is worth knowing before R1.
 | Proof tier | **D0 — ASSUMED**, unchanged since 2026-08-01 |
 | Suite | `unit: 348 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean |
 | Exposure prep | `bench/exposure/{README,TEMPLATE}.md` landed; URL preflighted at **421735** bytes, build **`1bc70ac4f16c`**; sheet has a build-under-test row fed by `socom version` |
-| Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork (Accepted, adopts nothing) · **`0004` two-boundaries-socom-does-not-represent** (Accepted, diagnosis only, repairs nothing) |
+| Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork (Accepted, adopts nothing) · **`0004`** two-boundaries-socom-does-not-represent (Accepted, diagnosis only, repairs nothing) · **`0005`** the-user-is-an-agent-the-adopter-is-not (Accepted — the population question is CLOSED) |
 
 Probes: `./bin/socom gate full` · `python3 build.py --check` ·
 `python3 tests/unit.py` · `python3 tests/r1corpus.py` · `grep -c '^- \`' buckets/*.md`
