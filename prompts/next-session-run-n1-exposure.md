@@ -140,7 +140,7 @@ addresses, tool quality is irrelevant and that is worth knowing before R1.
 
 | Thing | State |
 |---|---|
-| socom `main` | `fa432bb`, clean, pushed, CI green |
+| socom `main` | state below verified at `fa432bb`; the closeout commit that landed this prompt sits on top of it. `git log --oneline -3` and re-probe rather than trusting either SHA. Clean, pushed, CI green. |
 | Buckets | `defects.md` 4 DONE P0 + **6** READY P1 · `build.md` 1 READY (R1) + 7 BLOCKED · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** |
 | Proof tier | **D0 — ASSUMED**, unchanged since 2026-08-01 |
 | Suite | `unit: 339 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean |
