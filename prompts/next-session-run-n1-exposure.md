@@ -100,6 +100,20 @@ distinguish "thesis wrong" from "a participant's remote was refusing and their
 leases were invisible." Cross-referenced into `EV-TRIAL-PROTOCOL-CONFOUND-01`.
 It does **not** block the n=1 exposure.
 
+**One capability row was filed and then evaluated the same day.**
+`BUILD-ACP-RUNTIME-SEAM-01` (BLOCKED **P2**) — socom hand-rolls one vendor
+binding per agent (`RUNTIMES` has a single entry) where the Agent Client
+Protocol is the standard, adopted across 25+ agents since 2025-08 and never once
+mentioned in this repo. It was filed at P1 on the argument that an ACP *proxy*
+shape would give zero planted files and zero git-config writes, and so answer the
+entry-shape problem. **That argument was probed and refuted the same day** — 3 of
+8 gates are git-triggered and ACP has no `git commit`; `.socom/` carries 17 state
+directories; the blackboard pushes `refs/socom/blackboard` by design; and
+`PILOT.md`'s audience is terminal Claude Code, not an ACP session. The narrow
+seam survives (~3 d). **The cheap way to separate `0001`'s two hypotheses is not
+that row — it is shipping R1 standalone, which is already the READY row.**
+Read the row's `EVALUATED` block before acting on any of it.
+
 ## The three assessments that should still weaken the instinct to build
 
 1. **Build order/shape (scout, 2026-08-04).** Execution is rigorous; the *order*
@@ -141,7 +155,7 @@ addresses, tool quality is irrelevant and that is worth knowing before R1.
 | Thing | State |
 |---|---|
 | socom `main` | state below verified at `fa432bb`; the closeout commit that landed this prompt sits on top of it. `git log --oneline -3` and re-probe rather than trusting either SHA. Clean, pushed, CI green. |
-| Buckets | `defects.md` 4 DONE P0 + **6** READY P1 · `build.md` 1 READY (R1) + 7 BLOCKED · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** |
+| Buckets | `defects.md` 4 DONE P0 + **6** READY P1 · `build.md` 1 READY (R1) + **8** BLOCKED · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** |
 | Proof tier | **D0 — ASSUMED**, unchanged since 2026-08-01 |
 | Suite | `unit: 339 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean |
 | Exposure prep | `bench/exposure/{README,TEMPLATE}.md` landed; download URL preflighted |
