@@ -21,8 +21,29 @@ second one, and it is binary, cheap and unfakeable.
 
 1. Copy `TEMPLATE.md` to `<YYYY-MM-DD>-<participant-handle>.md`.
 2. Fill §1 **before** the session. Everything else is filled live or after.
-3. §5 is filled **one week later**, in a separate sitting, and is the metric.
-4. Commit it. An unrecorded run did not happen.
+3. **Confirm the participant is standing in a repository before they run
+   anything** — `git rev-parse --show-toplevel` must print the repo they mean to
+   adopt. This is silent setup, like handing someone a laptop; say nothing about
+   socom while you do it.
+4. §5 is filled **one week later**, in a separate sitting, and is the metric.
+5. Commit it. An unrecorded run did not happen.
+
+⚠️ **Step 3 is not fussiness — it is the one thing that can void the measurement
+rather than inform it.** `repo_root()` fails soft: in a directory that is neither
+a git repo nor a socom root it returns the current directory and plants ~33 files
+there. The operator did exactly this on 2026-08-05, on their own machine, inside
+two minutes, following `PILOT.md` verbatim — cloned into a subdirectory, ran
+`quickstart` from the parent, and adopted a scratch folder. **They read the
+result as socom repeating itself rather than as a wrong-directory adopt**, and
+nothing in 110 lines of output says which directory is being adopted except one
+word on line 3. A participant who does this spends the whole session measuring a
+folder, and the run tells you nothing about socom.
+
+The defect ([[DEF-QUICKSTART-REPORTS-ADOPTION-IN-NON-GIT-REPO-01]]) is **not**
+repaired, deliberately — see `decisions/0004`. It is mitigated here instead,
+because the observer is present and one line of protocol costs nothing and
+deletes no finding, where a code repair would touch the metric surfaces §4 exists
+to test.
 
 **The sheet is the observer's, not the participant's.** Handing it over turns an
 observation into a survey and deletes (a) — a participant who knows a "stall
@@ -70,11 +91,23 @@ A broken first touch burns a scarce participant on nothing.
 curl -fsSL -o /tmp/socom.pre \
   https://raw.githubusercontent.com/Morse2580/socom/main/bin/socom \
   -w 'http=%{http_code} bytes=%{size_download}\n'
-chmod +x /tmp/socom.pre && /tmp/socom.pre --help | head -3
+chmod +x /tmp/socom.pre && /tmp/socom.pre --help | head -3 && /tmp/socom.pre version
 ```
 
 Expect `http=200`, a non-trivial byte count, and the command list. Last verified
-2026-08-05 against `d23fa0c` — 200, 408964 bytes, identical to `bin/socom`.
+2026-08-05 against `4ef2d11` — **200, 421735 bytes**, byte-identical to
+`bin/socom` (`cmp`), build **`1bc70ac4f16c`**, digest reproduced by
+`shasum -a 256`.
+
+⚠️ **Record the `version` build digest on the sheet** — it is the build-under-test
+row, and a result that cannot name its build is not reproducible evidence. The
+byte count changes on **any** merge touching `bin/socom`; re-run rather than
+trust the number above.
+
+⚠️ Cosmetic and expected, not a broken download: `--help` writes to **stderr**
+and exits **1**, so the `| head -3` above does not truncate it — the whole
+command list scrolls past. **Not filed** (cosmetic, and the bucket has a stated
+no-growth norm); noted here only so it does not read as a failed preflight.
 
 **Also confirm the participant is on macOS / Linux / WSL.** Native Windows is
 unsupported (`fcntl` — the tool exits loudly), and discovering that during the
