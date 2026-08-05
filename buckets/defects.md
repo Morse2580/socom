@@ -346,6 +346,88 @@ written down here. **That row is still unrun, and it is still the work.**
   the prettier block, where excluding it is right — none of it is the host's to
   format.
 
+## Active — P0 (pre-exposure; found 2026-08-05 by the 5-substrate breakage sweep)
+
+**Provenance.** Five agents, five isolated shallow clones, one ecosystem each
+(Node/express · Go/cobra · Rust/fd · Python/click · no-build/github-gitignore),
+each given only the public `curl` URL, forbidden from reading socom's source to
+work around a failure and from installing any toolchain to keep going. Build
+under test `b80c5efc6013`. **Zero crashes, zero hangs, 20+ subcommands.** Every
+row below was then **reproduced by the primary session** in a throwaway repo with
+a *local bare* remote — none of it rests on an agent's self-report.
+
+These three qualify under §Amendment 1 rule 2 (fires before a non-author's stall
+point) on a stricter test than the 2026-08-03 four: each **mutates state the user
+never agreed to**, and one writes to a remote the participant may share with
+colleagues. A participant hitting any of them is burned on something recorded here.
+
+- `DEF-CLAIM-PUSHES-TO-HOST-REMOTE-01` **READY P0** — **`claim` pushes a ref to
+  the adopted repo's own `origin`, unasked.** Announcing intent to edit a file —
+  a local bookkeeping act — publishes to the host project's shared remote.
+  REPRODUCED by the primary session against a local bare remote: refs on origin
+  before `socom claim a.txt` = `refs/heads/main`; after = `refs/heads/main` **+
+  `refs/socom/blackboard`**. No prompt, no confirmation, no `--push` opt-in.
+  `attest` and `resolve` do the same. On `pallets/click` the Python agent saw it
+  attempt the push, get `remote: Permission to pallets/click.git denied`, retry
+  under `refs/heads/socom/blackboard`, then degrade to `LOCAL ONLY` — it only
+  failed because that agent lacked push rights. **On the user's own repo it
+  lands.** The refusal message also leaks the tool author's GitHub identity to
+  the participant. ⚠️ **The blackboard pushing `refs/socom/blackboard` is
+  by design — pushing it to an arbitrary *host* repo's origin is not the same
+  decision**, and no surface asks. **Why P0:** `PILOT.md` puts `claim` on the
+  first-run path; a participant who runs it on a work repo writes to a remote
+  their colleagues share, which is unrecoverable reputationally even though it is
+  trivially deletable technically. **Falsifiable acceptance:** `claim` on a repo
+  whose remote socom did not create either does not push, or pushes only after an
+  explicit opt-in, and says which remote it is about to write to before doing it.
+  **Files:** `src/socom/blackboard.py` (`bb_push`, `bb_do_claim`, `bb_do_attest`).
+
+- `DEF-PRECOND-SILENTLY-REVERSES-UNADOPT-01` **READY P0** — **`unadopt` is
+  correct but not durable: the next `precond` silently re-arms the hooks.**
+  Found INDEPENDENTLY by two agents (Python, no-build), then REPRODUCED by the
+  primary session:
+  ```
+  after unadopt : hooksPath='UNSET'
+  ./socom precond  →  ~ healed: git config core.hooksPath .githooks
+                      -> PASS (13ms): 0 blocker(s), 1 warning(s), 1 healed
+  after precond : hooksPath='.githooks'
+  ```
+  `precond` advertises itself as a fast pre-flight that "auto-heals safe gaps".
+  It treats an **explicit, user-requested opt-out** as drift, reverses it, reports
+  the reversal as neither blocker nor warning but as `1 healed` under a **PASS**
+  verdict, and never prints the word "adopt". The no-build agent isolated it by
+  elimination — `value`, `greet`, `index`, `doctor` all leave `hooksPath` unset.
+  **Why P0:** it defeats the documented exit. `DEF-HOOKS-HIJACK-NO-UNADOPT-01`
+  (DONE P0) exists precisely because a participant must be able to leave; this
+  makes leaving non-durable, which is worse than not shipping the exit — the user
+  believes they left. **Falsifiable acceptance:** after `unadopt`, no socom
+  command re-sets `core.hooksPath` without an explicit re-`adopt`; if `precond`
+  detects the unadopted state it reports it and stops, and a heal that changes
+  git config is never scored as `PASS` with zero warnings. **Files:**
+  `src/socom/lifecycle.py` (`cmd_precond` heal path), `cmd_unadopt`.
+
+- `DEF-RELEASE-NEVER-RELEASES-01` **READY P0** — **`release` reports success and
+  releases nothing; leases leak permanently.** REPRODUCED by the primary session,
+  same shell, back to back:
+  ```
+  ./socom claim --scan   →  akili-build-…: a.txt — probe [l-c9bc5255134c] · 1 live lease(s)
+  ./socom release a.txt  →  "socom release: no live lease held by this session"   exit 0
+  ./socom release --all  →  "socom release: no live lease held by this session"   exit 0
+  ./socom claim --scan   →  akili-build-…: a.txt — probe [l-c9bc5255134c] · 1 live lease(s)
+  ```
+  Both forms exit **0** — the shape of success — while the lease `--scan` lists is
+  untouched. The session's own view of what it holds disagrees with the published
+  record, and `release` trusts the former. **Why P0:** `CLAUDE.md`-style guidance
+  and socom's own docs tell a user to release at closeout rather than wait out the
+  8h TTL; following that instruction produces a false confirmation and a leaked
+  lease that blocks the next session on those paths. It also silently corrupts any
+  multi-session trial, including the Phase 3a instrument. **Falsifiable
+  acceptance:** `release <path>` on a lease that `claim --scan` reports as live
+  either removes it and says so, or exits non-zero naming why it cannot — never
+  exit 0 with "nothing held" while `--scan` disagrees; and a round-trip test
+  asserts `claim → --scan shows 1 → release → --scan shows 0`. **Files:**
+  `src/socom/blackboard.py` (`bb_do_release`, session-identity resolution).
+
 ## Active — P1 (recorded; explicitly NOT pre-exposure)
 
 - `DEF-CI-ADAPTER-CLAIMS-UNINVOKED-GATE-01` **READY P1** — **All three generated
@@ -622,10 +704,19 @@ section's own reasons, and decision 0001 §Amendment 1 rule 3 for
 
 This bucket exists because a defect repair was neither a capability nor a fact
 about the world, and so had no legitimate row shape — see decision 0001
-§Amendment 1. Its `P0` section is capped at four rows on purpose: those are the
-defects a stranger hits before their session ends, and repairing them is what
-stops [[EV-NONAUTHOR-EXPOSURE-01]] from spending a scarce participant on
-something already written down here.
+§Amendment 1. Its `P0` section is small on purpose: those are the defects a
+stranger hits before their session ends, and repairing them is what stops
+[[EV-NONAUTHOR-EXPOSURE-01]] from spending a scarce participant on something
+already written down here.
+
+⚠️ **The cap was four (2026-08-03/04) and is now seven.** The three added
+2026-08-05 were admitted on a *stricter* test than the original four, not a
+looser one: each mutates state the user never agreed to — a push to the host
+repo's shared remote, a silent reversal of the documented exit, and a false
+success on `release`. **Admitting them is not a licence to grow this section.**
+The 5-substrate sweep that found them also produced a much longer list of claim/
+capability mismatches, and every one of those went to `P1` or nowhere. If a
+future row needs an argument to qualify as `P0`, it does not qualify.
 
 **A full defect backlog is not progress toward the D-tier.** Rows here repair a
 tool nobody outside this repo has yet chosen to use.
