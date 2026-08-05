@@ -104,9 +104,12 @@ yourself before every push.
 socom's `next:` step is one it has already refused to allow.**
 
 - `write_generated` (`core.py:137`) refuses to overwrite a `CLAUDE.md` without a
-  `socom:generated` header — HR2 no-clobber, and correct.
+  `socom:generated` header — HR2 no-clobber, and correct. *(mechanism verified:
+  `sed -n '137p'` is the `def write_generated` line; the guard is at `:140`,
+  `:139` is its HR2 comment.)*
 - `adoption_rung` (`lifecycle.py:927-929`) returns `T1 → run socom compile`
-  *because* that header is absent.
+  *because* that header is absent. *(mechanism verified: `:927` is
+  `if not (root / "CLAUDE.md").exists() or \`, the header test at `:928`.)*
 - So `compile` refuses, the header never appears, the rung never advances, and
   the instruction repeats forever.
 
@@ -122,7 +125,7 @@ tested earlier that day lacked one, which is the only reason this went unseen.
 
 ⚠️ **The only exit socom offers is the clobber the refusal exists to prevent.**
 MEASURED: `compile --force` overwrote the hand-written file (`Do not delete` →
-**0 occurrences**) and the rung advanced. `doctor` separately calls the user's own
+**0 occurrences**) and the rung advanced. *(measured: throwaway repo, 2026-08-05)* `doctor` separately calls the user's own
 file *"hand-written or tampered"*.
 
 **Falsifiable acceptance:** on a repo with a hand-written `CLAUDE.md`, socom
@@ -508,11 +511,11 @@ addresses, tool quality is irrelevant and that is worth knowing before R1.
 | Thing | State |
 |---|---|
 | socom `main` | state below re-verified at `099c45a` (the three P0 repairs + their evidence, CI `success`); the closeout commit that lands this prompt sits on top of it. `git log --oneline -3` and re-probe rather than trusting either SHA. Clean, pushed, CI green. |
-| Buckets | `defects.md` **7 DONE P0 + 1 READY P0** (the CLAUDE.md wedge — clear it first) + **9** READY P1 · `build.md` 1 READY (R1) + **8** BLOCKED · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** |
-| Proof tier | **D0 — ASSUMED**, unchanged since 2026-08-01 |
-| Suite | `unit: 348 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean |
-| Exposure prep | `bench/exposure/{README,TEMPLATE}.md` landed; URL preflighted at **421735** bytes, build **`1bc70ac4f16c`**; sheet has a build-under-test row fed by `socom version` |
-| Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork (Accepted, adopts nothing) · **`0004`** two-boundaries-socom-does-not-represent (Accepted, diagnosis only, repairs nothing) · **`0005`** the-user-is-an-agent-the-adopter-is-not (Accepted — the population question is CLOSED) |
+| Buckets | `defects.md` **7 DONE P0 + 1 READY P0** (the CLAUDE.md wedge — clear it first) + **9** READY P1 *(measured: 7/1/9 via `grep -cE`)* · `build.md` 1 READY (R1) + **8** BLOCKED · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** *(L514 @ `099c45a` for the wedge row)* |
+| Proof tier | **D0 — ASSUMED**, unchanged since 2026-08-01 *(measured: `bench/exposure/` holds README + TEMPLATE only, no dated sheet)* |
+| Suite | `unit: 348 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean *(measured: all four re-run at `099c45a`)* |
+| Exposure prep | `bench/exposure/{README,TEMPLATE}.md` landed *(verified `099c45a`)*; URL preflighted at **421735** bytes, build **`1bc70ac4f16c`** *(measured: `curl -w` + `cmp` vs `bin/socom` + `shasum -a 256`)*; sheet has a build-under-test row fed by `socom version`. ⚠️ **Re-measure both — never carry them.** |
+| Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork (Accepted, adopts nothing) · **`0004`** two-boundaries-socom-does-not-represent (Accepted, diagnosis only, repairs nothing) · **`0005`** the-user-is-an-agent-the-adopter-is-not (Accepted — the population question is CLOSED) *(measured: 5 files in `decisions/`)* |
 
 Probes: `./bin/socom gate full` · `python3 build.py --check` ·
 `python3 tests/unit.py` · `python3 tests/r1corpus.py` · `grep -c '^- \`' buckets/*.md`

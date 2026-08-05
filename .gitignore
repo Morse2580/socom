@@ -7,7 +7,14 @@ __pycache__/
 /.socom/
 /CLAUDE.md
 /AGENTS.md
-/.claude/
+# CONTENTS, not the directory: git cannot re-include a path whose parent dir is
+# excluded, so `/.claude/` would swallow the negation below without a word.
+/.claude/*
+# …except hand-authored skills, which are SOURCE, not generated adoption. The
+# rule above exists to keep `socom adopt`'s output (agents/, settings.json) out
+# of the repo that ships the tool; it must not also swallow the workflow
+# substrate this repo is worked WITH.
+!/.claude/skills/
 /.cursor/
 /.githooks/
 /.gitlab-ci.yml
