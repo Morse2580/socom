@@ -16,7 +16,7 @@ from socom.mcp import cmd_mcp
 from socom.context import cmd_context
 from socom.gate import cmd_breach, cmd_gate
 from socom.handoff import cmd_handoff, cmd_prompt
-from socom.install import cmd_install, cmd_quickstart, cmd_uninstall
+from socom.install import cmd_install, cmd_quickstart, cmd_uninstall, cmd_version
 from socom.ledger import cmd_contract
 from socom.lesson import cmd_introspect, cmd_lesson
 from socom.lifecycle import cmd_adopt, cmd_compile, cmd_doctor, cmd_forge, cmd_greet, cmd_init, cmd_precond, cmd_statusline, cmd_unadopt
@@ -45,7 +45,8 @@ COMMANDS = {"init": cmd_init, "compile": cmd_compile, "doctor": cmd_doctor,
             "monarch": cmd_monarch, "trace": cmd_trace, "meter": cmd_meter,
             "forge": cmd_forge, "adopt": cmd_adopt, "quickstart": cmd_quickstart,
             "unadopt": cmd_unadopt,
-            "install": cmd_install, "uninstall": cmd_uninstall}
+            "install": cmd_install, "uninstall": cmd_uninstall,
+            "version": cmd_version}
 
 
 if __name__ == "__main__":

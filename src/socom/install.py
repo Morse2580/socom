@@ -16,7 +16,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 import yaml
-from socom.core import SOCOM_DIR, load_cfg, repo_root
+from socom.core import SOCOM_DIR, SOCOM_VERSION, load_cfg, repo_root
 from socom.lifecycle import adoption_bar, adoption_rung, cmd_adopt, cmd_compile
 from socom.retrieval import cmd_baseline, cmd_embed, cmd_eval, cmd_query
 from socom.spawn import RUNTIMES
@@ -100,6 +100,44 @@ def cmd_uninstall(args):
     else:
         sys.exit(f"socom uninstall: {dst} is not a symlink to this checkout — "
                  f"refusing to remove. Remove it manually if intended.")
+
+
+def cmd_version(args):
+    """Identify the RUNNING artifact — version, build digest, interpreter, platform.
+
+    The build digest, not SOCOM_VERSION, is the load-bearing field. SOCOM_VERSION
+    is a static "0.1" that has never moved, so it cannot answer "which build did
+    this person actually run" — and the distribution model is `curl` of raw main,
+    which mints a new artifact on every merge under an unchanging version string.
+    Hashing the executing file gives an identity that DOES move, and one anybody
+    can reproduce against the public URL:
+
+        curl -fsSL <raw-url> | shasum -a 256 | cut -c1-12
+
+    Why it exists: an exposure run records its result on a sheet, and a result
+    that cannot name the build it was produced against is not reproducible
+    evidence (§verify-never-claim). EV-NONAUTHOR-EXPOSURE-01's sheet had no way
+    to state this.
+
+    `Path(__file__).resolve()` follows the ~/.local/bin symlink `install` plants,
+    so this always hashes the real artifact rather than the link. In the
+    distributed single-file form that IS bin/socom — the whole tool, one hash. Run
+    from a src checkout it is this module only, so the path is printed alongside
+    the digest and the output is never quietly misleading about what was hashed.
+    """
+    src = Path(__file__).resolve()
+    try:
+        digest = hashlib.sha256(src.read_bytes()).hexdigest()[:12]
+    except OSError as e:
+        # Degrade LOUDLY (R6): an unreadable artifact is reported as such, never
+        # silently as a blank or a fabricated digest.
+        digest = f"UNREADABLE ({e.__class__.__name__})"
+    py = ".".join(str(n) for n in sys.version_info[:3])
+    print(f"socom    {SOCOM_VERSION}")
+    print(f"build    {digest}")
+    print(f"source   {src}")
+    print(f"python   {py}")
+    print(f"platform {sys.platform}")
 
 
 # ── quickstart (the first-run on-ramp: climb the adoption ladder) ──────────

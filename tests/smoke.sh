@@ -997,6 +997,20 @@ E2E="$(python3 "$ROOT/tests/orchestration_e2e.py" 2>&1)"; E2ER=$?
 [ "$E2ER" = 0 ] && ok "e2e: orchestration ($(printf '%s' "$E2E" | tail -1))" \
                || { bad "orchestration e2e (spawn+monarch lifecycle)"; printf '%s\n' "$E2E"; }
 
+# 16. version — the build-identity command. The DIGEST is the contract, not the
+#     version string: SOCOM_VERSION is a static "0.1" while `curl` of raw main
+#     mints a new artifact on every merge, so only a hash of the running file can
+#     answer "which build did this person run". An exposure result that cannot
+#     name its build is not reproducible evidence. Assert the digest is not
+#     decorative — it must equal a hash of bin/socom computed independently here.
+"$SOCOM" version >/dev/null 2>&1; check "version: exits 0" 0 $?
+"$SOCOM" version 2>/dev/null | grep -q '^socom '; check "version: reports the version line" 0 $?
+V_REPORTED="$("$SOCOM" version 2>/dev/null | awk '/^build/{print $2}')"
+V_ACTUAL="$(python3 -c "import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest()[:12])" "$SOCOM")"
+[ -n "$V_REPORTED" ] && [ "$V_REPORTED" = "$V_ACTUAL" ]
+check "version: build digest IS sha256(bin/socom)[:12] — identifies the artifact" 0 $?
+"$SOCOM" version 2>/dev/null | grep -q '^source .*socom'; check "version: names the file it hashed" 0 $?
+
 rm -rf "$T"
 if [ "$FAIL" -gt 0 ]; then echo "smoke: $FAIL FAILURE(S)"; exit 1; fi
 echo "smoke: all checks passed"

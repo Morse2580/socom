@@ -85,6 +85,10 @@ Commands:
   install  symlink this checkout onto PATH (~/.local/bin) so `socom` just works
   uninstall remove the socom symlink (only if it points at this checkout).
            Machine-level only — run `unadopt` in each adopted repo first
+  version  identify the running artifact: version, build digest, interpreter,
+           platform. The DIGEST is the answer to "which build did I run" — the
+           version string is static and `curl` of raw main mints a new artifact
+           on every merge under it. Reproduce: curl <url> | shasum -a 256
 
 All intelligence is canonical (.socom/); compiled views are one-way renders
 carrying a source hash (residue R3). Local gates may be bypassed for flow;
