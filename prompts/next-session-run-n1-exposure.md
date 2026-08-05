@@ -2,8 +2,8 @@
 CLAIM-VERIFY PASS — 2026-08-05, probed against the tree at the SHA below.
 Every concrete claim in this prompt was re-run, not carried over.
   VERIFIED  socom main SHA + clean tree ......... git rev-parse / status
-  VERIFIED  buckets: 4 DONE P0 / 6 READY P1 ..... grep -cE '^- `DEF-.*(DONE P0|READY P1)'
-  VERIFIED  build.md 1 READY + 7 BLOCKED ........ grep -cE '^- `.*(READY|BLOCKED)'
+  VERIFIED  buckets: 4 DONE P0 / 7 READY P1 ..... grep -cE '^- `DEF-.*(DONE P0|READY P1)'
+  VERIFIED  build.md 1 READY + 8 BLOCKED ........ grep -cE '^- `.*(READY|BLOCKED)'
   VERIFIED  EV-NONAUTHOR-EXPOSURE-01 READY P0 ... grep, still unrun
   VERIFIED  bench/exposure/{README,TEMPLATE}.md . ls
   VERIFIED  decisions/0001 + 0002 ............... ls
@@ -70,8 +70,8 @@ wastes the run.
 
 ## What changed on 2026-08-05
 
-A class sweep, no code. Two rows filed, **neither repairable-first and neither
-able to fire at `n=1`**:
+A class sweep and one smoke run, no code. **Three defect rows filed, none
+repairable-first**:
 
 - `DEF-UNRESOLVABLE-GATE-LEAVES-NO-TRACE-01` — when a gate cannot run at all,
   socom records nothing, so a repo whose `core.hooksPath` still declares socom's
@@ -82,8 +82,21 @@ able to fire at `n=1`**:
   and the record it writes is byte-identical to a published one. Measured: two
   sessions both holding the same path, each `--scan` reporting itself as sole
   holder. Needs two concurrent sessions.
+- `DEF-QUICKSTART-REPORTS-ADOPTION-IN-NON-GIT-REPO-01` — the adoption percentage
+  and rung count what socom **planted**, not what it can **enforce**. Measured in
+  an empty non-git dir: `quickstart` says `! hooks NOT wired: not a git repo`,
+  then plants 33 files and reports `33% · T2 — compiled`. The non-git case is the
+  extreme; the same decoupling fires in a normal git repo whenever check-detection
+  fails, and **that version can reach a single participant**. Filed P1
+  deliberately unrepaired — `PILOT.md` asks *"did a metric mislead you?"*, so this
+  IS a finding the participant should generate.
 
-The class both share: *enforcement whose declaration is durable, whose capability
+⚠️ **A `quickstart` was run on the author's own machine (`/home/akili`,
+`G1-Stack`) on 2026-08-05. That was a smoke test, NOT the exposure** — it moved
+nothing, because the author is not a non-author. It is where the row above came
+from. Do not let a second one of these stand in for the run.
+
+The first two share a class: *enforcement whose declaration is durable, whose capability
 resolves through a referent socom does not own, and whose resolution failure
 degrades open without a trace* — which socom's own `canon/residuality.xml`
 `compromise-recording` names, and the code fails. Full sweep (6 instances, 6
@@ -130,7 +143,7 @@ Read the row's `EVALUATED` block before acting on any of it.
 
 ## Do NOT do these
 
-- **Do not work the P1 defects.** Six are filed now, all cheaper and more
+- **Do not work the P1 defects.** Seven are filed now, all cheaper and more
   interesting than the exposure, and they measure nothing.
   `DEF-STATUS-CLAIMS-UNLABELLED-01` is P1 **on purpose** — `PILOT.md` asks *"did
   a metric mislead you?"*, so repairing it first deletes a finding the
@@ -155,7 +168,7 @@ addresses, tool quality is irrelevant and that is worth knowing before R1.
 | Thing | State |
 |---|---|
 | socom `main` | state below verified at `fa432bb`; the closeout commit that landed this prompt sits on top of it. `git log --oneline -3` and re-probe rather than trusting either SHA. Clean, pushed, CI green. |
-| Buckets | `defects.md` 4 DONE P0 + **6** READY P1 · `build.md` 1 READY (R1) + **8** BLOCKED · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** |
+| Buckets | `defects.md` 4 DONE P0 + **7** READY P1 · `build.md` 1 READY (R1) + **8** BLOCKED · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** |
 | Proof tier | **D0 — ASSUMED**, unchanged since 2026-08-01 |
 | Suite | `unit: 339 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean |
 | Exposure prep | `bench/exposure/{README,TEMPLATE}.md` landed; download URL preflighted |
