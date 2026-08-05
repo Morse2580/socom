@@ -509,6 +509,62 @@ colleagues. A participant hitting any of them is burned on something recorded he
   parent: every pre-existing blackboard test pins `SOCOM_SESSION`, which is why
   none of them ever caught this.
 
+## Active — P0 (found 2026-08-05 in the wild, on the target population)
+
+- `DEF-HANDWRITTEN-CLAUDE-MD-WEDGES-THE-LADDER-01` **READY P0** — **A repo that
+  already has a hand-written `CLAUDE.md` can never leave `T1`, and socom's `next:`
+  instruction is one it has already refused to allow.** The two behaviours are
+  each correct and together form a livelock:
+  - `write_generated` (`core.py:137`) REFUSES to overwrite a `CLAUDE.md` without
+    a `socom:generated` header — HR2 no-clobber, and right.
+  - `adoption_rung` (`lifecycle.py:927-929`) returns `T1 — planted, not compiled`
+    → *"run `socom compile`"* when `CLAUDE.md` lacks that same header.
+  So `compile` refuses, the header never appears, the rung never advances, and
+  the tool prints the same unsatisfiable instruction forever.
+  **OBSERVED IN THE WILD 2026-08-05** on `aaif-goose/goose` (Rust, real
+  third-party clone, 132,875 objects), build `1bc70ac4f16c`, following `PILOT.md`
+  verbatim. The operator ran **`socom compile` four times and `socom adopt` once**,
+  getting a byte-identical `rung: T1 · next: run socom compile` every time, and
+  typed `socom compie` twice in between. **That is a recorded stall point — and
+  the author produced it, on their own tool.**
+  **REPRODUCED** here in a throwaway repo whose only distinguishing feature is a
+  hand-written `CLAUDE.md`: `quickstart` → `T1`, `compile` → 2 REFUSED, `T1`,
+  `compile` again → `T1`. Deterministic.
+  ⚠️ **The population is socom's OWN stated audience.** A repo has a `CLAUDE.md`
+  because it uses Claude Code, and `PILOT.md` §With Claude Code says *"SOCOM is
+  built for Claude Code."* **The tool cannot onboard past `T1` the exact
+  population it was built for.** Every repo tested earlier that day
+  (`httpie/cli`, `cargo-applications`, `monarch-hris-platform`) lacked a
+  `CLAUDE.md`, which is the only reason this had not been seen.
+  ⚠️ **The only escape socom offers is the clobber the refusal exists to
+  prevent.** MEASURED: `socom compile --force` overwrote the hand-written file —
+  the line `Do not delete` went from present to **0 occurrences** — and the rung
+  advanced to `T2`. The documented way forward destroys the user's agent
+  instructions, which on an agent-driven repo is the most load-bearing file in it.
+  ⚠️ **`doctor` reports the user's own file as suspect**: `✗ CLAUDE.md: no
+  socom:generated header — hand-written or tampered`. It is neither missing nor
+  tampered; it is theirs, and socom declined to touch it.
+  ⚠️ **The rung is decoupled from capability in BOTH directions**, which closes
+  the [[DEF-STATUS-CLAIMS-UNLABELLED-01]] A/B: on `goose` `core.hooksPath` was
+  wired, `checks.*` were bound to `cargo test`, and the readout still said
+  **`17% · T1 — planted, not compiled`** — understating as badly as
+  `monarch-hris-platform` overstated at `100% · T6` over a command that exits
+  127. Same root cause, opposite sign: every rung tests a **file's existence**,
+  never a capability. This is `decisions/0004` Class A, and it is the sharpest
+  instance on file.
+  **Why P0 and not P1** (§Amendment 1 rule 2): it fires at step 2 of a first run,
+  on the target population, it is unrecoverable without destroying a file the
+  user wrote, and it is now written down — so a participant who meets it is burned
+  on a recorded defect. It is **not** the metric finding rule 3 protects: `PILOT.md`
+  asks *"did a metric mislead you?"*, not *"did the tool give you an instruction
+  it refuses to let you complete?"*
+  **Falsifiable acceptance:** on a repo with a hand-written `CLAUDE.md`, socom
+  either advances past `T1` without touching that file, or states plainly that it
+  will not advance and why — and never prints a `next:` step it has already
+  refused in the same run. `--force` remains available and remains destructive;
+  it must stop being the only exit. **Files:** `src/socom/lifecycle.py`
+  (`adoption_rung`, the compile path), `src/socom/core.py` (`write_generated`).
+
 ## Active — P1 (recorded; explicitly NOT pre-exposure)
 
 - `DEF-CI-ADAPTER-CLAIMS-UNINVOKED-GATE-01` **READY P1** — **All three generated
