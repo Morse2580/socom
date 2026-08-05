@@ -346,7 +346,7 @@ written down here. **That row is still unrun, and it is still the work.**
   the prettier block, where excluding it is right — none of it is the host's to
   format.
 
-## Active — P0 (pre-exposure; found 2026-08-05 by the 5-substrate breakage sweep)
+## Done — the second pre-exposure P0 batch (all three, fixed 2026-08-05)
 
 **Provenance.** Five agents, five isolated shallow clones, one ecosystem each
 (Node/express · Go/cobra · Rust/fd · Python/click · no-build/github-gitignore),
@@ -361,7 +361,7 @@ point) on a stricter test than the 2026-08-03 four: each **mutates state the use
 never agreed to**, and one writes to a remote the participant may share with
 colleagues. A participant hitting any of them is burned on something recorded here.
 
-- `DEF-CLAIM-PUSHES-TO-HOST-REMOTE-01` **READY P0** — **`claim` pushes a ref to
+- `DEF-CLAIM-PUSHES-TO-HOST-REMOTE-01` **DONE P0** — **`claim` pushes a ref to
   the adopted repo's own `origin`, unasked.** Announcing intent to edit a file —
   a local bookkeeping act — publishes to the host project's shared remote.
   REPRODUCED by the primary session against a local bare remote: refs on origin
@@ -381,8 +381,28 @@ colleagues. A participant hitting any of them is burned on something recorded he
   whose remote socom did not create either does not push, or pushes only after an
   explicit opt-in, and says which remote it is about to write to before doing it.
   **Files:** `src/socom/blackboard.py` (`bb_push`, `bb_do_claim`, `bb_do_attest`).
+  **VERIFIED-FIXED.** `blackboard.sync` now defaults to **false** (`bb_cfg`), and
+  `init` plants `sync: false` with the consequence spelled out in the comment
+  beside it. The default was the entire defect: sharing over git is still the
+  design, but *which* remote receives it is the adopter's decision and no code
+  path may assume it. `bb_push` is the one writer, so it is also the one place
+  that names the target — it prints `publishing to <remote> (<url>) as <ref>` to
+  **stderr, before the write**, every time, because the opt-in is a config line
+  set on some other day and "socom is about to write to the remote your
+  colleagues share" is only useful at the moment it is true. Reproduced and
+  re-measured against a local bare remote, `claim` on a freshly-`init`ed repo:
+  | build | refs on origin after `socom claim a.txt` |
+  |---|---|
+  | PRE-FIX | `refs/heads/main` + **`refs/socom/blackboard`** |
+  | SHIPPED | `refs/heads/main` — and the CLI says `(LOCAL ONLY — not published: …)` |
+  With `sync: true` set by hand the push lands exactly as before, preceded by the
+  disclosure line. Four new smoke assertions (§6c), four unit assertions on
+  `bb_cfg`'s defaults; all five fail on the pre-fix build.
+  ⚠️ **This retunes the Phase 3a trial's setup, not just a default** — a
+  multi-clone trial must set `blackboard.sync: true`, and `PILOT.md` now says so
+  where the trial is described.
 
-- `DEF-PRECOND-SILENTLY-REVERSES-UNADOPT-01` **READY P0** — **`unadopt` is
+- `DEF-PRECOND-SILENTLY-REVERSES-UNADOPT-01` **DONE P0** — **`unadopt` is
   correct but not durable: the next `precond` silently re-arms the hooks.**
   Found INDEPENDENTLY by two agents (Python, no-build), then REPRODUCED by the
   primary session:
@@ -405,8 +425,32 @@ colleagues. A participant hitting any of them is burned on something recorded he
   detects the unadopted state it reports it and stops, and a heal that changes
   git config is never scored as `PASS` with zero warnings. **Files:**
   `src/socom/lifecycle.py` (`cmd_precond` heal path), `cmd_unadopt`.
+  **VERIFIED-FIXED.** The root cause was an **ambiguity**, not a heal-path bug:
+  an unset `core.hooksPath` means both "socom was never here" and "socom was here
+  and I asked it to leave", and `unadopt` erased its own trace, so nothing could
+  tell those apart. `unadopt` now writes `socom.unadopted=<iso ts>` to LOCAL git
+  config, `_wire_hooks` — the single wiring writer, so no caller can heal around
+  it — returns a new `unadopted` state and changes nothing, and exactly one thing
+  clears the record: an explicit `socom adopt`, which says so as it does.
+  ```
+  after unadopt : hooksPath='UNSET'  socom.unadopted=2026-08-05T13:16:55+00:00
+  ./socom precond → ! WARN: this repo was UNADOPTED on 2026-08-05… — hooks left
+                      unwired and precond will not re-arm them
+                    -> PASS (5ms): 0 blocker(s), 3 warning(s)
+  after precond : hooksPath='UNSET'
+  ./socom adopt  → · re-adopting: … that record is now cleared
+  after adopt   : hooksPath='.githooks'
+  ```
+  Two further honesty repairs the acceptance asked for: a heal that writes the
+  **host's own** git config is now counted as a warning *and* named as one
+  (`~ healed: WROTE YOUR GIT CONFIG — core.hooksPath=.githooks`, summarised as
+  `1 healed (1 WROTE GIT CONFIG)`), so it can never land inside `PASS … 0
+  warning(s)`; and `doctor` reports an unadopted repo as **INFO**, not as a
+  finding — reporting the operator's own decision back as a defect is how a tool
+  talks someone into re-adopting it. Eight new smoke assertions (§9c), five of
+  which fail on the pre-fix build.
 
-- `DEF-RELEASE-NEVER-RELEASES-01` **READY P0** — **`release` reports success and
+- `DEF-RELEASE-NEVER-RELEASES-01` **DONE P0** — **`release` reports success and
   releases nothing; leases leak permanently.** REPRODUCED by the primary session,
   same shell, back to back:
   ```
@@ -427,6 +471,43 @@ colleagues. A participant hitting any of them is burned on something recorded he
   exit 0 with "nothing held" while `--scan` disagrees; and a round-trip test
   asserts `claim → --scan shows 1 → release → --scan shows 0`. **Files:**
   `src/socom/blackboard.py` (`bb_do_release`, session-identity resolution).
+  **VERIFIED-FIXED — and the diagnosis in the row above was incomplete.** The
+  session's view did not merely "disagree with the published record": identity
+  itself was `hostname-<ppid>`, so **every one-shot invocation was a different
+  author**. The lease `--scan` listed had been written by a session that no
+  longer existed by the next command — and one shell per command is exactly how
+  an agent runtime drives this tool, so the common case was the broken one. The
+  original repro's `--scan` output carries the tell: no `(this session)` marker
+  on a lease the same shell had just taken.
+  Both halves are fixed, deliberately on their own terms:
+  1. **Identity** (`bb_author`) is now derived from the WORKING TREE — the
+     boundary a lease is actually about, since two agents inside one checkout
+     share the files themselves whatever the blackboard says. Derived, not
+     stored: no state file to seed, reap or gitignore. `SOCOM_SESSION` still
+     overrides. ⚠️ **Recorded residue:** two sessions in ONE tree now share an
+     author and will not conflict with each other; splitting them is what
+     `SOCOM_SESSION` is for.
+  2. **Reporting** (`bb_do_release`) matches FIRST and filters by author second.
+     A live match this session cannot retire is now an **error naming the
+     holder**, not a no-op wearing the shape of success. This half was fixed
+     independently of the identity half on purpose — an identity scheme can be
+     wrong again, and a false confirmation is the unrecoverable failure.
+  ```
+  ./socom claim a.txt   →  acquired a.txt as akili-build-5985af71-host
+  ./socom claim --scan  →  akili-build-5985af71-host (this session): a.txt · 1 live lease(s)
+  ./socom release a.txt →  released 1 lease(s) (a.txt)                       exit 0
+  ./socom claim --scan  →  0 live lease(s)
+  # and against a lease held by someone else:
+  ./socom release a.txt →  HELD by other since … [l-3860c785003f]
+                           …this session (…) holds none of them…            exit 1
+  ```
+  Each command above ran under its **own parent shell**, which is what the old
+  scheme could not survive. Nine new smoke assertions (§6b) — including the
+  acceptance round-trip verbatim — plus five unit assertions on `bb_author`;
+  five of the smoke assertions fail on the pre-fix build. The smoke harness uses
+  `sh -c '…; s=$?; :; exit $s'` per command precisely so each one gets a distinct
+  parent: every pre-existing blackboard test pins `SOCOM_SESSION`, which is why
+  none of them ever caught this.
 
 ## Active — P1 (recorded; explicitly NOT pre-exposure)
 

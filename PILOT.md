@@ -35,11 +35,20 @@ say *"walk me through this on this repo"* — see [With Claude Code](#with-claud
     `.prettierignore` (its own generated files, so adopting SOCOM can't turn a
     green format check red). Everything outside the `# >>> socom` markers is
     left byte-for-byte alone.
-- **There is a way back:** `socom unadopt` restores `core.hooksPath` to whatever
-  it was before (or unsets it) and drops SOCOM's local git config. It deliberately
-  does **not** delete the planted files — it lists them, so removing them stays
-  your call. (`socom uninstall` is a different thing: it removes the binary from
-  your PATH and touches no repo.)
+  - **nothing on your remote.** The blackboard is local until you say otherwise:
+    `blackboard.sync` is planted **false**, and `claim`/`attest`/`resolve` write
+    only to `.socom/` under your working tree. Set it to `true` and SOCOM pushes
+    its own ref (`refs/socom/blackboard`, no branch, no source) to the remote you
+    name — announcing that remote by URL before each write. Until then it never
+    touches a remote your colleagues share.
+- **There is a way back, and it stays back:** `socom unadopt` restores
+  `core.hooksPath` to whatever it was before (or unsets it) and drops SOCOM's
+  local git config. It also **records that you left**, so no later `precond`,
+  `doctor` or heal quietly re-arms the hooks — only an explicit `socom adopt`
+  does, and it tells you it is clearing that record. It deliberately does **not**
+  delete the planted files — it lists them, so removing them stays your call.
+  (`socom uninstall` is a different thing: it removes the binary from your PATH
+  and touches no repo.)
 - It **degrades loudly**: when it can't do something honestly (detect your test
   command, certify retrieval), it says so and stops — it never fabricates.
 
@@ -151,6 +160,13 @@ problem, and the first thing to watch for.
 
 **Setting:** three or more people running concurrent agents on a shared repo.
 The thesis is a claim about *teams* and is untestable solo.
+
+⚠️ **This trial is the one case that needs the opt-in.** Set
+`blackboard.sync: true` in `socom.yaml` on every participating clone, or each
+person gets a private notebook, every `claim` tallies **C — silent**, and the
+measurement reads as "no saves" for a reason that has nothing to do with the
+thesis. Publishing is off by default precisely so that turning it on is a
+decision someone made.
 
 ### The kill criterion, written before the build
 

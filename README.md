@@ -55,8 +55,11 @@ the next session spends itself re-deriving a dead end:
 socom resolve f-bbb3149a9357 --verdict retracted --note "misread the fixture"
 ```
 
-Storage is append-only JSONL synced over a git ref, one shard per author. No
-database, no daemon, no host to configure. Agents reach it over MCP:
+Storage is append-only JSONL, one shard per author. No database, no daemon, no
+host to configure. It is **local until you say otherwise**: the cross-clone hop
+above rides a directly-pushed git ref, and socom will not write to a remote your
+colleagues share on its own initiative — set `blackboard.sync: true` in
+`socom.yaml` and it names the remote before each push. Agents reach it over MCP:
 
 ```bash
 socom mcp     # stdio MCP server: claim, attest, findings, resolve, release
