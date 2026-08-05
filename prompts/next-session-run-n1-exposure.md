@@ -30,6 +30,15 @@ bin/socom changed and the byte count above is SUPERSEDED:
   UNCHANGED buckets 4/7/1/8, EV row READY P0 unrun, proof tier D0
 ⚠️ The byte count changes on ANY merge touching bin/socom. Re-run the preflight;
 never carry it forward.
+
+RE-VERIFIED 2026-08-05 (fourth pass, at 5894df9 — the breakage sweep + two scouts).
+  REWRITTEN buckets ......... defects now 4 DONE P0 / **3 READY P0** / 7 READY P1
+  VERIFIED  build.md ........ 1 READY (R1) + 8 BLOCKED, unchanged
+  VERIFIED  EV row .......... EV-NONAUTHOR-EXPOSURE-01 READY P0, STILL UNRUN
+  VERIFIED  decisions ....... 0001 + 0002 + 0003 (3 files)
+  VERIFIED  suites .......... unit 339 / r1corpus 146 / gate full PASS
+  VERIFIED  public URL ...... http=200, 411152 bytes, byte-identical, build b80c5efc6013
+  UNCHANGED proof tier ...... D0
 -->
 
 # Next session — stop building. Run the n=1 exposure.
@@ -202,6 +211,77 @@ seam survives (~3 d). **The cheap way to separate `0001`'s two hypotheses is not
 that row — it is shipping R1 standalone, which is already the READY row.**
 Read the row's `EVALUATED` block before acting on any of it.
 
+## The 5-substrate breakage sweep — 2026-08-05, three P0s filed
+
+Five agents, five isolated shallow clones, one ecosystem each (Node/express ·
+Go/cobra · Rust/fd · Python/click · no-build/github-gitignore), each given only
+the public `curl` URL, **forbidden** from reading socom's source to work around a
+failure or installing a toolchain to keep going. Build `b80c5efc6013`.
+
+**Zero crashes, zero hangs, 20+ subcommands. The tool is robust.** What it has is
+claims outrunning capability — and three that mutate state the user never agreed
+to. Those three are now **READY P0** in `defects.md`, each REPRODUCED by the
+primary session (local bare remote; nothing outbound), not taken on agent report:
+
+- `DEF-CLAIM-PUSHES-TO-HOST-REMOTE-01` — `claim` pushes `refs/socom/blackboard`
+  to the **adopted repo's own origin**, unprompted. It only failed on
+  `pallets/click` because that agent lacked push rights.
+- `DEF-PRECOND-SILENTLY-REVERSES-UNADOPT-01` — `unadopt` works; the next
+  `precond` silently re-sets `core.hooksPath` and scores it `PASS / 1 healed /
+  0 blockers`. Found independently by two agents. The documented exit is not durable.
+- `DEF-RELEASE-NEVER-RELEASES-01` — both forms exit **0** saying "no live lease
+  held" while `claim --scan` lists the lease before and after.
+
+⚠️ **The P0 cap moved 4 → 7. That is not a licence to grow it** — see the §Note in
+`defects.md`. The same sweep produced a much longer list and every other finding
+went to P1 or nowhere.
+
+**The asymmetry worth carrying** (it reframes the already-filed metric row):
+socom is **honest when detection FAILS and misleading when detection SUCCEEDS
+WRONGLY**. On the no-build repo it binds `true`, prints `unbound — passing` at
+every gate, `doctor` exits 1, and it reads **33% · T2** — exactly as the filed row
+predicted. On the other four it binds a command that exits 127 (`pytest -q` on a
+**Rust** repo), `doctor` says **clean**, it reads **100% · T6 — operational**, and
+`git push` is **hard-blocked** because `checks.full` is the pre-push RED band.
+Most real repos have a detectable test command, so the second column is the
+common case and it is the one nobody had measured.
+
+## What the two scouts found — read before touching R1
+
+1. **The premise is REFUTED as a top-tier developer pain.** No primary source
+   (HN, Reddit, GitHub issues, Cursor forum) where a developer complains that an
+   instruction file told the agent something false. The loud, repeatedly-sourced
+   complaint is the **mechanical inverse** — agents ignoring rules that are still
+   **correct**: `anthropics/claude-code#15443` ("ignores explicit CLAUDE.md
+   instructions"), `#37888` ("runs explicitly forbidden destructive git
+   commands"), Cursor forum (".cursorrules … perhaps only 20-25% effective").
+   Drift is real but researcher-discovered (arXiv 2606.09090: 23% of 356 repos,
+   **1.27%** of individual references) with **no** developer-voice grounding.
+   ⚠️ Caveat kept: no survey has ever *asked* this question, so absence of
+   complaint may be an availability effect. You may not assume that — you would
+   have to test it. **All three citations verified live.**
+2. **Prior art: PARTIAL, and it splits R1 in half.** `giacomo/agents-lint`
+   ("Your AGENTS.md is probably lying") already ships **existence**-checking —
+   dead paths, dead npm scripts. Verified live: 12★, 2 forks, **no license at
+   all**, dormant since 2026-03-26. **Git-history contradiction is its unreleased
+   roadmap item and was found in no shipped tool.** Entry shape is a *documented*
+   cost, not theoretical: `core.hooksPath` is a single slot — `husky#1574` (open),
+   `lefthook#1248` (closed, "Unset core.hookspath"), and lefthook markets *not*
+   rewriting it as a differentiator.
+
+**R1's acceptance prose was corrected 2026-08-05 to match its corpus** (`5894df9`)
+— 18/19 corpus defects are `paired-parent` (referent EXISTS in both commits; it
+was *edited* in violation of a rule), only 1/19 is missing-referent. An
+existence-checker scores ≈1/19 and cannot pass. Read the row before implementing.
+
+⚠️ **Open for the operator, NOT actioned:** the field evidence points at the
+**enforcement** half (gates/hooks re-asserting a rule at the moment of action —
+which is what the loud pain calls for) rather than the **detection** half (R1).
+That contradicts `decisions/0001`'s R1-before-blackboard ordering, which is
+ratified. Amending it is an operator decision, not a session's. Counter-argument
+to keep: nobody has used the gates either, and this sweep showed them bound to
+`pytest -q` on a Rust repo and `true` on a repo with no tests.
+
 ## The three assessments that should still weaken the instinct to build
 
 1. **Build order/shape (scout, 2026-08-04).** Execution is rigorous; the *order*
@@ -218,6 +298,13 @@ Read the row's `EVALUATED` block before acting on any of it.
 
 ## Do NOT do these
 
+- **Do not run a sixth agent cohort.** One ran 2026-08-03 (cold-run, ~30 defects)
+  and a second ran 2026-08-05 (5-substrate breakage sweep, 3 P0s). Both were
+  falsification and neither moved the D-tier by a millimetre — agents do not
+  quit, and the stall point is the measurement. A third buys nothing.
+- **Do not repair the three new P0s *instead of* running the exposure.** They are
+  filed as pre-exposure because a participant hitting them is burned on something
+  already written down. Fix them, then run it — not fix them and call it a session.
 - **Do not work the P1 defects.** Seven are filed now, all cheaper and more
   interesting than the exposure, and they measure nothing.
   `DEF-STATUS-CLAIMS-UNLABELLED-01` is P1 **on purpose** — `PILOT.md` asks *"did
@@ -247,11 +334,11 @@ addresses, tool quality is irrelevant and that is worth knowing before R1.
 
 | Thing | State |
 |---|---|
-| socom `main` | state below re-verified at `d1b090e` (the 0003 commit, CI `success`); the closeout commit that lands this prompt sits on top of it. `git log --oneline -3` and re-probe rather than trusting either SHA. Clean, pushed, CI green. |
-| Buckets | `defects.md` 4 DONE P0 + **7** READY P1 · `build.md` 1 READY (R1) + **8** BLOCKED · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** |
+| socom `main` | state below re-verified at `5894df9` (the R1-prose correction, CI `success`); the closeout commit that lands this prompt sits on top of it. `git log --oneline -3` and re-probe rather than trusting either SHA. Clean, pushed, CI green. |
+| Buckets | `defects.md` 4 DONE P0 + **3 READY P0** + **7** READY P1 · `build.md` 1 READY (R1) + **8** BLOCKED · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** |
 | Proof tier | **D0 — ASSUMED**, unchanged since 2026-08-01 |
 | Suite | `unit: 339 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean |
-| Exposure prep | `bench/exposure/{README,TEMPLATE}.md` landed; download URL preflighted |
+| Exposure prep | `bench/exposure/{README,TEMPLATE}.md` landed; URL preflighted at 411152 bytes, build `b80c5efc6013`; sheet has a build-under-test row fed by `socom version` |
 | Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork (Accepted, adopts nothing) |
 
 Probes: `./bin/socom gate full` · `python3 build.py --check` ·
