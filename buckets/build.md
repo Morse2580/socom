@@ -46,7 +46,7 @@ Ladder reference: §14.2 of
 
 All blocked on [[EV-NONAUTHOR-EXPOSURE-01]] per decision 0001.
 
-- `BUILD-ACP-RUNTIME-SEAM-01` **BLOCKED P1** — blocked on
+- `BUILD-ACP-RUNTIME-SEAM-01` **BLOCKED P2** — blocked on
   [[EV-NONAUTHOR-EXPOSURE-01]]. **Speak the Agent Client Protocol
   ([agentclientprotocol.com](https://agentclientprotocol.com), JSON-RPC 2.0 over
   stdio) instead of hand-rolling one vendor binding per agent — and evaluate
@@ -65,9 +65,10 @@ All blocked on [[EV-NONAUTHOR-EXPOSURE-01]] per decision 0001.
   orchestrate a second vendor without a new entry. That is a Claude Code wrapper
   wearing the word substrate.
 
-  **The wide case, and the reason this is P1 rather than P3 — it is a candidate
-  answer to the entry-shape problem, which is what blocks adoption, which is what
-  blocks D0.** ACP is editor↔agent. socom is neither, but it is a *middlebox* —
+  **The wide case as originally filed — ⚠️ REFUTED the same day; read the
+  EVALUATED block below before acting on any of it. Kept verbatim because the
+  refutation is only legible against the claim it killed.** It argued this was a
+  candidate answer to the entry-shape problem, hence P1. ACP is editor↔agent. socom is neither, but it is a *middlebox* —
   it launches agents and governs them — and a middlebox is exactly what gets both
   interfaces free from a client/agent protocol: **the editor speaks ACP to socom;
   socom speaks ACP to the real agent; socom interposes the gates, the claims and
@@ -104,6 +105,47 @@ All blocked on [[EV-NONAUTHOR-EXPOSURE-01]] per decision 0001.
   [[DEF-UNRESOLVABLE-GATE-LEAVES-NO-TRACE-01]] is what happens when a
   declaration outlives the capability that served it.
 
+  ⚠️ **EVALUATED 2026-08-05, same day it was filed — the wide case does NOT
+  survive probing, and this row was re-rated P1 → P2 as a result.** Filed on the
+  claim that the proxy shape delivers *zero planted files, zero git-config
+  writes*, making it a candidate answer to the entry-shape problem. Four probes
+  against the tree at `b7cb1ef` refute the load-bearing half:
+  1. **Enforcement does not map.** Of 8 gates, exactly 3 are git-triggered —
+     `pre-commit`, `commit-msg`, `pre-push` (`HOOK_TEMPLATES`,
+     `lifecycle.py:254`) — and those 3 are the ones that actually *block*. ACP
+     carries editor↔agent turns and tool calls; it has no `git commit`. Gating
+     agent tool-calls instead is a **different enforcement model**, not a
+     transport swap, and it is blind to a human editing the same repo.
+  2. **"Zero planted files" is false.** `.socom/` carries **17** state
+     directories (`index`, `canon`, `gates`, `ledger`, `memory`, `lessons`,
+     `handoffs`, `context`, `prompts`, `evals`, `cycles`, `claims`, `traces`,
+     `runs`, `promises`, `ci`, `assertions`). Canon, index and ledger all need a
+     home; a stateless proxy has none.
+  3. **"Zero git writes" is architecturally impossible for the blackboard.**
+     `BB_REF = refs/socom/blackboard` is pushed to the remote *by design*, so a
+     teammate sees open leases. socom's multi-agent half — §20's "the part that
+     measures" — requires git, and cannot be interposition-only.
+  4. **Population shift, not entry-shape fix.** `PILOT.md`'s audience is Claude
+     Code, whose stated path is *"paste this to Claude Code"* — a terminal
+     session, not an ACP one. ACP reaches Zed/JetBrains-driven users. That is a
+     different population, which may be worth pursuing but is a **pivot**, not a
+     cheaper front door for the current one.
+
+  **What survives:** (a) the narrow seam — `RUNTIMES` really is a hand-rolled
+  mini-ACP and replacing it is a genuine bounded win (~3 d); (b) a *hybrid*, far
+  narrower than filed: proxy the **session-scoped** half (context injection, run
+  ledger, seat dispatch) and keep git hooks for the **repo-scoped** half. That
+  maps onto the hooks-bind-the-repo / interposition-binds-the-session split
+  already noted below — but it explicitly does **not** deliver zero-adoption,
+  which was the entire reason this was rated P1.
+  **What does not survive:** the claim that this separates `0001`'s two
+  hypotheses. The cheap mechanism for that is already filed and already READY —
+  **ship R1 standalone**. This row is not a substitute for it.
+  *(Recorded because the first framing of this row was advocacy that had not been
+  probed. `[[clean-runs-on-a-degenerate-input-are-not-evidence]]` applies to
+  arguments too: an unprobed case is most confident exactly where it was never
+  exercised.)*
+
   **Watch for it in the exposure run, free:** if the participant drives Cursor,
   Codex or Gemini CLI rather than Claude Code, record what happens when they meet
   the seat/runtime config (§4 of `bench/exposure/TEMPLATE.md`). That observation
@@ -111,7 +153,7 @@ All blocked on [[EV-NONAUTHOR-EXPOSURE-01]] per decision 0001.
   **Falsifiable acceptance:** socom governs a session driven by an agent that has
   no entry in `RUNTIMES`, with the gate and ledger semantics of a native run, and
   with zero files planted and zero git config written in the target repo.
-  **Size:** 2–3 wk for the proxy shape; ~3 d for the narrow seam alone.
+  **Size:** ~3 d for the narrow seam (the part that survived evaluation); 2–3 wk for the session-scoped hybrid. The full zero-adoption proxy is NOT scoped — it was refuted.
 
 - `R2-CLAIM-VERIFIER-HOOK-01` **BLOCKED P2** — commit/PR hook refusing claims
   that lack evidence: "tests pass" with no captured run, "verified" with no
