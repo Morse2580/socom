@@ -600,6 +600,50 @@ colleagues. A participant hitting any of them is burned on something recorded he
   rather than repeated: the rung string says *"not loaded by it"* for the
   negative and claims nothing beyond the join for the positive.
 
+## Active — P0 (found 2026-08-06, by reflex, by the author)
+
+- `DEF-SUBCOMMAND-HELP-MUTATES-STATE-01` **READY P0** — **No subcommand handles
+  `--help`, so the universal "explain, don't act" reflex makes socom act — and on
+  two subcommands it mutates state the user did not agree to.** Top-level
+  `socom --help` works fine, which is exactly why nobody looked further.
+  MEASURED 2026-08-06, build `77d2b1855dca`, throwaway git repo:
+  - `socom claim --help` → `acquired --help as <author> [l-28b3a6e833fc]`. The
+    flag is swallowed as the PATH argument and a real lease is taken. `-h` does
+    the same (`acquired -h`). `claim --scan` then lists a lease named `--help`.
+  - `socom compile --help` → plants the full compiled view set (33 files). A help
+    request writes to the user's repo.
+  - `socom release --help` → releases the `--help` lease, consistent with the
+    flag-as-positional reading.
+  - `socom attest --help` → error, no mutation. `doctor --help` → runs doctor.
+    So the class is: **the flag is either swallowed as a positional or silently
+    ignored; it is never handled.**
+  ⚠️ **Found by the author typing it by reflex** while checking an unrelated
+  claim, on socom's OWN repo — where `blackboard.sync: true`, so the bogus lease
+  was **published to `refs/socom/blackboard` on the public remote** before it was
+  noticed. A participant's repo is safe from the push half
+  (`DEF-CLAIM-PUSHES-TO-HOST-REMOTE-01` made `sync` default false), but not from
+  the lease or the 33 files.
+  **Why P0** (§Amendment 1 rule 2): `<cmd> --help` is the first thing a stranger
+  types at an unfamiliar subcommand — it fires *at* the stall point, not after
+  it, and the response to a request for an explanation is a state mutation. Same
+  class as the three P0s from the 5-substrate sweep ("claims outrunning
+  capability — and three that mutate state the user never agreed to"), and the
+  same rung as the CLAUDE.md wedge. It is **not** the metric finding rule 3
+  protects: `PILOT.md` asks *"did a metric mislead you?"*, not *"did `--help`
+  write to my repo?"*
+  **Falsifiable acceptance:** `<any subcommand> --help` and `-h` print that
+  subcommand's usage and exit 0 **having written nothing** — no lease, no file,
+  no git config, no ref. Verified by running every subcommand with `--help` in a
+  clean repo and asserting `git status --porcelain` is empty and
+  `claim --scan` reports 0 leases afterwards.
+  **Files:** `src/socom/cli.py` (the dispatch), and any `cmd_*` that reads
+  `args[0]` as a positional.
+  ⚠️ **This re-opens a P0 queue that was empty for one commit.** That is the
+  operator's call, not a session's: it can be cleared before the exposure (the
+  repair is small — intercept `--help`/`-h` in dispatch, before any `cmd_*`
+  runs), or accepted as a known defect a participant may hit. Recording it is
+  not optional either way.
+
 ## Active — P1 (recorded; explicitly NOT pre-exposure)
 
 - `DEF-CI-ADAPTER-CLAIMS-UNINVOKED-GATE-01` **READY P1** — **All three generated
