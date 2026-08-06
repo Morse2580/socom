@@ -258,18 +258,84 @@ def parse_canon(root: Path, name: str):
     return ET.parse(f).getroot()
 
 
+def is_generated(path: Path) -> bool:
+    """True iff socom wrote this file — PROVED by the header, never by the path."""
+    try:
+        return path.is_file() and "socom:generated" in path.read_text(errors="ignore")[:200]
+    except OSError:
+        return False
+
+
+def sidecar_for(path: Path) -> Path:
+    """The socom-owned neighbour of a view socom is not allowed to write:
+    CLAUDE.md -> CLAUDE.socom.md. One naming rule, one place."""
+    return path.with_name(f"{path.stem}.socom{path.suffix}")
+
+
+CLAUDE_SIDECAR = "CLAUDE.socom.md"  # socom's half when CLAUDE.md is the user's
+
+
+def compiled_view(root: Path) -> tuple[Path | None, str]:
+    """Where socom's compiled instructions actually live, and how they are reached:
+
+      (CLAUDE.md,      "owned")     socom generated CLAUDE.md itself
+      (sidecar,        "imported")  CLAUDE.md is the user's and imports the sidecar
+      (sidecar,        "orphan")    the sidecar exists but nothing loads it
+      (None,           "none")      nothing compiled yet
+
+    Every other surface (rung, doctor, drift gates) reads THIS, so there is one
+    answer to "which file is socom's" and it is proved by the header, not a path.
+    NOTE the honest limit of "imported": socom checks that the import LINE is
+    present. It cannot execute the agent runtime, so it never claims the file was
+    loaded — only that the user joined them.
+    """
+    claude = root / "CLAUDE.md"
+    if is_generated(claude):
+        return (claude, "owned")
+    side = root / CLAUDE_SIDECAR
+    if is_generated(side):
+        try:
+            txt = claude.read_text(errors="ignore") if claude.exists() else ""
+        except OSError:
+            txt = ""
+        hit = re.search(rf"@\.?/?{re.escape(CLAUDE_SIDECAR)}", txt)
+        return (side, "imported" if hit else "orphan")
+    return (None, "none")
+
+
 def write_generated(path: Path, body: str, hash_: str, comment=("<!--", "-->"),
-                    force: bool = False):
-    # HR2: never clobber a file we didn't generate. Adoption is explicit.
-    if path.exists() and "socom:generated" not in path.read_text()[:200] and not force:
-        print(f"  REFUSED {path}: exists and is not socom-generated "
-              f"(hand-written?). Re-run with --force to adopt it.", file=sys.stderr)
-        return
+                    force: bool = False, sidecar: bool = False,
+                    import_line: str | None = None):
+    """Write a compiled view. Returns the path actually written, or None.
+
+    HR2: never clobber a file we didn't generate. Adoption is explicit. But a
+    refusal that offers only `--force` makes destroying the user's file the ONLY
+    way forward, and the caller then goes on printing an instruction it just
+    refused (DEF-HANDWRITTEN-CLAUDE-MD-WEDGES-THE-LADDER-01). With sidecar=True
+    the refusal keeps HR2 AND leaves an exit: socom's half lands beside the file
+    it will not touch, and the user joins them with one line socom does not write.
+    """
+    if path.exists() and not is_generated(path) and not force:
+        if not sidecar:
+            print(f"  REFUSED {path}: exists and is not socom-generated "
+                  f"(hand-written?). Re-run with --force to adopt it.", file=sys.stderr)
+            return None
+        side = sidecar_for(path)
+        write_generated(side, body, hash_, comment, force=True)
+        print(f"  KEPT {path.name} — it is yours and socom did not touch it. "
+              f"socom's half is {side.name}.")
+        if import_line:
+            print(f"         to load it, add this ONE line to {path.name}: "
+                  f"{import_line}")
+        print(f"         (`socom compile --force` would instead OVERWRITE "
+              f"{path.name} — it still works and still destroys it.)")
+        return side
     path.parent.mkdir(parents=True, exist_ok=True)
     header = (f"{comment[0]} socom:generated v={SOCOM_VERSION} source={hash_} "
               f"— do not edit; edit .socom/ + socom.yaml, then `socom compile` {comment[1]}\n")
     path.write_text(header + body)
     print(f"  wrote {path}")
+    return path
 
 
 # ── blackboard (R2') ─────────────────────────────────────────────────────
@@ -2879,8 +2945,11 @@ def cmd_gate(args):
 
     if name == "session-start":
         h = canonical_hash(root)
-        claude = root / "CLAUDE.md"
-        if claude.exists():
+        # Read the view socom actually OWNS — on a repo whose CLAUDE.md is the
+        # user's, socom's half is the sidecar, and scanning their prose for
+        # `source=` is both wrong and a false-drift risk.
+        claude, _how = compiled_view(root)
+        if claude is not None:
             m = re.search(r"source=(\w+)", claude.read_text())
             if m and m.group(1) != h:
                 print(f"socom: P0 DRIFT — compiled views stale ({m.group(1)} != {h}); "
@@ -3861,8 +3930,15 @@ def cmd_compile(args):
     h = canonical_hash(root)
     body = render_body(root, cfg)
 
-    write_generated(root / "CLAUDE.md", body, h, force=force)
-    write_generated(root / "AGENTS.md", body, h, force=force)
+    # CLAUDE.md and AGENTS.md are the two views a repo is LIKELY to already own —
+    # a repo has a CLAUDE.md because it drives Claude Code, which is socom's own
+    # stated audience. Refusing them without an exit wedges that repo at T1
+    # forever, so both get a sidecar. Only CLAUDE.md gets an import line: Claude
+    # Code resolves `@path` in CLAUDE.md, and AGENTS.md has no such mechanism —
+    # printing one there would be a claim outrunning capability.
+    write_generated(root / "CLAUDE.md", body, h, force=force, sidecar=True,
+                    import_line=f"@{CLAUDE_SIDECAR}")
+    write_generated(root / "AGENTS.md", body, h, force=force, sidecar=True)
     write_generated(root / ".cursor" / "rules" / "socom.mdc",
                     "---\nalwaysApply: true\n---\n" + body, h, force=force)
 
@@ -4171,7 +4247,8 @@ def _socom_artifacts(root: Path) -> list:
         out.append(f"{SOCOM_DIR}/")
     if (root / "socom.yaml").exists():
         out.append("socom.yaml")
-    candidates = ["CLAUDE.md", "AGENTS.md", ".cursor/rules/socom.mdc",
+    candidates = ["CLAUDE.md", "AGENTS.md", CLAUDE_SIDECAR, "AGENTS.socom.md",
+                  ".cursor/rules/socom.mdc",
                   ".gitlab-ci.yml", ".github/workflows/socom-gates.yml"]
     agents = root / ".claude" / "agents"
     if agents.is_dir():
@@ -4273,14 +4350,32 @@ def cmd_doctor(args):
 
     for rel in ["CLAUDE.md", "AGENTS.md", ".cursor/rules/socom.mdc"]:
         f = root / rel
-        if not f.exists():
+        side = sidecar_for(f)
+        # socom's view may legitimately live in the sidecar — the user owns the
+        # named file and socom refused to touch it. Reporting THEIR file as
+        # "tampered" is socom calling its own correct refusal a defect.
+        if is_generated(f):
+            target = f
+        elif is_generated(side):
+            target = side
+            if rel == "CLAUDE.md" and compiled_view(root)[1] == "orphan":
+                problems.append(
+                    f"{side.name} is not loaded: add the line `@{CLAUDE_SIDECAR}` "
+                    f"to CLAUDE.md (socom will not edit it)")
+            else:
+                print(f"socom doctor — INFO: {rel} is yours, socom did not write "
+                      f"it; socom's view is {side.name}")
+        elif f.exists():
+            problems.append(f"{rel}: yours — no socom:generated header, and no "
+                            f"{side.name} beside it; run `socom compile`")
+            continue
+        else:
             problems.append(f"missing compiled view: {rel}")
             continue
-        m = re.search(r"socom:generated v=\S+ source=(\w+)", f.read_text())
-        if not m:
-            problems.append(f"{rel}: no socom:generated header — hand-written or tampered")
-        elif m.group(1) != h:
-            problems.append(f"{rel}: stale (source={m.group(1)}, canonical={h}) — DRIFT, recompile")
+        m = re.search(r"socom:generated v=\S+ source=(\w+)", target.read_text())
+        if m and m.group(1) != h:
+            problems.append(f"{target.name}: stale (source={m.group(1)}, "
+                            f"canonical={h}) — DRIFT, recompile")
 
     for k in ("fast", "medium", "full"):
         if cfg.get("checks", {}).get(k) in (None, "", "true"):
@@ -4419,8 +4514,8 @@ def cmd_precond(args):
         rows.append(("✓", "checks.fast/medium/full bound"))
 
     # 5. Drift — warn with the exact fix (working stale is a risk, not a hard stop here).
-    claude = root / "CLAUDE.md"
-    if claude.exists():
+    claude, _how = compiled_view(root)  # socom's view, sidecar included
+    if claude is not None:
         m = re.search(r"source=(\w+)", claude.read_text())
         if m and m.group(1) != canonical_hash(root):
             warns += 1
@@ -4514,9 +4609,19 @@ def adoption_rung(root: Path) -> tuple[str, str]:
     if not (root / "socom.yaml").exists():
         return ("T0 — no substrate", "run `socom init` to plant it")
     cfg = yaml.safe_load((root / "socom.yaml").read_text()) or {}
-    if not (root / "CLAUDE.md").exists() or \
-            "socom:generated" not in (root / "CLAUDE.md").read_text()[:200]:
+    # T1's exit is "socom's compiled instructions are reachable by the agent" —
+    # NOT "socom owns CLAUDE.md". The two were the same test until a repo that
+    # already had a hand-written CLAUDE.md hit compile's HR2 refusal and the rung
+    # kept printing the step compile had just refused, forever
+    # (DEF-HANDWRITTEN-CLAUDE-MD-WEDGES-THE-LADDER-01). Never return a next: step
+    # this run has already refused.
+    view, how = compiled_view(root)
+    if how == "none":
         return ("T1 — planted, not compiled", "run `socom compile`")
+    if how == "orphan":
+        return ("T1 — compiled beside your CLAUDE.md, not loaded by it",
+                f"add one line to CLAUDE.md: `@{CLAUDE_SIDECAR}` "
+                f"(socom will not edit CLAUDE.md — it is yours)")
     if any(cfg.get("checks", {}).get(k) in (None, "", "true")
            for k in ("fast", "medium", "full")):
         return ("T2 — compiled, checks unbound",
@@ -4757,7 +4862,8 @@ def cmd_unadopt(args):
     print(f"  core.hooksPath now: {now or '<unset>'}")
 
     left = [p for p in (SOCOM_DIR, HOOKS_DIR, "socom.yaml", "CLAUDE.md",
-                        "AGENTS.md", ".cursor/rules/socom.mdc",
+                        "AGENTS.md", CLAUDE_SIDECAR, "AGENTS.socom.md",
+                        ".cursor/rules/socom.mdc",
                         ".github/workflows/socom-gates.yml")
             if (root / p).exists()]
     if left:

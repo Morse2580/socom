@@ -134,16 +134,82 @@ def parse_canon(root: Path, name: str):
     return ET.parse(f).getroot()
 
 
+def is_generated(path: Path) -> bool:
+    """True iff socom wrote this file — PROVED by the header, never by the path."""
+    try:
+        return path.is_file() and "socom:generated" in path.read_text(errors="ignore")[:200]
+    except OSError:
+        return False
+
+
+def sidecar_for(path: Path) -> Path:
+    """The socom-owned neighbour of a view socom is not allowed to write:
+    CLAUDE.md -> CLAUDE.socom.md. One naming rule, one place."""
+    return path.with_name(f"{path.stem}.socom{path.suffix}")
+
+
+CLAUDE_SIDECAR = "CLAUDE.socom.md"  # socom's half when CLAUDE.md is the user's
+
+
+def compiled_view(root: Path) -> tuple[Path | None, str]:
+    """Where socom's compiled instructions actually live, and how they are reached:
+
+      (CLAUDE.md,      "owned")     socom generated CLAUDE.md itself
+      (sidecar,        "imported")  CLAUDE.md is the user's and imports the sidecar
+      (sidecar,        "orphan")    the sidecar exists but nothing loads it
+      (None,           "none")      nothing compiled yet
+
+    Every other surface (rung, doctor, drift gates) reads THIS, so there is one
+    answer to "which file is socom's" and it is proved by the header, not a path.
+    NOTE the honest limit of "imported": socom checks that the import LINE is
+    present. It cannot execute the agent runtime, so it never claims the file was
+    loaded — only that the user joined them.
+    """
+    claude = root / "CLAUDE.md"
+    if is_generated(claude):
+        return (claude, "owned")
+    side = root / CLAUDE_SIDECAR
+    if is_generated(side):
+        try:
+            txt = claude.read_text(errors="ignore") if claude.exists() else ""
+        except OSError:
+            txt = ""
+        hit = re.search(rf"@\.?/?{re.escape(CLAUDE_SIDECAR)}", txt)
+        return (side, "imported" if hit else "orphan")
+    return (None, "none")
+
+
 def write_generated(path: Path, body: str, hash_: str, comment=("<!--", "-->"),
-                    force: bool = False):
-    # HR2: never clobber a file we didn't generate. Adoption is explicit.
-    if path.exists() and "socom:generated" not in path.read_text()[:200] and not force:
-        print(f"  REFUSED {path}: exists and is not socom-generated "
-              f"(hand-written?). Re-run with --force to adopt it.", file=sys.stderr)
-        return
+                    force: bool = False, sidecar: bool = False,
+                    import_line: str | None = None):
+    """Write a compiled view. Returns the path actually written, or None.
+
+    HR2: never clobber a file we didn't generate. Adoption is explicit. But a
+    refusal that offers only `--force` makes destroying the user's file the ONLY
+    way forward, and the caller then goes on printing an instruction it just
+    refused (DEF-HANDWRITTEN-CLAUDE-MD-WEDGES-THE-LADDER-01). With sidecar=True
+    the refusal keeps HR2 AND leaves an exit: socom's half lands beside the file
+    it will not touch, and the user joins them with one line socom does not write.
+    """
+    if path.exists() and not is_generated(path) and not force:
+        if not sidecar:
+            print(f"  REFUSED {path}: exists and is not socom-generated "
+                  f"(hand-written?). Re-run with --force to adopt it.", file=sys.stderr)
+            return None
+        side = sidecar_for(path)
+        write_generated(side, body, hash_, comment, force=True)
+        print(f"  KEPT {path.name} — it is yours and socom did not touch it. "
+              f"socom's half is {side.name}.")
+        if import_line:
+            print(f"         to load it, add this ONE line to {path.name}: "
+                  f"{import_line}")
+        print(f"         (`socom compile --force` would instead OVERWRITE "
+              f"{path.name} — it still works and still destroys it.)")
+        return side
     path.parent.mkdir(parents=True, exist_ok=True)
     header = (f"{comment[0]} socom:generated v={SOCOM_VERSION} source={hash_} "
               f"— do not edit; edit .socom/ + socom.yaml, then `socom compile` {comment[1]}\n")
     path.write_text(header + body)
     print(f"  wrote {path}")
+    return path
 

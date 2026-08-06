@@ -1316,6 +1316,83 @@ check("well-formed + stale -> rewritten in place", _r == "updated" and "old/" no
 check("rewrite preserves content before AND after the block",
       "keep-me/" in _t and "trailing/" in _t)
 
+# ── the hand-written CLAUDE.md wedge (DEF-HANDWRITTEN-CLAUDE-MD-WEDGES-THE-
+#    LADDER-01) ────────────────────────────────────────────────────────────────
+# compile REFUSED to clobber a hand-written CLAUDE.md (HR2, correct) while the
+# rung read the ABSENCE of socom's header as "run `socom compile`" — so the tool
+# printed, forever, the one step it had just refused. Observed in the wild on a
+# real third-party clone: four compiles, one adopt, byte-identical output.
+# These pin both halves and the acceptance: --force stays available and stays
+# destructive; it must not be the only exit.
+_HDR = "<!-- socom:generated v=0.1 source=deadbeef -->\n"
+
+eq("sidecar_for names the socom half beside the user's file",
+   socom.sidecar_for(Path("/r/CLAUDE.md")).name, socom.CLAUDE_SIDECAR)
+
+with _tf.TemporaryDirectory() as _d:
+    _r = Path(_d)
+    check("is_generated: absent file -> False", not socom.is_generated(_r / "CLAUDE.md"))
+    (_r / "CLAUDE.md").write_text("# mine\n\nDo not delete anything.\n")
+    check("is_generated: hand-written -> False", not socom.is_generated(_r / "CLAUDE.md"))
+    eq("compiled_view: user's file, no sidecar -> none",
+       socom.compiled_view(_r)[1], "none")
+
+    # compile's refusal path, with the exit wired in.
+    _got = socom.write_generated(_r / "CLAUDE.md", "BODY\n", "deadbeef", sidecar=True,
+                                 import_line=f"@{socom.CLAUDE_SIDECAR}")
+    eq("write_generated(sidecar) writes the sidecar, not the user's file",
+       _got.name, socom.CLAUDE_SIDECAR)
+    check("write_generated(sidecar) leaves the user's file byte-identical",
+          (_r / "CLAUDE.md").read_text() == "# mine\n\nDo not delete anything.\n")
+    check("the sidecar carries the socom:generated header",
+          socom.is_generated(_r / socom.CLAUDE_SIDECAR))
+    eq("compiled_view: sidecar written but not imported -> orphan",
+       socom.compiled_view(_r)[1], "orphan")
+
+    # The rung must not now ask for the step compile just refused.
+    (_r / "socom.yaml").write_text("checks: {}\n")
+    _state, _next = socom.adoption_rung(_r)
+    check("rung(orphan): next: is NOT the refused `socom compile`",
+          "socom compile" not in _next)
+    check("rung(orphan): next: names the one line the user adds",
+          f"@{socom.CLAUDE_SIDECAR}" in _next)
+    check("rung(orphan): state says the file is theirs, not that it is missing",
+          "CLAUDE.md" in _state)
+
+    # One line, written by the user, and the ladder moves — user's file intact.
+    (_r / "CLAUDE.md").write_text(f"# mine\n\nDo not delete anything.\n@{socom.CLAUDE_SIDECAR}\n")
+    eq("compiled_view: import line present -> imported",
+       socom.compiled_view(_r)[1], "imported")
+    _state2, _ = socom.adoption_rung(_r)
+    check(f"rung advances past T1 on the import alone (got {_state2!r})",
+          not _state2.startswith("T1"))
+    check("...and 'Do not delete anything.' is still in the user's file",
+          "Do not delete anything." in (_r / "CLAUDE.md").read_text())
+
+with _tf.TemporaryDirectory() as _d:
+    _r = Path(_d)
+    (_r / "CLAUDE.md").write_text(f"# mine\n@./{socom.CLAUDE_SIDECAR}\n")
+    (_r / socom.CLAUDE_SIDECAR).write_text(_HDR + "BODY\n")
+    eq("compiled_view: `@./` relative import counts",
+       socom.compiled_view(_r)[1], "imported")
+
+with _tf.TemporaryDirectory() as _d:
+    _r = Path(_d)
+    (_r / "CLAUDE.md").write_text(_HDR + "BODY\n")
+    eq("compiled_view: socom-owned CLAUDE.md -> owned",
+       socom.compiled_view(_r)[1], "owned")
+
+with _tf.TemporaryDirectory() as _d:
+    _r = Path(_d)
+    (_r / "AGENTS.md").write_text("mine\n")
+    eq("write_generated without sidecar still REFUSES and writes nothing",
+       socom.write_generated(_r / "AGENTS.md", "BODY\n", "deadbeef"), None)
+    check("...and the refused file is untouched", (_r / "AGENTS.md").read_text() == "mine\n")
+    # HR2's escape hatch is unchanged: still there, still destroys.
+    socom.write_generated(_r / "AGENTS.md", "BODY\n", "deadbeef", force=True, sidecar=True)
+    check("--force still overwrites the user's file (destructive, by design)",
+          "mine" not in (_r / "AGENTS.md").read_text())
+
 # ── summary ──────────────────────────────────────────────────────────────────
 print(f"unit: {_PASS} passed, {_FAIL} failed")
 raise SystemExit(1 if _FAIL else 0)

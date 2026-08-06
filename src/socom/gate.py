@@ -214,8 +214,11 @@ def cmd_gate(args):
 
     if name == "session-start":
         h = canonical_hash(root)
-        claude = root / "CLAUDE.md"
-        if claude.exists():
+        # Read the view socom actually OWNS — on a repo whose CLAUDE.md is the
+        # user's, socom's half is the sidecar, and scanning their prose for
+        # `source=` is both wrong and a false-drift risk.
+        claude, _how = compiled_view(root)
+        if claude is not None:
             m = re.search(r"source=(\w+)", claude.read_text())
             if m and m.group(1) != h:
                 print(f"socom: P0 DRIFT — compiled views stale ({m.group(1)} != {h}); "

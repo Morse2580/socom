@@ -271,8 +271,15 @@ def cmd_compile(args):
     h = canonical_hash(root)
     body = render_body(root, cfg)
 
-    write_generated(root / "CLAUDE.md", body, h, force=force)
-    write_generated(root / "AGENTS.md", body, h, force=force)
+    # CLAUDE.md and AGENTS.md are the two views a repo is LIKELY to already own —
+    # a repo has a CLAUDE.md because it drives Claude Code, which is socom's own
+    # stated audience. Refusing them without an exit wedges that repo at T1
+    # forever, so both get a sidecar. Only CLAUDE.md gets an import line: Claude
+    # Code resolves `@path` in CLAUDE.md, and AGENTS.md has no such mechanism —
+    # printing one there would be a claim outrunning capability.
+    write_generated(root / "CLAUDE.md", body, h, force=force, sidecar=True,
+                    import_line=f"@{CLAUDE_SIDECAR}")
+    write_generated(root / "AGENTS.md", body, h, force=force, sidecar=True)
     write_generated(root / ".cursor" / "rules" / "socom.mdc",
                     "---\nalwaysApply: true\n---\n" + body, h, force=force)
 
@@ -581,7 +588,8 @@ def _socom_artifacts(root: Path) -> list:
         out.append(f"{SOCOM_DIR}/")
     if (root / "socom.yaml").exists():
         out.append("socom.yaml")
-    candidates = ["CLAUDE.md", "AGENTS.md", ".cursor/rules/socom.mdc",
+    candidates = ["CLAUDE.md", "AGENTS.md", CLAUDE_SIDECAR, "AGENTS.socom.md",
+                  ".cursor/rules/socom.mdc",
                   ".gitlab-ci.yml", ".github/workflows/socom-gates.yml"]
     agents = root / ".claude" / "agents"
     if agents.is_dir():
@@ -683,14 +691,32 @@ def cmd_doctor(args):
 
     for rel in ["CLAUDE.md", "AGENTS.md", ".cursor/rules/socom.mdc"]:
         f = root / rel
-        if not f.exists():
+        side = sidecar_for(f)
+        # socom's view may legitimately live in the sidecar — the user owns the
+        # named file and socom refused to touch it. Reporting THEIR file as
+        # "tampered" is socom calling its own correct refusal a defect.
+        if is_generated(f):
+            target = f
+        elif is_generated(side):
+            target = side
+            if rel == "CLAUDE.md" and compiled_view(root)[1] == "orphan":
+                problems.append(
+                    f"{side.name} is not loaded: add the line `@{CLAUDE_SIDECAR}` "
+                    f"to CLAUDE.md (socom will not edit it)")
+            else:
+                print(f"socom doctor — INFO: {rel} is yours, socom did not write "
+                      f"it; socom's view is {side.name}")
+        elif f.exists():
+            problems.append(f"{rel}: yours — no socom:generated header, and no "
+                            f"{side.name} beside it; run `socom compile`")
+            continue
+        else:
             problems.append(f"missing compiled view: {rel}")
             continue
-        m = re.search(r"socom:generated v=\S+ source=(\w+)", f.read_text())
-        if not m:
-            problems.append(f"{rel}: no socom:generated header — hand-written or tampered")
-        elif m.group(1) != h:
-            problems.append(f"{rel}: stale (source={m.group(1)}, canonical={h}) — DRIFT, recompile")
+        m = re.search(r"socom:generated v=\S+ source=(\w+)", target.read_text())
+        if m and m.group(1) != h:
+            problems.append(f"{target.name}: stale (source={m.group(1)}, "
+                            f"canonical={h}) — DRIFT, recompile")
 
     for k in ("fast", "medium", "full"):
         if cfg.get("checks", {}).get(k) in (None, "", "true"):
@@ -829,8 +855,8 @@ def cmd_precond(args):
         rows.append(("✓", "checks.fast/medium/full bound"))
 
     # 5. Drift — warn with the exact fix (working stale is a risk, not a hard stop here).
-    claude = root / "CLAUDE.md"
-    if claude.exists():
+    claude, _how = compiled_view(root)  # socom's view, sidecar included
+    if claude is not None:
         m = re.search(r"source=(\w+)", claude.read_text())
         if m and m.group(1) != canonical_hash(root):
             warns += 1
@@ -924,9 +950,19 @@ def adoption_rung(root: Path) -> tuple[str, str]:
     if not (root / "socom.yaml").exists():
         return ("T0 — no substrate", "run `socom init` to plant it")
     cfg = yaml.safe_load((root / "socom.yaml").read_text()) or {}
-    if not (root / "CLAUDE.md").exists() or \
-            "socom:generated" not in (root / "CLAUDE.md").read_text()[:200]:
+    # T1's exit is "socom's compiled instructions are reachable by the agent" —
+    # NOT "socom owns CLAUDE.md". The two were the same test until a repo that
+    # already had a hand-written CLAUDE.md hit compile's HR2 refusal and the rung
+    # kept printing the step compile had just refused, forever
+    # (DEF-HANDWRITTEN-CLAUDE-MD-WEDGES-THE-LADDER-01). Never return a next: step
+    # this run has already refused.
+    view, how = compiled_view(root)
+    if how == "none":
         return ("T1 — planted, not compiled", "run `socom compile`")
+    if how == "orphan":
+        return ("T1 — compiled beside your CLAUDE.md, not loaded by it",
+                f"add one line to CLAUDE.md: `@{CLAUDE_SIDECAR}` "
+                f"(socom will not edit CLAUDE.md — it is yours)")
     if any(cfg.get("checks", {}).get(k) in (None, "", "true")
            for k in ("fast", "medium", "full")):
         return ("T2 — compiled, checks unbound",
@@ -1167,7 +1203,8 @@ def cmd_unadopt(args):
     print(f"  core.hooksPath now: {now or '<unset>'}")
 
     left = [p for p in (SOCOM_DIR, HOOKS_DIR, "socom.yaml", "CLAUDE.md",
-                        "AGENTS.md", ".cursor/rules/socom.mdc",
+                        "AGENTS.md", CLAUDE_SIDECAR, "AGENTS.socom.md",
+                        ".cursor/rules/socom.mdc",
                         ".github/workflows/socom-gates.yml")
             if (root / p).exists()]
     if left:

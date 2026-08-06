@@ -344,6 +344,50 @@ git -C "$UR" config --unset core.hooksPath
   && ok "a git-config heal is named as a config write, not a silent 'healed'" \
   || bad "precond wrote git config without saying so"
 
+# 9e. the hand-written CLAUDE.md wedge (DEF-HANDWRITTEN-CLAUDE-MD-WEDGES-THE-
+#     LADDER-01). A repo that already has a CLAUDE.md is socom's OWN stated
+#     audience — it has one because it drives Claude Code. compile refused to
+#     clobber it (HR2, correct) and the rung read that same absence as
+#     "run `socom compile`", so the tool printed the step it had just refused,
+#     forever. Observed in the wild: four compiles and one adopt, byte-identical.
+#     This is the acceptance, black-box, in the order a stranger meets it.
+WR="$T/wedge-repo"; mkdir -p "$WR"; ( cd "$WR" && git init -q -b main . )
+printf '# My rules\n\nDo not delete anything.\n' > "$WR/CLAUDE.md"
+( cd "$WR" && "$SOCOM" init . >/dev/null 2>&1 )
+( cd "$WR" && "$SOCOM" compile >/dev/null 2>&1 ); check "compile on a repo that owns its CLAUDE.md" 0 $?
+grep -q "Do not delete anything." "$WR/CLAUDE.md" \
+  && ok "compile did NOT touch the user's CLAUDE.md (HR2 holds)" \
+  || bad "compile clobbered a hand-written CLAUDE.md"
+[ -f "$WR/CLAUDE.socom.md" ] \
+  && ok "compile left socom's half beside it (CLAUDE.socom.md)" \
+  || bad "compile refused with no exit but --force"
+WNEXT="$( cd "$WR" && "$SOCOM" greet 2>&1 | grep '^ *next:' )"
+printf '%s' "$WNEXT" | grep -q 'socom compile' \
+  && bad "the rung still prints the step compile just REFUSED: [$WNEXT]" \
+  || ok "the rung never prints a next: step this run already refused"
+printf '%s' "$WNEXT" | grep -q '@CLAUDE.socom.md' \
+  && ok "next: names the one line the USER adds (socom does not write it)" \
+  || bad "next: does not name a satisfiable step: [$WNEXT]"
+( cd "$WR" && "$SOCOM" doctor 2>&1 | grep -q "hand-written or tampered" ) \
+  && bad "doctor still calls the user's own file tampered" \
+  || ok "doctor no longer reports the user's own CLAUDE.md as tampered"
+# The user adds the line. The ladder moves, and their file is still theirs.
+printf '@CLAUDE.socom.md\n' >> "$WR/CLAUDE.md"
+( cd "$WR" && "$SOCOM" greet 2>&1 | grep -q 'rung: T1' ) \
+  && bad "the rung stayed at T1 after the import — still wedged" \
+  || ok "one line the user writes advances the rung past T1"
+grep -q "Do not delete anything." "$WR/CLAUDE.md" \
+  && ok "...and the user's own instructions survived the advance" \
+  || bad "advancing the rung cost the user their CLAUDE.md"
+# --force stays available and stays destructive. It just stops being the ONLY exit.
+WF="$T/wedge-force"; mkdir -p "$WF"; ( cd "$WF" && git init -q -b main . )
+printf '# My rules\n\nDo not delete anything.\n' > "$WF/CLAUDE.md"
+( cd "$WF" && "$SOCOM" init . >/dev/null 2>&1 )
+( cd "$WF" && "$SOCOM" compile --force >/dev/null 2>&1 )
+grep -q "Do not delete anything." "$WF/CLAUDE.md" \
+  && bad "--force stopped overwriting — the escape hatch changed meaning" \
+  || ok "--force still adopts the file by DESTROYING it (unchanged, on purpose)"
+
 "$SOCOM" baseline . >/dev/null;            check "baseline" 0 $?
 python3 - <<'EOF' && ok "chunk ids unique + full-path (STORAGE identity)" || bad "chunk identity violated"
 import json, sys

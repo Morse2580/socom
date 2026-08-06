@@ -509,9 +509,9 @@ colleagues. A participant hitting any of them is burned on something recorded he
   parent: every pre-existing blackboard test pins `SOCOM_SESSION`, which is why
   none of them ever caught this.
 
-## Active — P0 (found 2026-08-05 in the wild, on the target population)
+## Done — the eighth P0 (found 2026-08-05 in the wild, FIXED 2026-08-06)
 
-- `DEF-HANDWRITTEN-CLAUDE-MD-WEDGES-THE-LADDER-01` **READY P0** — **A repo that
+- `DEF-HANDWRITTEN-CLAUDE-MD-WEDGES-THE-LADDER-01` **DONE P0** — **A repo that
   already has a hand-written `CLAUDE.md` can never leave `T1`, and socom's `next:`
   instruction is one it has already refused to allow.** The two behaviours are
   each correct and together form a livelock:
@@ -564,6 +564,41 @@ colleagues. A participant hitting any of them is burned on something recorded he
   refused in the same run. `--force` remains available and remains destructive;
   it must stop being the only exit. **Files:** `src/socom/lifecycle.py`
   (`adoption_rung`, the compile path), `src/socom/core.py` (`write_generated`).
+  **FIXED 2026-08-06.** The refusal keeps HR2 and gains an exit that is not the
+  clobber: `write_generated(sidecar=True)` writes socom's half to
+  `CLAUDE.socom.md` and leaves the user's file byte-identical, and `compile`
+  prints the one line the USER adds — `@CLAUDE.socom.md` — which socom does not
+  write. `compiled_view()` (`core.py`) is now the single answer to *"which file
+  is socom's"*, proved by the header and not the path, and the rung, `doctor`,
+  the `session-start` drift gate and `precond` all read it. `adoption_rung` exits
+  `T1` on *"socom's instructions are reachable"*, not *"socom owns CLAUDE.md"*,
+  so the import advances the rung with the user's file untouched. When the
+  sidecar exists but is not imported, the rung says so and names the one line —
+  it never re-prints the step compile just refused.
+  **RE-RUN EVIDENCE:** the row's own 30-second reproduction, post-fix — `compile`
+  → `KEPT CLAUDE.md … socom's half is CLAUDE.socom.md`, `rung: T1 — compiled
+  beside your CLAUDE.md, not loaded by it`, `next: add one line to CLAUDE.md:
+  @CLAUDE.socom.md`; user's line `Do not delete anything.` **still present**;
+  after the user appends that line, `rung: T2 — compiled, checks unbound` and the
+  line is still present. `doctor` prints `INFO: CLAUDE.md is yours, socom did not
+  write it` instead of *"hand-written or tampered"*, and exits 0.
+  `compile --force` still overwrote the file (`Do not delete` → **0
+  occurrences**) — the escape hatch is unchanged, it has simply stopped being the
+  only one. **19 unit + 9 smoke assertions added; 5 of the 9 smoke assertions
+  FAIL against a `git archive HEAD` of the pre-fix tree** (the unit ones do not
+  compile there at all — the helpers did not exist), so the tests pin the defect
+  and not just the repair. `unit: 367 passed` · `r1corpus: 146 passed` ·
+  `gate full: PASS` · `build.py --check` clean.
+  ⚠️ **Scope, stated rather than implied:** the `@` import is a **Claude Code**
+  mechanism. `AGENTS.md` gets a sidecar so `compile` is not a dead end there
+  either, but **no import line is printed for it**, because AGENTS.md has no such
+  mechanism and printing one would be this repo's own Class A sin. The rung only
+  ever gated on `CLAUDE.md`, so nothing was wedged on the AGENTS.md side.
+  ⚠️ **The `imported` state is a FILE test, not an effect test** — socom checks
+  that the line is present; it cannot execute the agent runtime, so it must never
+  say the file was loaded. That is `decisions/0004` Class A, contained and named
+  rather than repeated: the rung string says *"not loaded by it"* for the
+  negative and claims nothing beyond the join for the positive.
 
 ## Active — P1 (recorded; explicitly NOT pre-exposure)
 
