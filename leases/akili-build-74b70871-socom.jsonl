@@ -1,1 +1,2 @@
 {"author": "akili-build-74b70871-socom", "id": "l-5dd8f7a55296", "intent": "", "kind": "lease", "paths": ["--help"], "ts": "2026-08-06T06:38:52+00:00", "ttl_s": 28800}
+{"author": "akili-build-74b70871-socom", "id": "r-2c3be95452b3", "kind": "release", "ref": "l-5dd8f7a55296", "ts": "2026-08-06T06:39:19+00:00"}
