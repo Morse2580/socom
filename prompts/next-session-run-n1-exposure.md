@@ -92,7 +92,7 @@ nothing else was done). Every line re-run, not carried:
             core.py:137 is now `def is_generated` — the old cite would have
             resolved to a real line and meant nothing. Re-`sed` before quoting.
             ⚠️ These moved TWICE in one day (once for the fix, once for the
-            duplication collapse at `ab87af9`). Treat every line number in this
+            duplication collapse at `868386b`). Treat every line number in this
             prompt as stale and re-`sed` it; the symbol is the durable cite.
   VERIFIED  the fix ......... 5 of 9 new smoke assertions FAIL against a
             `git archive HEAD` of the pre-fix tree; the 19 unit assertions do
