@@ -605,8 +605,13 @@ colleagues. A participant hitting any of them is burned on something recorded he
 - `DEF-SUBCOMMAND-HELP-MUTATES-STATE-01` **READY P0** — **No subcommand handles
   `--help`, so the universal "explain, don't act" reflex makes socom act — and on
   two subcommands it mutates state the user did not agree to.** Top-level
-  `socom --help` works fine, which is exactly why nobody looked further.
-  MEASURED 2026-08-06, build `77d2b1855dca`, throwaway git repo:
+  `socom --help` at least PRINTS the command list, which is exactly why nobody
+  looked further. *(Precisely: it writes 7075 bytes to **stderr** and exits **1**,
+  so `socom --help | head -3` yields empty stdout. That half is already recorded
+  in `bench/exposure/README.md` as cosmetic and deliberately **not filed**, under
+  the bucket's no-growth norm; this row is about the SUBCOMMANDS and does not
+  reopen it.)*
+  MEASURED 2026-08-06, build `ae42d0c4c71a`, throwaway git repo:
   - `socom claim --help` → `acquired --help as <author> [l-28b3a6e833fc]`. The
     flag is swallowed as the PATH argument and a real lease is taken. `-h` does
     the same (`acquired -h`). `claim --scan` then lists a lease named `--help`.

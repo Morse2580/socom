@@ -104,9 +104,31 @@ nothing else was done). Every line re-run, not carried:
   UNCHANGED proof tier ...... D0 — eight P0 repairs now. The queue in front of
             the run is EMPTY. There is nothing left to clear first.
   HYPOTHESIS none.
+
+REWRITTEN 2026-08-06 (ninth pass, at f842bac — ONE NEW P0, found by reflex).
+  REWRITTEN defects ......... 8 DONE P0 / **1 READY P0** / 9 READY P1
+            (measured: 8/1/9 via grep -cE). The queue was empty for exactly
+            ONE commit. DEF-SUBCOMMAND-HELP-MUTATES-STATE-01.
+  VERIFIED  the new defect .. MEASURED on ae42d0c4c71a in a throwaway repo:
+            `claim --help` acquires a lease literally named "--help" (and `-h`
+            the same); `compile --help` plants 33 files; `release --help`
+            releases the bogus lease; `attest --help` errors cleanly.
+            Top-level `socom --help` is FINE — which is why it went unseen.
+  VERIFIED  skills .......... 4 in `.claude/skills/`, auto-discovered
+            (`git ls-files .claude/skills/`); the prompt now points at them
+  REWRITTEN public artifact . 427138 -> **427639** bytes, 77d2b1855dca ->
+            **ae42d0c4c71a**. I first wrote this line as UNCHANGED and the
+            probe refuted it: bin/socom moved at 868386b (the duplication
+            collapse). Regression Test 1 of prompt-verify-pass, on the author,
+            in the same session that ported the skill naming it.
+  UNCHANGED suites .......... unit 370 / r1corpus 146 / gate full PASS
+  UNCHANGED EV row .......... EV-NONAUTHOR-EXPOSURE-01 READY P0, STILL UNRUN
+  UNCHANGED proof tier ...... D0
+  HYPOTHESIS the `--help` repair "looks small" — dispatch-level intercept, no
+            spike run. (hypothesis — operator-driven)
 -->
 
-# Next session — run the n=1 exposure. Nothing is in front of it.
+# Next session — run the n=1 exposure. One small P0 sits in front of it.
 
 **Row:** `EV-NONAUTHOR-EXPOSURE-01` (`buckets/evidence.md`), **READY P0**, `n=1`.
 **Governed by** `decisions/0001-exposure-before-capability.md`.
@@ -123,6 +145,28 @@ no MRs. Commit **directly to `main`**, push, watch with `gh run watch`.
 `python3 build.py`, commit both (`python3 build.py --check` is a CI gate).
 socom's own hooks are not wired in its checkout, so run `./bin/socom gate full`
 yourself before every push.
+
+**Four skills ship in this repo** and are auto-discovered — nothing to install
+*(verified: `git ls-files .claude/skills/` lists all four at `f842bac`)*.
+Use them instead of hand-rolling their procedures:
+
+- `ship-and-verify` — the push loop: `build.py` → `gate full` **by hand** →
+  commit to `main` → `gh run watch` → **re-measure the public curl artifact**.
+  Its failure-mode list is real and was paid for; read it before citing a SHA
+  or a line number.
+- `bucket-ledger-reconcile` — before writing ANY state table or flipping a row
+  `DONE`. `DONE` = Changed + Pinned (a test that fails against the pre-fix tree)
+  + Effect (the row's acceptance re-run, output in the row). Not "I edited it".
+- `prompt-verify-pass` — mandatory at closeout and on any edit to this file.
+- `reap-shells` — stale background shells; §5 covers socom's own reaper, which
+  owns `spawn`'d workers (hand-killing them corrupts the tally).
+
+⚠️ **The doctrine skills were deliberately NOT ported** (root-gate,
+residuality-gate, seam-coupling-gate, capability-composability-gate,
+explain-plain). They live in `/root/Akili/.claude/skills/` and still govern —
+`0001`, `0005` and `evidence.md` all cite the root gate and its `D0` tier, which
+**nothing in this repo defines.** If you need the tier vocabulary, read it there;
+do not re-derive it, and do not port it as a side quest.
 
 ## The P0 that was in front of this is CLEARED (2026-08-06, `df924f9`)
 
@@ -149,9 +193,28 @@ the `@` import is a **Claude Code** mechanism, so `AGENTS.md` gets a sidecar but
 committed by the author. And the `imported` state is a **file test, not an effect
 test**: socom checks the line is present and never claims the file was loaded.
 
-**This is the eighth P0 and the queue is now empty.** *(measured: 8 DONE P0 /
-**0** READY P0 via `grep -cE`.)* Nothing is in front of the run.
-⚠️ It moved the proof tier by **nothing**, exactly as the seven before it did.
+**That was the eighth P0.** It moved the proof tier by **nothing**, exactly as
+the seven before it did.
+
+## …and a ninth was filed the same day, by reflex
+
+`DEF-SUBCOMMAND-HELP-MUTATES-STATE-01` **READY P0** *(measured: 8 DONE P0 /
+**1** READY P0 / 9 READY P1 via `grep -cE`)*. **No subcommand handles `--help`,
+so the universal "explain, don't act" reflex makes socom act.** `claim --help`
+acquires a lease literally named `--help`; `compile --help` plants 33 files;
+`-h` behaves the same. Top-level `socom --help` is fine, which is why it was
+never looked at. *(measured 2026-08-06, build `ae42d0c4c71a`, throwaway repo.)*
+
+It fires **at** the stall point, not after it — `<cmd> --help` is the first thing
+a stranger types at an unfamiliar subcommand, and the answer to a request for an
+explanation is a state mutation. The row has the full scope and the acceptance.
+
+⚠️ **Decide, don't drift.** Either clear it first — the repair looks like a
+dispatch-level intercept of `--help`/`-h` before any `cmd_*` runs *(hypothesis —
+operator-driven; no spike run)* — or accept it as a known defect a participant
+may hit and **go and run the exposure anyway**. What must not happen is a third
+session that repairs P0s and calls that the work. Eight repairs have moved D0 by
+zero, and this row does not change that arithmetic.
 
 ## The one thing this session is for
 
@@ -184,9 +247,9 @@ curl -fsSL -o /tmp/socom.pre \
 chmod +x /tmp/socom.pre && /tmp/socom.pre --help | head -3 && /tmp/socom.pre version
 ```
 
-Verified 2026-08-06 (re-run after `df924f9`, the wedge repair): `http=200`,
-**427138 bytes**, `cmp` byte-identical to `bin/socom`, `--help` prints the command
-list, and `version` reports build **`77d2b1855dca`** *(measured: curl -w + cmp +
+Verified 2026-08-06 (re-run at `f842bac`): `http=200`, **427639 bytes**, `cmp`
+byte-identical to `bin/socom`, `--help` prints the command list, and `version`
+reports build **`ae42d0c4c71a`** (last commit touching `bin/socom`: `868386b`) *(measured: curl -w + cmp +
 `socom version`)*. **Also confirm the participant is on
 macOS/Linux/WSL** — native Windows is unsupported and finding out mid-session
 wastes the run.
@@ -505,7 +568,7 @@ informing it — and it needs no code change, only that line.
   before the run deletes the measurement.
   ⚠️ **A React/Ink rewrite was evaluated the same day and REFUTED on its own
   goal.** It was proposed to make the tool "calmer to install"; it does the
-  opposite. socom installs today as ONE file — `curl` 427138 bytes of stdlib
+  opposite. socom installs today as ONE file — `curl` 427639 bytes of stdlib
   Python, `chmod +x`, run — and Ink requires a Node runtime, `npm install`,
   `node_modules` and a bundle step, so the install grows from one curl to
   "install Node first" and **the 30-second preflight above stops existing**. It
@@ -527,10 +590,10 @@ addresses, tool quality is irrelevant and that is worth knowing before R1.
 | Thing | State |
 |---|---|
 | socom `main` | state below re-verified at `df924f9` (the wedge P0 fix, CI `success @ df924f9`); the closeout commit that lands this prompt sits on top of it. `git log --oneline -3` and re-probe rather than trusting either SHA. Clean, pushed, CI green. |
-| Buckets | `defects.md` **8 DONE P0 + 0 READY P0** — the queue in front of the run is empty — **+ 9** READY P1 *(measured: 8/0/9 via `grep -cE`)* · `build.md` 1 READY (R1) + **8** BLOCKED *(measured: 1/8)* · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** *(L15 @ `df924f9`)* |
+| Buckets | `defects.md` **8 DONE P0 + 1 READY P0** (`DEF-SUBCOMMAND-HELP-MUTATES-STATE-01`, filed 2026-08-06) **+ 9** READY P1 *(measured: 8/1/9 via `grep -cE`)* · `build.md` 1 READY (R1) + **8** BLOCKED *(measured: 1/8)* · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** *(L15 @ `df924f9`)* |
 | Proof tier | **D0 — ASSUMED**, unchanged since 2026-08-01 *(measured: `bench/exposure/` holds README + TEMPLATE only, no dated sheet)* |
 | Suite | `unit: 367 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean *(measured: all four re-run at `df924f9`)* |
-| Exposure prep | `bench/exposure/{README,TEMPLATE}.md` landed *(verified `df924f9`)*; URL preflighted at **427138** bytes, build **`77d2b1855dca`** *(measured: `curl -w` + `cmp` vs `bin/socom` + `socom version`)*; sheet has a build-under-test row fed by `socom version`. ⚠️ **Re-measure both — never carry them.** |
+| Exposure prep | `bench/exposure/{README,TEMPLATE}.md` landed *(verified `df924f9`)*; URL preflighted at **427639** bytes, build **`ae42d0c4c71a`** *(re-measured at `f842bac`)* *(measured: `curl -w` + `cmp` vs `bin/socom` + `socom version`)*; sheet has a build-under-test row fed by `socom version`. ⚠️ **Re-measure both — never carry them.** |
 | Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork (Accepted, adopts nothing) · **`0004`** two-boundaries-socom-does-not-represent (Accepted, diagnosis only, repairs nothing) · **`0005`** the-user-is-an-agent-the-adopter-is-not (Accepted — the population question is CLOSED) *(measured: 5 files in `decisions/`)* |
 
 Probes: `./bin/socom gate full` · `python3 build.py --check` ·
