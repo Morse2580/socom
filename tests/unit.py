@@ -1329,6 +1329,20 @@ _HDR = "<!-- socom:generated v=0.1 source=deadbeef -->\n"
 eq("sidecar_for names the socom half beside the user's file",
    socom.sidecar_for(Path("/r/CLAUDE.md")).name, socom.CLAUDE_SIDECAR)
 
+# One naming rule, one place. The inventory lists (_generated_files, unadopt)
+# once spelled "AGENTS.socom.md" as a literal, which is a name that goes stale
+# silently the moment sidecar_for changes — the list keeps matching nothing and
+# no test notices. view_files() DERIVES every sidecar instead.
+eq("view_files derives every compiled view + sidecar, none spelled twice",
+   socom.view_files(),
+   ["CLAUDE.md", "AGENTS.md", ".cursor/rules/socom.mdc",
+    "CLAUDE.socom.md", "AGENTS.socom.md"])
+check("view_files covers both sidecar-able views (the literals' whole job)",
+      {socom.sidecar_for(Path(v)).name for v in socom.SIDECAR_VIEWS}
+      <= set(socom.view_files()))
+check("socom's own path is NOT given a sidecar (the collision cannot arise)",
+      ".cursor/rules/socom.socom.mdc" not in socom.view_files())
+
 with _tf.TemporaryDirectory() as _d:
     _r = Path(_d)
     check("is_generated: absent file -> False", not socom.is_generated(_r / "CLAUDE.md"))

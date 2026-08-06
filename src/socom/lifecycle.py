@@ -588,8 +588,7 @@ def _socom_artifacts(root: Path) -> list:
         out.append(f"{SOCOM_DIR}/")
     if (root / "socom.yaml").exists():
         out.append("socom.yaml")
-    candidates = ["CLAUDE.md", "AGENTS.md", CLAUDE_SIDECAR, "AGENTS.socom.md",
-                  ".cursor/rules/socom.mdc",
+    candidates = [*view_files(),
                   ".gitlab-ci.yml", ".github/workflows/socom-gates.yml"]
     agents = root / ".claude" / "agents"
     if agents.is_dir():
@@ -689,7 +688,7 @@ def cmd_doctor(args):
     h = canonical_hash(root)
     problems = []
 
-    for rel in ["CLAUDE.md", "AGENTS.md", ".cursor/rules/socom.mdc"]:
+    for rel in COMPILED_VIEWS:
         f = root / rel
         side = sidecar_for(f)
         # socom's view may legitimately live in the sidecar — the user owns the
@@ -1202,9 +1201,7 @@ def cmd_unadopt(args):
     now = _git_hooks_path(root)
     print(f"  core.hooksPath now: {now or '<unset>'}")
 
-    left = [p for p in (SOCOM_DIR, HOOKS_DIR, "socom.yaml", "CLAUDE.md",
-                        "AGENTS.md", CLAUDE_SIDECAR, "AGENTS.socom.md",
-                        ".cursor/rules/socom.mdc",
+    left = [p for p in (SOCOM_DIR, HOOKS_DIR, "socom.yaml", *view_files(),
                         ".github/workflows/socom-gates.yml")
             if (root / p).exists()]
     if left:

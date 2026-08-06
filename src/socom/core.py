@@ -148,7 +148,22 @@ def sidecar_for(path: Path) -> Path:
     return path.with_name(f"{path.stem}.socom{path.suffix}")
 
 
-CLAUDE_SIDECAR = "CLAUDE.socom.md"  # socom's half when CLAUDE.md is the user's
+COMPILED_VIEWS = ["CLAUDE.md", "AGENTS.md", ".cursor/rules/socom.mdc"]
+
+# Only a view the repo may ALREADY own can end up in a sidecar. .cursor/rules/
+# socom.mdc is socom's own path, so that collision cannot arise there.
+SIDECAR_VIEWS = ["CLAUDE.md", "AGENTS.md"]
+
+CLAUDE_SIDECAR = sidecar_for(Path("CLAUDE.md")).name  # socom's half of a user's CLAUDE.md
+
+
+def view_files() -> list[str]:
+    """Every path socom compiles a view into, sidecars DERIVED and never spelled
+    again. compile writes these, doctor checks them, _generated_files and unadopt
+    inventory them — so the naming rule lives in exactly one function
+    (`sidecar_for`) and changing it cannot strand a stale literal in a list
+    somewhere that then silently stops matching."""
+    return COMPILED_VIEWS + [sidecar_for(Path(v)).name for v in SIDECAR_VIEWS]
 
 
 def compiled_view(root: Path) -> tuple[Path | None, str]:

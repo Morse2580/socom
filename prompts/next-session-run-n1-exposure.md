@@ -87,10 +87,13 @@ nothing else was done). Every line re-run, not carried:
   REWRITTEN suites .......... unit 348 -> **367** / r1corpus 146 / gate full PASS
             / build.py --check clean / CI **success @ df924f9**
   REWRITTEN code cites ...... the fix MOVED both lines the old header cited.
-            write_generated is now `core.py:182` (its HR2 guard at `:194`);
-            adoption_rung is `lifecycle.py:948`, its new branch at `:959-964`.
+            write_generated is now `core.py:197` (its HR2 guard at `:209`);
+            adoption_rung is `lifecycle.py:947`, its new branch at `:958-963`.
             core.py:137 is now `def is_generated` — the old cite would have
             resolved to a real line and meant nothing. Re-`sed` before quoting.
+            ⚠️ These moved TWICE in one day (once for the fix, once for the
+            duplication collapse at `ab87af9`). Treat every line number in this
+            prompt as stale and re-`sed` it; the symbol is the durable cite.
   VERIFIED  the fix ......... 5 of 9 new smoke assertions FAIL against a
             `git archive HEAD` of the pre-fix tree; the 19 unit assertions do
             not load there at all (the helpers did not exist)
@@ -132,10 +135,10 @@ had just refused, forever. **Do not re-derive it; the row has the full account.*
 The repair, in one line: the refusal keeps HR2 and gains an exit that is not the
 clobber. socom's half lands in `CLAUDE.socom.md`, the user's file is left
 byte-identical, and `compile` prints the ONE line the *user* adds —
-`@CLAUDE.socom.md` — which socom does not write. `compiled_view()` (`core.py:154`)
+`@CLAUDE.socom.md` — which socom does not write. `compiled_view()` (`core.py:169`)
 is now the single answer to *"which file is socom's"* *(mechanism verified:
-`sed -n '154p'` is the `def compiled_view` line; `adoption_rung` reads it at
-`lifecycle.py:959`)*, and the rung exits `T1` on
+`sed -n '169p'` is the `def compiled_view` line; `adoption_rung` reads it at
+`lifecycle.py:958`)*, and the rung exits `T1` on
 *"socom's instructions are reachable"* rather than *"socom owns CLAUDE.md"*.
 `--force` is unchanged: still available, still destroys the file *(measured:
 `Do not delete` → 0 occurrences, post-fix)*. It simply stopped being the only exit.
