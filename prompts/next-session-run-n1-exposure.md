@@ -77,9 +77,33 @@ REWRITTEN 2026-08-05 (seventh pass, at 099c45a — ONE NEW P0, found in the wild
   VERIFIED  public URL ...... 421735 bytes, 1bc70ac4f16c (no code since 2fd2b5d)
   UNCHANGED EV row .......... EV-NONAUTHOR-EXPOSURE-01 READY P0, STILL UNRUN
   UNCHANGED proof tier ...... D0
+
+REWRITTEN 2026-08-06 (eighth pass, at df924f9 — the wedge P0 is FIXED, and
+nothing else was done). Every line re-run, not carried:
+  REWRITTEN defects ......... **8 DONE P0 / 0 READY P0** / 9 READY P1
+            (measured: 8/0/9 via grep -cE). The P0 section below is now history.
+  REWRITTEN public artifact . 421735 -> **427138** bytes, build 1bc70ac4f16c ->
+            **77d2b1855dca**, http=200, cmp byte-identical to bin/socom
+  REWRITTEN suites .......... unit 348 -> **367** / r1corpus 146 / gate full PASS
+            / build.py --check clean / CI **success @ df924f9**
+  REWRITTEN code cites ...... the fix MOVED both lines the old header cited.
+            write_generated is now `core.py:182` (its HR2 guard at `:194`);
+            adoption_rung is `lifecycle.py:948`, its new branch at `:959-964`.
+            core.py:137 is now `def is_generated` — the old cite would have
+            resolved to a real line and meant nothing. Re-`sed` before quoting.
+  VERIFIED  the fix ......... 5 of 9 new smoke assertions FAIL against a
+            `git archive HEAD` of the pre-fix tree; the 19 unit assertions do
+            not load there at all (the helpers did not exist)
+  VERIFIED  build.md ........ 1 READY (R1) + 8 BLOCKED, unchanged
+  VERIFIED  decisions ....... 0001-0005 (5 files), unchanged
+  UNCHANGED EV row .......... EV-NONAUTHOR-EXPOSURE-01 READY P0, STILL UNRUN
+            (L15 @ df924f9)
+  UNCHANGED proof tier ...... D0 — eight P0 repairs now. The queue in front of
+            the run is EMPTY. There is nothing left to clear first.
+  HYPOTHESIS none.
 -->
 
-# Next session — clear ONE P0, then run the n=1 exposure.
+# Next session — run the n=1 exposure. Nothing is in front of it.
 
 **Row:** `EV-NONAUTHOR-EXPOSURE-01` (`buckets/evidence.md`), **READY P0**, `n=1`.
 **Governed by** `decisions/0001-exposure-before-capability.md`.
@@ -97,48 +121,34 @@ no MRs. Commit **directly to `main`**, push, watch with `gh run watch`.
 socom's own hooks are not wired in its checkout, so run `./bin/socom gate full`
 yourself before every push.
 
-## FIRST — clear the one open P0. It takes the morning, not the session.
+## The P0 that was in front of this is CLEARED (2026-08-06, `df924f9`)
 
-`DEF-HANDWRITTEN-CLAUDE-MD-WEDGES-THE-LADDER-01` **READY P0** (`buckets/defects.md`).
-**A repo that already has a hand-written `CLAUDE.md` can never leave `T1`, and
-socom's `next:` step is one it has already refused to allow.**
+`DEF-HANDWRITTEN-CLAUDE-MD-WEDGES-THE-LADDER-01` is **DONE**. A repo with a
+hand-written `CLAUDE.md` — socom's own stated audience — could not leave `T1`,
+because `compile` refused to clobber the file (HR2, correct) and the rung read
+that same missing header as *"run `socom compile`"*. socom printed the step it
+had just refused, forever. **Do not re-derive it; the row has the full account.**
 
-- `write_generated` (`core.py:137`) refuses to overwrite a `CLAUDE.md` without a
-  `socom:generated` header — HR2 no-clobber, and correct. *(mechanism verified:
-  `sed -n '137p'` is the `def write_generated` line; the guard is at `:140`,
-  `:139` is its HR2 comment.)*
-- `adoption_rung` (`lifecycle.py:927-929`) returns `T1 → run socom compile`
-  *because* that header is absent. *(mechanism verified: `:927` is
-  `if not (root / "CLAUDE.md").exists() or \`, the header test at `:928`.)*
-- So `compile` refuses, the header never appears, the rung never advances, and
-  the instruction repeats forever.
+The repair, in one line: the refusal keeps HR2 and gains an exit that is not the
+clobber. socom's half lands in `CLAUDE.socom.md`, the user's file is left
+byte-identical, and `compile` prints the ONE line the *user* adds —
+`@CLAUDE.socom.md` — which socom does not write. `compiled_view()` (`core.py:154`)
+is now the single answer to *"which file is socom's"* *(mechanism verified:
+`sed -n '154p'` is the `def compiled_view` line; `adoption_rung` reads it at
+`lifecycle.py:959`)*, and the rung exits `T1` on
+*"socom's instructions are reachable"* rather than *"socom owns CLAUDE.md"*.
+`--force` is unchanged: still available, still destroys the file *(measured:
+`Do not delete` → 0 occurrences, post-fix)*. It simply stopped being the only exit.
 
-**FOUND IN THE WILD** on `aaif-goose/goose`, build `1bc70ac4f16c`, `PILOT.md`
-followed verbatim: the operator ran `compile` **four times** and `adopt` once for
-byte-identical output, and typed `socom compie` twice in between. **A recorded
-stall point, produced by the author, on his own tool.**
+⚠️ **Two limits recorded on purpose, in case they resurface as "bugs":**
+the `@` import is a **Claude Code** mechanism, so `AGENTS.md` gets a sidecar but
+**no import line** — AGENTS.md has none, and printing one would be `0004` Class A
+committed by the author. And the `imported` state is a **file test, not an effect
+test**: socom checks the line is present and never claims the file was loaded.
 
-⚠️ **The population is socom's OWN.** A repo has a `CLAUDE.md` because it uses
-Claude Code, and `PILOT.md` says *"SOCOM is built for Claude Code."* Every repo
-tested earlier that day lacked one, which is the only reason this went unseen.
-**A participant on any agent-driven repo meets it inside 60 seconds.**
-
-⚠️ **The only exit socom offers is the clobber the refusal exists to prevent.**
-MEASURED: `compile --force` overwrote the hand-written file (`Do not delete` →
-**0 occurrences**) and the rung advanced. *(measured: throwaway repo, 2026-08-05)* `doctor` separately calls the user's own
-file *"hand-written or tampered"*.
-
-**Falsifiable acceptance:** on a repo with a hand-written `CLAUDE.md`, socom
-either advances past `T1` without touching that file, or says plainly that it will
-not advance and why — and **never prints a `next:` step it has already refused in
-the same run**. `--force` stays available and stays destructive; it must stop
-being the only exit. Reproduce in 30 seconds: `git init`, write a `CLAUDE.md` by
-hand, `socom quickstart`, then `socom compile` twice.
-
-⚠️ **This is rule 2, not rule 3.** `PILOT.md` asks *"did a metric mislead you?"* —
-not *"did the tool hand you an instruction it refuses to let you complete?"*
-Fixing it deletes no finding. **Fix it, verify it, then run the exposure the same
-week — not fix it and call that the session.**
+**This is the eighth P0 and the queue is now empty.** *(measured: 8 DONE P0 /
+**0** READY P0 via `grep -cE`.)* Nothing is in front of the run.
+⚠️ It moved the proof tier by **nothing**, exactly as the seven before it did.
 
 ## The one thing this session is for
 
@@ -171,9 +181,10 @@ curl -fsSL -o /tmp/socom.pre \
 chmod +x /tmp/socom.pre && /tmp/socom.pre --help | head -3 && /tmp/socom.pre version
 ```
 
-Verified 2026-08-05 (re-run after `9e9cb79`, the P0 repairs): `http=200`,
-**421735 bytes**, byte-identical to `bin/socom`, `--help` prints the command
-list, and `version` reports build `1bc70ac4f16c`. **Also confirm the participant is on
+Verified 2026-08-06 (re-run after `df924f9`, the wedge repair): `http=200`,
+**427138 bytes**, `cmp` byte-identical to `bin/socom`, `--help` prints the command
+list, and `version` reports build **`77d2b1855dca`** *(measured: curl -w + cmp +
+`socom version`)*. **Also confirm the participant is on
 macOS/Linux/WSL** — native Windows is unsupported and finding out mid-session
 wastes the run.
 
@@ -443,9 +454,11 @@ informing it — and it needs no code change, only that line.
   `DEF-STATUS-CLAIMS-UNLABELLED-01` is P1 **on purpose** — `PILOT.md` asks *"did
   a metric mislead you?"*, so repairing it first deletes a finding the
   participant is meant to generate (`0001` §Amendment 1 rule 3).
-- **Do not let the P0 above become the session.** It is a morning. If it grows
-  past that, ship the smallest honest version — socom must not print a `next:`
-  step it just refused — and go and find the engineer.
+- **Do not treat the wedge repair as the session, and do not polish it.** It
+  landed at `df924f9` with CI green, 19 unit + 9 smoke assertions, and 5 of the 9
+  failing against the pre-fix tree *(measured: `git archive HEAD` of the pre-fix
+  tree + the new `tests/smoke.sh`; CI `success @ df924f9`)*. It is finished. The sidecar shape is
+  deliberately minimal; improving it is another morning that moves D0 by nothing.
 - **Do not build any capability.** Everything except R1 reads BLOCKED.
 - **Do not build R1 either**, unless the exposure has happened. If you do, ship
   it **standalone** — own binary, zero adoption, zero git-config writes, no
@@ -489,7 +502,7 @@ informing it — and it needs no code change, only that line.
   before the run deletes the measurement.
   ⚠️ **A React/Ink rewrite was evaluated the same day and REFUTED on its own
   goal.** It was proposed to make the tool "calmer to install"; it does the
-  opposite. socom installs today as ONE file — `curl` 421735 bytes of stdlib
+  opposite. socom installs today as ONE file — `curl` 427138 bytes of stdlib
   Python, `chmod +x`, run — and Ink requires a Node runtime, `npm install`,
   `node_modules` and a bundle step, so the install grows from one curl to
   "install Node first" and **the 30-second preflight above stops existing**. It
@@ -510,11 +523,11 @@ addresses, tool quality is irrelevant and that is worth knowing before R1.
 
 | Thing | State |
 |---|---|
-| socom `main` | state below re-verified at `099c45a` (the three P0 repairs + their evidence, CI `success`); the closeout commit that lands this prompt sits on top of it. `git log --oneline -3` and re-probe rather than trusting either SHA. Clean, pushed, CI green. |
-| Buckets | `defects.md` **7 DONE P0 + 1 READY P0** (the CLAUDE.md wedge — clear it first) + **9** READY P1 *(measured: 7/1/9 via `grep -cE`)* · `build.md` 1 READY (R1) + **8** BLOCKED · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** *(L514 @ `099c45a` for the wedge row)* |
+| socom `main` | state below re-verified at `df924f9` (the wedge P0 fix, CI `success @ df924f9`); the closeout commit that lands this prompt sits on top of it. `git log --oneline -3` and re-probe rather than trusting either SHA. Clean, pushed, CI green. |
+| Buckets | `defects.md` **8 DONE P0 + 0 READY P0** — the queue in front of the run is empty — **+ 9** READY P1 *(measured: 8/0/9 via `grep -cE`)* · `build.md` 1 READY (R1) + **8** BLOCKED *(measured: 1/8)* · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** *(L15 @ `df924f9`)* |
 | Proof tier | **D0 — ASSUMED**, unchanged since 2026-08-01 *(measured: `bench/exposure/` holds README + TEMPLATE only, no dated sheet)* |
-| Suite | `unit: 348 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean *(measured: all four re-run at `099c45a`)* |
-| Exposure prep | `bench/exposure/{README,TEMPLATE}.md` landed *(verified `099c45a`)*; URL preflighted at **421735** bytes, build **`1bc70ac4f16c`** *(measured: `curl -w` + `cmp` vs `bin/socom` + `shasum -a 256`)*; sheet has a build-under-test row fed by `socom version`. ⚠️ **Re-measure both — never carry them.** |
+| Suite | `unit: 367 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean *(measured: all four re-run at `df924f9`)* |
+| Exposure prep | `bench/exposure/{README,TEMPLATE}.md` landed *(verified `df924f9`)*; URL preflighted at **427138** bytes, build **`77d2b1855dca`** *(measured: `curl -w` + `cmp` vs `bin/socom` + `socom version`)*; sheet has a build-under-test row fed by `socom version`. ⚠️ **Re-measure both — never carry them.** |
 | Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork (Accepted, adopts nothing) · **`0004`** two-boundaries-socom-does-not-represent (Accepted, diagnosis only, repairs nothing) · **`0005`** the-user-is-an-agent-the-adopter-is-not (Accepted — the population question is CLOSED) *(measured: 5 files in `decisions/`)* |
 
 Probes: `./bin/socom gate full` · `python3 build.py --check` ·
