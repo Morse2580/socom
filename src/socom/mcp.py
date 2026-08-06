@@ -346,13 +346,9 @@ def cmd_mcp(args):
     Exiting on EOF is the primary graceful-shutdown signal and the only portable
     one, so honouring it is what keeps the client from having to escalate to
     SIGKILL."""
-    if args and args[0] in ("-h", "--help"):
-        print("usage: socom mcp   # stdio MCP server: claim, attest, findings, "
-              "resolve, release\n"
-              "Register in .mcp.json:\n"
-              '  {"mcpServers": {"socom": {"command": "<path>/bin/socom", '
-              '"args": ["mcp"]}}}')
-        return
+    # (`socom mcp --help` is intercepted at cli.py's dispatch, with every other
+    # subcommand's — the local guard that used to live here handled one instance
+    # of a class that had 40 members.)
     print(f"socom mcp: blackboard server up (modern {MCP_MODERN_VERSIONS[0]}, "
           f"legacy {MCP_LEGACY_DEFAULT}) — {len(MCP_TOOLS)} tools", file=sys.stderr)
     for line in sys.stdin:

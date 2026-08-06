@@ -1161,6 +1161,46 @@ V_ACTUAL="$(python3 -c "import hashlib,sys;print(hashlib.sha256(open(sys.argv[1]
 check "version: build digest IS sha256(bin/socom)[:12] — identifies the artifact" 0 $?
 "$SOCOM" version 2>/dev/null | grep -q '^source .*socom'; check "version: names the file it hashed" 0 $?
 
+# 17. `<cmd> --help` EXPLAINS, it never ACTS (DEF-SUBCOMMAND-HELP-MUTATES-STATE-01).
+#     No subcommand handled the flag, so it fell through as a positional and the
+#     universal "explain, don't act" reflex made socom act: `claim --help` took a
+#     real lease NAMED "--help", `compile --help` planted the full compiled view.
+#     It fires AT first contact — `<cmd> --help` is what a stranger types at an
+#     unfamiliar subcommand — so the acceptance is the whole surface, not a
+#     sample: EVERY command in the table, both flags, in a pristine repo, must
+#     exit 0 and leave the working tree byte-for-byte untouched.
+HR="$T/help-repo"; mkdir -p "$HR"; ( cd "$HR" && git init -q -b main . )
+HELP_CMDS="$("$SOCOM" --help 2>&1 | sed -n '/^Commands:/,/^$/p' \
+             | grep -E '^  [^ ]' | awk '{print $1}')"
+HELP_N="$(printf '%s\n' "$HELP_CMDS" | wc -l | tr -d ' ')"
+[ "$HELP_N" -ge 40 ]
+check "help: the command table parses (${HELP_N} commands swept x2 flags)" 0 $?
+HELP_BAD=""
+for c in $HELP_CMDS; do
+  for f in --help -h; do
+    ( cd "$HR" && "$SOCOM" "$c" "$f" ) >/dev/null 2>&1 \
+      || HELP_BAD="$HELP_BAD $c/$f"
+  done
+done
+[ -z "$HELP_BAD" ]
+check "help: every <cmd> --help and -h exits 0${HELP_BAD:+ (non-zero:$HELP_BAD)}" 0 $?
+# The load-bearing half: asking what a command does must write NOTHING — no
+# planted file, no lease, no git config, no ref. Pre-fix this printed 10
+# untracked entries and a live lease.
+HELP_DIRT="$( cd "$HR" && git status --porcelain )"
+[ -z "$HELP_DIRT" ]
+check "help: 80 help requests wrote NOTHING (git status clean)" 0 $?
+[ -z "$HELP_DIRT" ] || printf '%s\n' "$HELP_DIRT" | sed 's/^/      /'
+( cd "$HR" && "$SOCOM" claim --scan 2>&1 ) | grep -q '^socom claim: 0 live lease'
+check "help: ...and took NO lease (claim --help is not a claim)" 0 $?
+( cd "$HR" && git config --get-regexp 'socom|hooksPath' ) >/dev/null 2>&1
+check "help: ...and wrote no git config" 1 $?
+[ "$( cd "$HR" && git for-each-ref refs/socom | wc -l | tr -d ' ')" = 0 ]
+check "help: ...and published no ref" 0 $?
+# Usage is DERIVED from the one command table, so it cannot drift from it.
+( cd "$HR" && "$SOCOM" claim --help ) | grep -q 'claim PATHS before you touch them'
+check "help: prints THAT subcommand's entry, not the whole command list" 0 $?
+
 rm -rf "$T"
 if [ "$FAIL" -gt 0 ]; then echo "smoke: $FAIL FAILURE(S)"; exit 1; fi
 echo "smoke: all checks passed"

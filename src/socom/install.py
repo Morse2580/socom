@@ -41,13 +41,9 @@ def cmd_install(args):
     rest = [a for a in args if a != "--force"]
     # `socom install --help` used to read --help as the TARGET DIR and create a
     # literal `--help/` directory holding a symlink, in whatever repo you asked
-    # from. Asking a tool what it does must never leave debris behind.
-    if rest and rest[0] in ("-h", "--help"):
-        print(f"usage: socom install [<bin-dir>] [--force]   "
-              f"(default: {DEFAULT_BIN_DIR})\n"
-              "  Symlinks the running socom file onto PATH. Nothing is copied.\n"
-              "  --force overwrites an existing NON-socom file at the target.")
-        return
+    # from. Asking a tool what it does must never leave debris behind. The guard
+    # that fixed it here is now cli.py's dispatch intercept, which covers EVERY
+    # command — this one was the instance that got patched, not the class.
     dst_dir = (Path(rest[0]).expanduser() if rest else DEFAULT_BIN_DIR)
     src = Path(__file__).resolve()  # the running socom file itself — works whether
     dst = dst_dir / "socom"         # this is repo/bin/socom or a distributed copy

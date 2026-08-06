@@ -103,10 +103,15 @@ row, and a result that cannot name its build is not reproducible evidence. The
 byte count changes on **any** merge touching `bin/socom`; re-run rather than
 trust the number above.
 
-⚠️ Cosmetic and expected, not a broken download: `--help` writes to **stderr**
-and exits **1**, so the `| head -3` above does not truncate it — the whole
-command list scrolls past. **Not filed** (cosmetic, and the bucket has a stated
-no-growth norm); noted here only so it does not read as a failed preflight.
+⚠️ **This note is now history, kept so the change is not mistaken for a
+regression.** `--help` used to write to **stderr** and exit **1**, so `| head -3`
+did not truncate it and the whole command list scrolled past. It was recorded
+here as cosmetic and deliberately **not filed** (the bucket has a stated
+no-growth norm). It changed anyway on 2026-08-06 as scope of
+`DEF-SUBCOMMAND-HELP-MUTATES-STATE-01`, whose repair would otherwise have left
+socom answering `--help` two different ways: it now prints to **stdout** and
+exits **0**, so `| head -3` truncates as written. Bare `socom` with no command
+still exits 1 on stderr — that is a usage error, not a request to explain.
 
 **Also confirm the participant is on macOS / Linux / WSL.** Native Windows is
 unsupported (`fcntl` — the tool exits loudly), and discovering that during the

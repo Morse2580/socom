@@ -600,9 +600,9 @@ colleagues. A participant hitting any of them is burned on something recorded he
   rather than repeated: the rung string says *"not loaded by it"* for the
   negative and claims nothing beyond the join for the positive.
 
-## Active — P0 (found 2026-08-06, by reflex, by the author)
+## Done — the ninth P0 (found AND fixed 2026-08-06, both by reflex)
 
-- `DEF-SUBCOMMAND-HELP-MUTATES-STATE-01` **READY P0** — **No subcommand handles
+- `DEF-SUBCOMMAND-HELP-MUTATES-STATE-01` **DONE P0** — **No subcommand handles
   `--help`, so the universal "explain, don't act" reflex makes socom act — and on
   two subcommands it mutates state the user did not agree to.** Top-level
   `socom --help` at least PRINTS the command list, which is exactly why nobody
@@ -648,6 +648,51 @@ colleagues. A participant hitting any of them is burned on something recorded he
   repair is small — intercept `--help`/`-h` in dispatch, before any `cmd_*`
   runs), or accepted as a known defect a participant may hit. Recording it is
   not optional either way.
+  **DECIDED 2026-08-06: cleared first**, by the operator, because it fires at the
+  moment of first contact and burns a scarce participant on something already
+  written down.
+  **FIXED 2026-08-06.** The guard is a **dispatch-level intercept** in
+  `cli.py` — if any argument after the subcommand is exactly `-h` or `--help`,
+  socom prints that subcommand's usage on **stdout**, exits **0**, and no
+  `cmd_*` runs at all. The usage text is **derived**, not spelled twice:
+  `subcommand_usage()` lifts the command's entry out of the one `Commands:`
+  table in the root docstring, so help can never drift from the command list,
+  and `tests/unit.py` fails closed if any command in `COMMANDS` has no entry.
+  ⚠️ **The class, not the instance.** `install` and `mcp` had each already
+  patched their *own* `-h`/`--help` locally — `install.py` still carries the
+  comment about the literal `--help/` directory it used to create. That is
+  precisely why the class survived to be found by reflex nine months in: a
+  per-command guard is one that every future `cmd_*` must remember. Both local
+  guards were deleted (the dispatch reaches them first, so they were dead), and
+  the detail they carried that a one-line table entry cannot hold moved to
+  `USAGE_EXTRA` beside the guard.
+  **RE-RUN EVIDENCE** — the row's own falsifiable acceptance, run whole and not
+  sampled, in a pristine throwaway git repo: **all 40 commands × both flags = 80
+  invocations exit 0**, `git status --porcelain` is **empty**, `claim --scan`
+  reports **0 live leases**, no `socom`/`hooksPath` git config key exists, and
+  `git for-each-ref refs/socom` is **0**. `socom claim --help` now prints
+  `claim PATHS before you touch them…` and the line *"`--help` explains; it never
+  acts — nothing was written."*
+  **PINNED** against a `git archive HEAD` of the pre-fix tree, same 80
+  invocations: **32 of 80 exited non-zero**, **10 untracked entries** were
+  planted (`.claude/ .cursor/ .githooks/ .github/ .gitignore .gitlab-ci.yml
+  .socom/ AGENTS.md …`), and `claim --help` alone acquired
+  `--help [l-ccbeb7a991b3]`, listed by `claim --scan` as a live lease. **5 of the
+  8 new smoke assertions FAIL there**, and `tests/unit.py` does not load at all
+  (`AttributeError: subcommand_usage`) — the tests pin the defect, not the
+  repair. ⚠️ Note the one that *passes* pre-fix: "took no lease" — because the
+  sweep's own `release --help` releases it, exactly as this row documented.
+  **9 unit + 8 smoke assertions added.** `unit: 378 passed, 0 failed` ·
+  `r1corpus: 146 passed` · `gate full: PASS` · `build.py --check` clean.
+  ⚠️ **Scope, stated rather than implied:** top-level `socom --help` was fixed in
+  the same three lines — it now prints to **stdout** and exits **0**, where it
+  previously wrote 7075 bytes to stderr and exited 1. That half was recorded in
+  `bench/exposure/README.md` as cosmetic and deliberately not filed under the
+  bucket's no-growth norm, and this does **not** file it. It is folded in because
+  the alternative was to leave socom answering `--help` two different ways
+  depending on whether a subcommand followed it — an inconsistency this repair
+  would have *created*. Bare `socom` with no command still exits **1** on stderr:
+  no command given is a usage error, not a request for an explanation.
 
 ## Active — P1 (recorded; explicitly NOT pre-exposure)
 

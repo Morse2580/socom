@@ -6331,13 +6331,9 @@ def cmd_install(args):
     rest = [a for a in args if a != "--force"]
     # `socom install --help` used to read --help as the TARGET DIR and create a
     # literal `--help/` directory holding a symlink, in whatever repo you asked
-    # from. Asking a tool what it does must never leave debris behind.
-    if rest and rest[0] in ("-h", "--help"):
-        print(f"usage: socom install [<bin-dir>] [--force]   "
-              f"(default: {DEFAULT_BIN_DIR})\n"
-              "  Symlinks the running socom file onto PATH. Nothing is copied.\n"
-              "  --force overwrites an existing NON-socom file at the target.")
-        return
+    # from. Asking a tool what it does must never leave debris behind. The guard
+    # that fixed it here is now cli.py's dispatch intercept, which covers EVERY
+    # command — this one was the instance that got patched, not the class.
     dst_dir = (Path(rest[0]).expanduser() if rest else DEFAULT_BIN_DIR)
     src = Path(__file__).resolve()  # the running socom file itself — works whether
     dst = dst_dir / "socom"         # this is repo/bin/socom or a distributed copy
@@ -6952,13 +6948,9 @@ def cmd_mcp(args):
     Exiting on EOF is the primary graceful-shutdown signal and the only portable
     one, so honouring it is what keeps the client from having to escalate to
     SIGKILL."""
-    if args and args[0] in ("-h", "--help"):
-        print("usage: socom mcp   # stdio MCP server: claim, attest, findings, "
-              "resolve, release\n"
-              "Register in .mcp.json:\n"
-              '  {"mcpServers": {"socom": {"command": "<path>/bin/socom", '
-              '"args": ["mcp"]}}}')
-        return
+    # (`socom mcp --help` is intercepted at cli.py's dispatch, with every other
+    # subcommand's — the local guard that used to live here handled one instance
+    # of a class that had 40 members.)
     print(f"socom mcp: blackboard server up (modern {MCP_MODERN_VERSIONS[0]}, "
           f"legacy {MCP_LEGACY_DEFAULT}) — {len(MCP_TOOLS)} tools", file=sys.stderr)
     for line in sys.stdin:
@@ -7003,10 +6995,75 @@ COMMANDS = {"init": cmd_init, "compile": cmd_compile, "doctor": cmd_doctor,
             "version": cmd_version}
 
 
+# ── help: explain, never act ─────────────────────────────────────────────
+# `<cmd> --help` is the first thing a stranger types at an unfamiliar
+# subcommand. No cmd_* handled it, so the flag fell through as a positional:
+# `claim --help` took a real lease NAMED "--help", `compile --help` planted 33
+# files, `release --help` released the bogus lease. Two commands had already
+# patched their own instance locally (install, mcp) — which is exactly why the
+# class survived: a per-command guard is one every future cmd_* must remember.
+# The guard lives at the dispatch instead, so no cmd_* can reintroduce it.
+HELP_FLAGS = ("-h", "--help")
+
+# The two commands whose detail a one-line table entry cannot carry. Extra
+# lines only — the description itself is still derived, never spelled twice.
+USAGE_EXTRA = {
+    "install": f"usage: socom install [<bin-dir>] [--force]  (default: {DEFAULT_BIN_DIR})\n"
+               "--force overwrites an existing NON-socom file at the target.\n"
+               "Nothing is copied: the symlink points at the file you ran.",
+    "mcp": 'Register in .mcp.json:\n  {"mcpServers": {"socom": '
+           '{"command": "<path>/bin/socom", "args": ["mcp"]}}}',
+}
+
+
+def root_doc():
+    """The top-level command list. bin/socom is one flat namespace, so there it
+    is this module's __doc__; under src/ the docstring lives on the package."""
+    pkg = sys.modules.get("socom")
+    return (pkg.__doc__ if pkg is not None else None) or __doc__ or ""
+
+
+def subcommand_usage(name, doc=None):
+    """One command's entry, lifted out of the single `Commands:` table in the
+    root docstring. Derived so help cannot drift from the command list — the
+    table is indented two spaces per command, deeper for continuation lines.
+    Returns None when `name` has no entry (tests/unit.py asserts none do)."""
+    body = None
+    for line in (root_doc() if doc is None else doc).splitlines():
+        entry = line.strip() and line.startswith("  ") and not line.startswith("   ")
+        if body is not None:
+            if entry or not line.startswith("   "):
+                break
+            body.append(line.strip())
+        elif entry:
+            head = line[2:].split(" ", 1)
+            if head[0] == name:
+                body = [head[1].strip()] if len(head) > 1 else []
+    return "\n".join(body) if body else None
+
+
+def print_usage(name):
+    """Explain `name` on stdout and write NOTHING else — no lease, no file, no
+    git config, no ref. The whole point of the row this closes."""
+    print(f"socom {name}\n")
+    print(textwrap.indent(subcommand_usage(name) or "(no entry in the command "
+                          "table — run `socom --help`)", "  "))
+    if name in USAGE_EXTRA:
+        print(f"\n{USAGE_EXTRA[name]}")
+    print("\n`--help` explains; it never acts — nothing was written.\n"
+          "Run `socom --help` for the full command list.")
+
+
 if __name__ == "__main__":
-    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
-        sys.exit(__doc__)
+    if sys.argv[1:2] and sys.argv[1] in HELP_FLAGS:
+        print(root_doc().strip())          # asked for: stdout, exit 0
+        raise SystemExit(0)
+    if len(sys.argv) < 2:
+        sys.exit(root_doc())               # no command given: a usage ERROR
     fn = COMMANDS.get(sys.argv[1])
     if fn is None:
-        sys.exit(f"socom: unknown command '{sys.argv[1]}'\n{__doc__}")
+        sys.exit(f"socom: unknown command '{sys.argv[1]}'\n{root_doc()}")
+    if any(a in HELP_FLAGS for a in sys.argv[2:]):
+        print_usage(sys.argv[1])
+        raise SystemExit(0)
     fn(sys.argv[2:])

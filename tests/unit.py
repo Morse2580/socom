@@ -1407,6 +1407,31 @@ with _tf.TemporaryDirectory() as _d:
     check("--force still overwrites the user's file (destructive, by design)",
           "mine" not in (_r / "AGENTS.md").read_text())
 
+# ── `--help` usage is DERIVED, not spelled twice ────────────────────────────
+# DEF-SUBCOMMAND-HELP-MUTATES-STATE-01's repair is a dispatch-level intercept,
+# and its usage text is lifted out of the ONE `Commands:` table in the root
+# docstring. smoke.sh §17 proves the intercept writes nothing; this pins the
+# extraction, so a command can never reach a user with no explanation at all.
+_missing = [c for c in socom.COMMANDS if not socom.subcommand_usage(c)]
+eq(f"every command in COMMANDS has a usage entry ({len(socom.COMMANDS)} commands)",
+   _missing, [])
+check("subcommand_usage: unknown command -> None (never a wrong answer)",
+      socom.subcommand_usage("no-such-command") is None)
+_claim = socom.subcommand_usage("claim")
+check("subcommand_usage: returns the command's own first line",
+      _claim.startswith("claim PATHS before you touch them"))
+check("subcommand_usage: joins the entry's continuation lines",
+      "blackboard.sync" in _claim)
+check("subcommand_usage: stops at the NEXT entry (no bleed)",
+      "release a lease" not in _claim)
+check("subcommand_usage: the last entry stops at the closing prose",
+      "All intelligence is canonical" not in socom.subcommand_usage("version"))
+eq("subcommand_usage: a one-line entry is exactly that line",
+   socom.subcommand_usage("greet"),
+   "adoption-ladder greeting — where you are, what's next")
+check("root_doc: resolves the command table in the assembled artifact",
+      "Commands:" in socom.root_doc())
+
 # ── summary ──────────────────────────────────────────────────────────────────
 print(f"unit: {_PASS} passed, {_FAIL} failed")
 raise SystemExit(1 if _FAIL else 0)
