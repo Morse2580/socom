@@ -95,8 +95,8 @@ chmod +x /tmp/socom.pre && /tmp/socom.pre --help | head -3 && /tmp/socom.pre ver
 ```
 
 Expect `http=200`, a non-trivial byte count, and the command list. Last verified
-2026-08-06 against `f842bac` — **200, 427639 bytes**, byte-identical to
-`bin/socom` (`cmp`), build **`ae42d0c4c71a`**.
+2026-08-06 against `3aad54a` — **200, 430621 bytes**, byte-identical to
+`bin/socom` (`cmp`), build **`a1cf0802daef`**.
 
 ⚠️ **Record the `version` build digest on the sheet** — it is the build-under-test
 row, and a result that cannot name its build is not reproducible evidence. The

@@ -126,9 +126,40 @@ REWRITTEN 2026-08-06 (ninth pass, at f842bac — ONE NEW P0, found by reflex).
   UNCHANGED proof tier ...... D0
   HYPOTHESIS the `--help` repair "looks small" — dispatch-level intercept, no
             spike run. (hypothesis — operator-driven)
+
+REWRITTEN 2026-08-06 (tenth pass, at `3aad54a` — the ninth P0 is FIXED, and
+nothing else was done). The ninth pass's HYPOTHESIS is now RESOLVED: the repair
+WAS the dispatch-level intercept it guessed, and it was small.
+  REWRITTEN defects ......... **9 DONE P0 / 0 READY P0** / 9 READY P1
+            (measured: 9/0/9 via `grep -cE`). The queue is empty again.
+  REWRITTEN public artifact . 427639 -> **430621** bytes, `ae42d0c4c71a` ->
+            **`a1cf0802daef`**, http=200, cmp byte-identical to bin/socom
+  REWRITTEN suites .......... unit 370 -> **378** / r1corpus 146 / gate full
+            PASS / build.py --check clean / CI **success @ 3aad54a**
+  REWRITTEN preflight ....... `--help` now prints to **stdout** and exits **0**,
+            so `/tmp/socom.pre --help | head -3` truncates as written. It used
+            to go to stderr and exit 1; the note in `bench/exposure/README.md`
+            saying so is rewritten, not deleted, so the change does not read as
+            a regression. Bare `socom` still exits 1 on stderr.
+  VERIFIED  the fix ......... acceptance run WHOLE: 40 commands x 2 flags = 80
+            invocations, all exit 0, `git status --porcelain` empty, 0 leases,
+            no git config key, 0 refs. Pre-fix, same 80: 32 non-zero exits, 10
+            untracked entries planted, `claim --help` -> `--help
+            [l-ccbeb7a991b3]`. 5 of 8 new smoke assertions FAIL pre-fix and
+            unit.py does not load there (`AttributeError: subcommand_usage`).
+  VERIFIED  build.md ........ 1 READY (R1) + 8 BLOCKED, unchanged
+  VERIFIED  decisions ....... 0001-0005 (5 files), unchanged
+  VERIFIED  new symbols ..... `root_doc` `cli.py:73`, `subcommand_usage` `:80`,
+            `print_usage` `:99` *(measured: `grep -n`)*. Stale by the next edit —
+            re-`sed` before quoting; the symbol is the durable cite.
+  UNCHANGED EV row .......... EV-NONAUTHOR-EXPOSURE-01 READY P0, STILL UNRUN
+            (L15 @ `3aad54a`)
+  UNCHANGED proof tier ...... D0 — **nine** P0 repairs now. The queue in front
+            of the run is empty for the second time in two days.
+  HYPOTHESIS none.
 -->
 
-# Next session — run the n=1 exposure. One small P0 sits in front of it.
+# Next session — run the n=1 exposure. Nothing is in front of it.
 
 **Row:** `EV-NONAUTHOR-EXPOSURE-01` (`buckets/evidence.md`), **READY P0**, `n=1`.
 **Governed by** `decisions/0001-exposure-before-capability.md`.
@@ -147,7 +178,7 @@ socom's own hooks are not wired in its checkout, so run `./bin/socom gate full`
 yourself before every push.
 
 **Four skills ship in this repo** and are auto-discovered — nothing to install
-*(verified: `git ls-files .claude/skills/` lists all four at `f842bac`)*.
+*(verified: `git ls-files .claude/skills/` lists all four at `3aad54a`)*.
 Use them instead of hand-rolling their procedures:
 
 - `ship-and-verify` — the push loop: `build.py` → `gate full` **by hand** →
@@ -196,25 +227,42 @@ test**: socom checks the line is present and never claims the file was loaded.
 **That was the eighth P0.** It moved the proof tier by **nothing**, exactly as
 the seven before it did.
 
-## …and a ninth was filed the same day, by reflex
+## …and a ninth was filed and CLEARED the same day (2026-08-06, `3aad54a`)
 
-`DEF-SUBCOMMAND-HELP-MUTATES-STATE-01` **READY P0** *(measured: 8 DONE P0 /
-**1** READY P0 / 9 READY P1 via `grep -cE`)*. **No subcommand handles `--help`,
-so the universal "explain, don't act" reflex makes socom act.** `claim --help`
-acquires a lease literally named `--help`; `compile --help` plants 33 files;
-`-h` behaves the same. Top-level `socom --help` is fine, which is why it was
-never looked at. *(measured 2026-08-06, build `ae42d0c4c71a`, throwaway repo.)*
+`DEF-SUBCOMMAND-HELP-MUTATES-STATE-01` is **DONE** *(measured: **9** DONE P0 /
+**0** READY P0 / 9 READY P1 via `grep -cE`)*. No subcommand handled `--help`, so
+the flag fell through as a positional and the universal "explain, don't act"
+reflex made socom **act**: `claim --help` acquired a real lease named `--help`,
+`compile --help` planted 33 files, `-h` the same. The operator's call was to
+clear it, because it fires **at** first contact and a participant hitting it is
+burned on something already written down. **Do not re-derive it; the row has the
+full account.**
 
-It fires **at** the stall point, not after it — `<cmd> --help` is the first thing
-a stranger types at an unfamiliar subcommand, and the answer to a request for an
-explanation is a state mutation. The row has the full scope and the acceptance.
+The repair, in one line: a **dispatch-level intercept** in `cli.py` — any `-h`
+or `--help` after the subcommand prints that subcommand's usage on stdout, exits
+0, and **no `cmd_*` runs at all**. The usage text is *derived* from the one
+`Commands:` table in the root docstring (`subcommand_usage`, `cli.py:80`), so
+help cannot drift from the command list, and `tests/unit.py` fails closed if any
+command in `COMMANDS` has no entry.
 
-⚠️ **Decide, don't drift.** Either clear it first — the repair looks like a
-dispatch-level intercept of `--help`/`-h` before any `cmd_*` runs *(hypothesis —
-operator-driven; no spike run)* — or accept it as a known defect a participant
-may hit and **go and run the exposure anyway**. What must not happen is a third
-session that repairs P0s and calls that the work. Eight repairs have moved D0 by
-zero, and this row does not change that arithmetic.
+⚠️ **The lesson worth carrying is the class/instance one.** `install` and `mcp`
+had each already patched their **own** `-h`/`--help` locally — `install.py`
+still carries the comment about the literal `--help/` directory it used to
+create. That is exactly why the class survived to be found by reflex: a
+per-command guard is one every future `cmd_*` must remember. Both local guards
+are now deleted and the guard lives at the single dispatch.
+
+⚠️ **Two scope calls recorded on purpose:** top-level `socom --help` moved to
+stdout/exit 0 in the same three lines — that half was "cosmetic, not filed", and
+this does **not** file it, but leaving it would have made socom answer `--help`
+two different ways. Bare `socom` with no command still exits **1** on stderr: no
+command given is a usage error, not a request for an explanation *(measured:
+`socom --help` → rc=0, 7074 bytes stdout, 0 stderr; bare `socom` → rc=1, 0
+stdout, 7075 bytes stderr)*.
+
+**That was the ninth P0.** It moved the proof tier by **nothing**, exactly as the
+eight before it did. What must not happen is a session that repairs P0s and calls
+that the work.
 
 ## The one thing this session is for
 
@@ -247,10 +295,12 @@ curl -fsSL -o /tmp/socom.pre \
 chmod +x /tmp/socom.pre && /tmp/socom.pre --help | head -3 && /tmp/socom.pre version
 ```
 
-Verified 2026-08-06 (re-run at `f842bac`): `http=200`, **427639 bytes**, `cmp`
-byte-identical to `bin/socom`, `--help` prints the command list, and `version`
-reports build **`ae42d0c4c71a`** (last commit touching `bin/socom`: `868386b`) *(measured: curl -w + cmp +
-`socom version`)*. **Also confirm the participant is on
+Verified 2026-08-06 (re-run at `3aad54a`): `http=200`, **430621 bytes**, `cmp`
+byte-identical to `bin/socom`, `--help` prints the command list **on stdout,
+exit 0** (so `| head -3` truncates as written — it used to go to stderr and exit
+1), and `version` reports build **`a1cf0802daef`** (last commit touching
+`bin/socom`: `3aad54a`) *(measured: curl -w + cmp + `socom version`)*.
+**Also confirm the participant is on
 macOS/Linux/WSL** — native Windows is unsupported and finding out mid-session
 wastes the run.
 
@@ -483,7 +533,9 @@ findings. `0004` names the two classes they belong to and **repairs neither**.
   query, in the same run where it violates it.
 - **Class B — socom writes what it does not own, and no code represents "own".**
   `core.hooksPath`, the remote, the working directory, `.claude/settings.json`,
-  the binary's location. `core.py:141` is the one place ownership IS tested, and
+  the binary's location. `is_generated` (`core.py:140` — the `socom:generated`
+  header test; `0004` cites it as `core.py:141`, which the wedge fix moved and
+  which now reads `except OSError:`) is the one place ownership IS tested, and
   the one place socom behaved correctly.
 - **`0002`'s class is their intersection**, not a third thing.
 
@@ -520,6 +572,13 @@ informing it — and it needs no code change, only that line.
   `DEF-STATUS-CLAIMS-UNLABELLED-01` is P1 **on purpose** — `PILOT.md` asks *"did
   a metric mislead you?"*, so repairing it first deletes a finding the
   participant is meant to generate (`0001` §Amendment 1 rule 3).
+- **Do not polish the `--help` repair, and do not treat it as the session.** It
+  landed at `3aad54a` with CI green, 9 unit + 8 smoke assertions, and 5 of the 8
+  failing against the pre-fix tree *(measured: `git archive HEAD` + the new
+  `tests/smoke.sh` §17)*. It is finished. Its usage text is one derived line per
+  command **on purpose** — writing real per-command usage prose for 40 commands
+  is a morning that moves D0 by nothing, and §4 of the sheet has not yet said
+  anyone wanted it.
 - **Do not treat the wedge repair as the session, and do not polish it.** It
   landed at `df924f9` with CI green, 19 unit + 9 smoke assertions, and 5 of the 9
   failing against the pre-fix tree *(measured: `git archive HEAD` of the pre-fix
@@ -568,7 +627,7 @@ informing it — and it needs no code change, only that line.
   before the run deletes the measurement.
   ⚠️ **A React/Ink rewrite was evaluated the same day and REFUTED on its own
   goal.** It was proposed to make the tool "calmer to install"; it does the
-  opposite. socom installs today as ONE file — `curl` 427639 bytes of stdlib
+  opposite. socom installs today as ONE file — `curl` 430621 bytes of stdlib
   Python, `chmod +x`, run — and Ink requires a Node runtime, `npm install`,
   `node_modules` and a bundle step, so the install grows from one curl to
   "install Node first" and **the 30-second preflight above stops existing**. It
@@ -589,11 +648,11 @@ addresses, tool quality is irrelevant and that is worth knowing before R1.
 
 | Thing | State |
 |---|---|
-| socom `main` | state below re-verified at `df924f9` (the wedge P0 fix, CI `success @ df924f9`); the closeout commit that lands this prompt sits on top of it. `git log --oneline -3` and re-probe rather than trusting either SHA. Clean, pushed, CI green. |
-| Buckets | `defects.md` **8 DONE P0 + 1 READY P0** (`DEF-SUBCOMMAND-HELP-MUTATES-STATE-01`, filed 2026-08-06) **+ 9** READY P1 *(measured: 8/1/9 via `grep -cE`)* · `build.md` 1 READY (R1) + **8** BLOCKED *(measured: 1/8)* · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** *(L15 @ `df924f9`)* |
+| socom `main` | state below re-verified at `3aad54a` (the `--help` P0 fix, CI `success @ 3aad54a`); the closeout commit that lands this prompt sits on top of it. `git log --oneline -3` and re-probe rather than trusting either SHA. Clean, pushed, CI green. |
+| Buckets | `defects.md` **9 DONE P0 + 0 READY P0 + 9** READY P1 *(measured: 9/0/9 via `grep -cE`)* · `build.md` 1 READY (R1) + **8** BLOCKED *(measured: 1/8)* · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` READY P0, **unrun** *(L15 @ `3aad54a`)* |
 | Proof tier | **D0 — ASSUMED**, unchanged since 2026-08-01 *(measured: `bench/exposure/` holds README + TEMPLATE only, no dated sheet)* |
-| Suite | `unit: 367 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean *(measured: all four re-run at `df924f9`)* |
-| Exposure prep | `bench/exposure/{README,TEMPLATE}.md` landed *(verified `df924f9`)*; URL preflighted at **427639** bytes, build **`ae42d0c4c71a`** *(re-measured at `f842bac`)* *(measured: `curl -w` + `cmp` vs `bin/socom` + `socom version`)*; sheet has a build-under-test row fed by `socom version`. ⚠️ **Re-measure both — never carry them.** |
+| Suite | `unit: 378 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean *(measured: all four re-run at `3aad54a`)* |
+| Exposure prep | `bench/exposure/{README,TEMPLATE}.md` landed *(verified `3aad54a`)*; URL preflighted at **430621** bytes, build **`a1cf0802daef`** *(measured at `3aad54a`: `curl -w` + `cmp` vs `bin/socom` + `socom version`)*; sheet has a build-under-test row fed by `socom version`. ⚠️ **Re-measure both — never carry them.** |
 | Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork (Accepted, adopts nothing) · **`0004`** two-boundaries-socom-does-not-represent (Accepted, diagnosis only, repairs nothing) · **`0005`** the-user-is-an-agent-the-adopter-is-not (Accepted — the population question is CLOSED) *(measured: 5 files in `decisions/`)* |
 
 Probes: `./bin/socom gate full` · `python3 build.py --check` ·
