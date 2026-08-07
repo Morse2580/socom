@@ -36,11 +36,15 @@ nothing in `build.md` can move it. Only rows here can.
   tool rather than recovering. One finding generated — a new sign of
   [[DEF-STATUS-CLAIMS-UNLABELLED-01]] where detection was *correct* and the
   toolchain absent.
-  ⚠️ **The row stays `READY P0`, not `DONE`.** Two things are outstanding and
-  both are named on the sheet: **§5 voluntary second use is PENDING until
-  2026-08-14**, and that is the row's own headline metric; and the **build under
-  test is unrecorded** — `socom version` was not run, so the sheet cannot name
-  the build the run was against. Fill both, then flip the row.
+  **Build under test SUPPLIED 2026-08-07:** `a1cf0802daef` — the digest of
+  `bin/socom` on `main` at `3aad54a`, `cmp` byte-identical to the public `curl`
+  artifact preflighted the same day. The run was against **live shipped code**,
+  not a local build, and `platform linux` is confirmed rather than inferred.
+  A second finding came with it: `source` resolves inside the adopted repo,
+  strengthening [[DEF-INSTALLED-BINARY-LANDS-INSIDE-THE-ADOPTED-REPO-01]].
+  ⚠️ **The row stays `READY P0`, not `DONE`.** ONE thing is outstanding:
+  **§5 voluntary second use, PENDING until 2026-08-14** — the row's own headline
+  metric. Fill it, then flip the row.
   This is permitted action (1) of the §10 root gate, named there as
   *"the experiment that raises the tier is cheap and has never been run"* — and
   it is still unrun as of 2026-08-03, two days later. Every other row in this

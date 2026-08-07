@@ -1087,6 +1087,19 @@ colleagues. A participant hitting any of them is burned on something recorded he
   and that the symlink now depends on that location. **Files:**
   `src/socom/install.py` (`cmd_install`), `src/socom/lifecycle.py`
   (`_wire_ignores`), `PILOT.md` §The 5-minute path.
+  **SECOND SIGHTING — 2026-08-07, and it weakens this row's own diagnosis.**
+  Exposure run [`bench/exposure/2026-08-07-akili.md`](../bench/exposure/2026-08-07-akili.md)
+  §4, build `a1cf0802daef`, repo `buzz`: `socom version` reports
+  `source /home/akili/projects/test-repos/buzz/socom` — the binary is inside the
+  adopted repo again, and it shows in the untracked count on the shell prompt
+  (`?11`). **`PILOT.md` was not followed this time**, so the ordering of the
+  §"5-minute path" block cannot be the cause here. The row currently attributes
+  the behaviour to that ordering ("**The doc invites this**"); one sighting
+  outside the doc says the doc is at most a contributing cause and the real one
+  is that a user sits in the repo they mean to adopt and runs the binary from
+  there. **The acceptance test is unchanged and still correct** — it asks about
+  the outcome, not the route — but a repair that only rewrites `PILOT.md` would
+  not have prevented this instance. Still P1.
 
 - `DEF-GITLAB-CI-REFUSAL-READS-AS-AN-ERROR-01` **READY P1** — **A correct
   no-clobber refusal is printed in the same register as a failure.** OBSERVED on
