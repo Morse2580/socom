@@ -403,6 +403,44 @@ try:
 finally:
     _os.environ["PATH"] = _saved
 
+# ── install: the binary must be EXTERNAL to the adopted repo ─────────────────
+# DEF-INSTALLED-BINARY-LANDS-INSIDE-THE-ADOPTED-REPO-01. Pre-fix, cmd_install
+# symlinked ~/.local/bin/socom at whatever file it ran from — so installing from
+# inside the repo you were adopting made the machine-wide tool depend on that
+# repo. These pin the discriminator and the two shapes it selects.
+with tempfile.TemporaryDirectory() as _it:
+    _it = Path(_it)
+    # _is_dev_checkout: only <root>/bin/socom of a source tree, nothing else.
+    (_it / "co" / "bin").mkdir(parents=True)
+    (_it / "co" / "src" / "socom").mkdir(parents=True)
+    (_it / "co" / "bin" / "socom").write_text("x")
+    check("_is_dev_checkout True for <root>/bin/socom beside src/socom/",
+          socom._is_dev_checkout(_it / "co" / "bin" / "socom") is True)
+    (_it / "nb" / "bin").mkdir(parents=True)          # bin/, but no src/socom/
+    (_it / "nb" / "bin" / "socom").write_text("x")
+    check("_is_dev_checkout False for bin/socom with no src/socom/ beside it",
+          socom._is_dev_checkout(_it / "nb" / "bin" / "socom") is False)
+    (_it / "repo").mkdir()
+    (_it / "repo" / "socom").write_text("x")
+    check("_is_dev_checkout False for a download sitting in a repo",
+          socom._is_dev_checkout(_it / "repo" / "socom") is False)
+    # _is_socom_binary: content test, so uninstall can remove an OLD copy that
+    # is not byte-identical to the running build.
+    _real = (REPO / "bin" / "socom").read_text(errors="ignore")[:200]
+    (_it / "asif").write_text(_real + "\n# a different, older build\n")
+    check("_is_socom_binary True for a socom binary that is not this build",
+          socom._is_socom_binary(_it / "asif") is True)
+    (_it / "notsocom").write_text("#!/bin/sh\necho hi\n")
+    check("_is_socom_binary False for an unrelated file named socom",
+          socom._is_socom_binary(_it / "notsocom") is False)
+    check("_is_socom_binary False for a missing path",
+          socom._is_socom_binary(_it / "nope") is False)
+    # _enclosing_git_root: the note that tells the user the download is disposable.
+    check("_enclosing_git_root None outside any work tree",
+          socom._enclosing_git_root(_it / "repo" / "socom") is None)
+    check("_enclosing_git_root finds this checkout",
+          socom._enclosing_git_root(REPO / "bin" / "socom") == REPO)
+
 # ── _cycle_rollup (SM-3: the pure eval rollup, extracted from cmd_cycle) ──────
 # Same fixture smoke.sh seeds; expectations hand-counted there. White-box now.
 _rows = [

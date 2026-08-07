@@ -109,12 +109,16 @@ Grab the one file, review it, make it executable, run it:
 ```sh
 curl -fsSLO https://raw.githubusercontent.com/Morse2580/socom/main/bin/socom
 # read it — it's plain Python — then:
-chmod +x socom && ./socom install      # symlinks itself onto PATH (~/.local/bin)
+chmod +x socom && ./socom install      # copies itself onto PATH (~/.local/bin)
+rm socom                               # the download is disposable — install said so
 ```
 
 Download-then-run (auditable) — not `curl … | sh` (which executes unseen code).
-`socom install` only symlinks the file you already have; no copy, no sudo, no
-network at install time.
+`socom install` **copies** the file to `~/.local/bin/socom`; no sudo and no
+network at install time. The copy is deliberate — it means the install does not
+depend on where you left the download, so deleting it (or the repo you were
+standing in) cannot break `socom`. A socom source checkout is the one exception:
+`<checkout>/bin/socom install` symlinks, so the tool follows your build.
 
 Then run `socom quickstart` in a repo to climb the whole on-ramp in one command.
 **New here, or testing it?** Start with **[PILOT.md](PILOT.md)** — the 5-minute

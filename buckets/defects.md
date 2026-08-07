@@ -1055,7 +1055,7 @@ colleagues. A participant hitting any of them is burned on something recorded he
   repair is the **operator's** call, not a session's; recorded here so the next
   session does not re-derive the hold from a condition that no longer holds.
 
-- `DEF-INSTALLED-BINARY-LANDS-INSIDE-THE-ADOPTED-REPO-01` **READY P1** — **The
+- `DEF-INSTALLED-BINARY-LANDS-INSIDE-THE-ADOPTED-REPO-01` **DONE P1** — **The
   documented 5-minute path leaves a 421 KB untracked binary in the user's repo,
   unignored, with the PATH symlink pointing into that repo.** OBSERVED on the
   operator's own machine, 2026-08-05, following `PILOT.md` §"The 5-minute path"
@@ -1100,6 +1100,55 @@ colleagues. A participant hitting any of them is burned on something recorded he
   there. **The acceptance test is unchanged and still correct** — it asks about
   the outcome, not the route — but a repair that only rewrites `PILOT.md` would
   not have prevented this instance. Still P1.
+  **FIXED 2026-08-07 — the binary is now EXTERNAL. Repaired on operator
+  instruction, out of P1 order, because the second sighting showed the cause was
+  not the doc.**
+  *CHANGED* — `cmd_install` now **copies** by default and symlinks only for
+  `<root>/bin/socom` of a socom source tree, which is the one place following
+  the checkout is the point (`_is_dev_checkout`, `install.py`). After a copy it
+  names the enclosing git repo and prints `rm <path>` — the download is
+  disposable and socom says so. `cmd_uninstall` had to move with it or the fix
+  would have broken removal: it now recognises a copied binary by content
+  (`_is_socom_binary`), so an OLDER installed copy is still removable, and it
+  still refuses anything that is not socom. The temp-dir dangle warning is
+  scoped to the symlink path — installing a copy out of `/tmp` is the on-ramp
+  working, and warning about it was noise.
+  *PINNED* — **4 of 10 new `tests/smoke.sh` §18 assertions FAIL against a
+  `git archive HEAD` of the pre-fix tree**, and `tests/unit.py` does not load
+  there at all (`AttributeError: module 'socom_cli' has no attribute
+  '_is_dev_checkout'` — the helpers did not exist). The sharpest pin:
+  *"socom still runs after the downloaded file is deleted"* → **rc=127** pre-fix,
+  rc=0 post. 8 unit assertions added; `unit: 378 → 386`.
+  *EFFECT* — the row's own falsifiable acceptance, re-run whole in a throwaway
+  git repo on build `a1354b03b292`:
+  ```
+  $ ./socom install ../bin          # run from INSIDE the repo
+  socom install: copied .../repo/socom → ../bin/socom
+  socom install: NOTE the file you ran is inside a git repo (.../repo). socom
+    COPIED itself to ../bin/socom and nothing on PATH points back — so that
+    download is now disposable:
+    rm .../repo/socom
+  $ test -L ../bin/socom  ->  false     (REGULAR FILE, not a symlink)
+  $ rm ./socom && ../bin/socom version  ->  rc=0, build a1354b03b292
+  ```
+  Same sequence pre-fix: `linked ../bin/socom → .../repo/socom`, then after
+  `rm ./socom` the installed tool is **gone** (`No such file or directory`).
+  Both halves of the acceptance are met — the documented path no longer leaves
+  an unignored binary in the repo, **and** socom says where the binary went.
+  ⚠️ **`PILOT.md` and `README.md` were edited, and this is the disclosure.**
+  Both stated *"symlinks onto ~/.local/bin"* / *"only symlinks the file you
+  already have; no copy"*, which this change makes **false**. Correcting a claim
+  the code has just falsified is the same exception the exposure row already
+  ratified for `PILOT.md` (see [[EV-NONAUTHOR-EXPOSURE-01]] §"the instrument
+  moved once"): confusion is the measurement, a false claim is a defect. Nothing
+  else in either file was touched — no reordering, no smoothing of a rough step.
+  One line added to each: `rm socom`.
+  ⚠️ **What this does NOT fix:** the `.gitignore` block still carries no rule
+  for a binary named `socom`, so a user who downloads, installs, and then does
+  not `rm` still has an untracked executable `git add -A` will stage. The
+  install path no longer *depends* on it, and socom now says to delete it —
+  which is what the acceptance asked for. Ignoring a file socom does not own
+  was deliberately not done here; it is `0004` Class B territory.
 
 - `DEF-GITLAB-CI-REFUSAL-READS-AS-AN-ERROR-01` **READY P1** — **A correct
   no-clobber refusal is printed in the same register as a failure.** OBSERVED on

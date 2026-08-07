@@ -1201,6 +1201,44 @@ check "help: ...and published no ref" 0 $?
 ( cd "$HR" && "$SOCOM" claim --help ) | grep -q 'claim PATHS before you touch them'
 check "help: prints THAT subcommand's entry, not the whole command list" 0 $?
 
+# ── §18 install puts the binary OUTSIDE the repo it was run from ─────────────
+# DEF-INSTALLED-BINARY-LANDS-INSIDE-THE-ADOPTED-REPO-01. Observed twice on real
+# repos: `curl` the file into the repo you mean to adopt, `./socom install`, and
+# ~/.local/bin/socom became a symlink INTO that repo — `git add -A` staged a
+# ~430 KB executable, and deleting the repo broke socom machine-wide.
+IR="$T/install-repo"; IB="$T/install-bin"; mkdir -p "$IR" "$IB"
+( cd "$IR" && git init -q -b main . && git config user.email t@t.t && git config user.name t )
+cp "$SOCOM" "$IR/socom" && chmod +x "$IR/socom"
+( cd "$IR" && ./socom install "$IB" ) >"$T/install.out" 2>&1
+check "install: exits 0 from inside a git repo" 0 $?
+[ ! -L "$IB/socom" ] && [ -f "$IB/socom" ]
+check "install: the installed binary is a COPY, not a symlink into the repo" 0 $?
+grep -q 'download is now disposable' "$T/install.out"
+check "install: says the file in your repo can be deleted" 0 $?
+[ -x "$IB/socom" ]
+check "install: the copy is executable" 0 $?
+# The load-bearing half: severing the dependency. Delete the download and the
+# installed tool must still run. Pre-fix this left a dangling symlink.
+rm -f "$IR/socom"
+"$IB/socom" version >/dev/null 2>&1
+check "install: socom still runs after the downloaded file is deleted" 0 $?
+# uninstall must recognise a COPY, not only a symlink to this checkout.
+"$IB/socom" uninstall "$IB" >/dev/null 2>&1
+check "uninstall: removes a copied install" 0 $?
+[ ! -e "$IB/socom" ]
+check "uninstall: ...and the file is gone" 0 $?
+printf 'not socom\n' > "$IB/socom"
+"$SOCOM" uninstall "$IB" >/dev/null 2>&1
+check "uninstall: refuses a file that is not a socom binary" 1 $?
+[ -e "$IB/socom" ]
+check "uninstall: ...and leaves it untouched" 0 $?
+rm -f "$IB/socom"
+# The one case a symlink is still right: a source checkout, so `socom` on PATH
+# follows `build.py` with no reinstall.
+"$SOCOM" install "$IB" >/dev/null 2>&1
+[ -L "$IB/socom" ]
+check "install: a source checkout still SYMLINKS (follows your build)" 0 $?
+
 rm -rf "$T"
 if [ "$FAIL" -gt 0 ]; then echo "smoke: $FAIL FAILURE(S)"; exit 1; fi
 echo "smoke: all checks passed"

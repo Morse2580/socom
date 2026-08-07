@@ -32,10 +32,68 @@ def _on_path(d: Path) -> bool:
     return str(d) in os.environ.get("PATH", "").split(os.pathsep)
 
 
+# The docstring of the generated binary. Narrow enough that no unrelated file at
+# ~/.local/bin/socom matches, so `uninstall` can recognise a COPIED install
+# without needing it to be a symlink back to this particular file.
+_SOCOM_MARK = "socom — substrate for orchestrated"
+
+
+def _is_socom_binary(p: Path) -> bool:
+    try:
+        return _SOCOM_MARK in p.read_text(errors="ignore")[:200]
+    except OSError:
+        return False
+
+
+def _is_dev_checkout(src: Path) -> bool:
+    """True when the running file is `<root>/bin/socom` of a socom SOURCE tree.
+
+    This is the one place a symlink is right: the maintainer edits `src/socom/`,
+    runs `build.py`, and wants `socom` on PATH to follow the checkout with no
+    reinstall. Everywhere else — a `curl`'d single file, in /tmp or in the
+    user's own repo — the install must not depend on where that file was sitting
+    when it ran, so it is copied.
+    """
+    return src.parent.name == "bin" and (src.parent.parent / "src" / "socom").is_dir()
+
+
+def _enclosing_git_root(p: Path) -> Path | None:
+    """The git work tree containing `p`, or None. Used only to tell the user their
+    downloaded file is sitting in a repo and can now be deleted."""
+    try:
+        r = subprocess.run(["git", "-C", str(p.parent), "rev-parse", "--show-toplevel"],
+                           capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    out = r.stdout.strip()
+    return Path(out) if r.returncode == 0 and out else None
+
+
+def _report_path(dst_dir: Path) -> None:
+    if _on_path(dst_dir):
+        print(f"socom install: {dst_dir} is on PATH — `socom` is ready.")
+    else:
+        print(f"socom install: NOTE {dst_dir} is not on PATH. Add it:")
+        print(f'  export PATH="{dst_dir}:$PATH"')
+
+
 def cmd_install(args):
-    """Symlink the running socom file onto PATH. The link points at the file you
-    ran (Path(__file__)), so nothing is copied — the symlink target is the source
-    of truth (a checkout's bin/socom, or a distributed self-contained file)."""
+    """Put socom on PATH. A socom development checkout is SYMLINKED; every other
+    location is COPIED, so the install depends on nothing outside the target dir.
+
+    Why it copies (DEF-INSTALLED-BINARY-LANDS-INSIDE-THE-ADOPTED-REPO-01): the
+    documented path is `curl` the single file → `chmod +x` → `./socom install`,
+    and users run it from inside the repo they mean to adopt. Symlinking there
+    made `~/.local/bin/socom` resolve INTO that repo — so `git add -A` staged a
+    ~430 KB executable into the adopter's history, and deleting or moving that
+    repo broke socom for the whole machine. Observed twice on real repos
+    (2026-08-05 following PILOT.md, 2026-08-07 NOT following it — which is why
+    rewording the doc was never the fix). A copy severs the dependency: the
+    downloaded file becomes disposable and socom says so.
+
+    The symlink survives for `<root>/bin/socom` of a source tree only, where
+    following the checkout is the point.
+    """
     import tempfile
     force = "--force" in args
     rest = [a for a in args if a != "--force"]
@@ -47,33 +105,53 @@ def cmd_install(args):
     dst_dir = (Path(rest[0]).expanduser() if rest else DEFAULT_BIN_DIR)
     src = Path(__file__).resolve()  # the running socom file itself — works whether
     dst = dst_dir / "socom"         # this is repo/bin/socom or a distributed copy
-    # The symlink will dangle if its target later disappears. Warn LOUDLY when the
-    # target is a temp dir (the README's curl-then-install lands here) so a
-    # permanent install never silently points at an ephemeral file (R6).
-    if str(src).startswith(str(Path(tempfile.gettempdir()).resolve())):
+    link = _is_dev_checkout(src)
+    # Only a SYMLINK can dangle, so this warning is now scoped to the link path.
+    # Installing a copy out of /tmp is fine and is the on-ramp working: the temp
+    # file can be cleaned up the moment the copy lands (R6).
+    if link and str(src).startswith(str(Path(tempfile.gettempdir()).resolve())):
         print(f"socom install: WARNING — installing from a temp location ({src}). "
               "Move socom somewhere permanent (e.g. ~/.local/bin) and install from "
               "there, or the symlink will break when the temp file is cleaned up.",
               file=sys.stderr)
     dst_dir.mkdir(parents=True, exist_ok=True)
-    if dst.is_symlink() and dst.resolve() == src and not force:
+    if dst == src:
+        # `curl`'d straight into the target dir and ran it from there. Copying a
+        # file onto itself truncates it; there is also nothing to do.
+        print(f"socom install: already at {dst} — nothing to copy.")
+        _report_path(dst_dir)
+        return
+    exists = dst.is_symlink() or dst.exists()
+    if link:
+        already = dst.is_symlink() and dst.resolve() == src
+    else:
+        already = (dst.is_file() and not dst.is_symlink()
+                   and dst.read_bytes() == src.read_bytes())
+    if already and not force:
         print(f"socom install: already installed → {dst}")
-    elif dst.is_symlink() or dst.exists():
-        if not force:
-            tgt = dst.resolve() if dst.is_symlink() else "(regular file)"
-            sys.exit(f"socom install: {dst} already exists ({tgt}), not this "
-                     f"checkout. Re-run with --force to repoint.")
-        dst.unlink()
-        dst.symlink_to(src)
-        print(f"socom install: repointed {dst} → {src}")
+    elif exists and not force:
+        tgt = dst.resolve() if dst.is_symlink() else "(regular file)"
+        sys.exit(f"socom install: {dst} already exists ({tgt}), not this "
+                 f"{'checkout' if link else 'build'}. Re-run with --force to replace.")
     else:
-        dst.symlink_to(src)
-        print(f"socom install: linked {dst} → {src}")
-    if _on_path(dst_dir):
-        print(f"socom install: {dst_dir} is on PATH — `socom` is ready.")
-    else:
-        print(f"socom install: NOTE {dst_dir} is not on PATH. Add it:")
-        print(f'  export PATH="{dst_dir}:$PATH"')
+        if exists:
+            dst.unlink()
+        if link:
+            dst.symlink_to(src)
+            print(f"socom install: linked {dst} → {src}  (source checkout — it "
+                  f"follows your build)")
+        else:
+            shutil.copyfile(src, dst)
+            dst.chmod(0o755)
+            print(f"socom install: copied {src} → {dst}")
+    if not link:
+        root = _enclosing_git_root(src)
+        if root is not None:
+            print(f"socom install: NOTE the file you ran is inside a git repo "
+                  f"({root}). socom COPIED itself to {dst} and nothing on PATH "
+                  f"points back — so that download is now disposable:")
+            print(f"  rm {src}")
+    _report_path(dst_dir)
 
 
 def cmd_uninstall(args):
@@ -83,7 +161,12 @@ def cmd_uninstall(args):
     if not dst.is_symlink() and not dst.exists():
         print(f"socom uninstall: nothing at {dst}")
         return
-    if dst.is_symlink() and dst.resolve() == src:
+    # Two shapes are ours now: the dev-checkout symlink, and a copied binary.
+    # Recognise the copy by its own content, not by whether it matches THIS
+    # build — an older installed copy must still be removable.
+    ours = ((dst.is_symlink() and dst.resolve() == src)
+            or (not dst.is_symlink() and dst.is_file() and _is_socom_binary(dst)))
+    if ours:
         dst.unlink()
         print(f"socom uninstall: removed {dst}")
         # uninstall is MACHINE-level: it removes the binary from PATH and
@@ -94,8 +177,9 @@ def cmd_uninstall(args):
               "ran `socom adopt` in still has core.hooksPath set — run "
               "`socom unadopt` IN THAT REPO first to put its hooks back.")
     else:
-        sys.exit(f"socom uninstall: {dst} is not a symlink to this checkout — "
-                 f"refusing to remove. Remove it manually if intended.")
+        sys.exit(f"socom uninstall: {dst} is neither a symlink to this checkout "
+                 f"nor a socom binary — refusing to remove. Remove it manually "
+                 f"if intended.")
 
 
 def cmd_version(args):

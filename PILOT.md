@@ -72,7 +72,8 @@ Everything else in the 5-minute path below is safe to run on a real repo.
 ```sh
 # 1. Get the tool (one self-contained file — read it, it's plain Python)
 curl -fsSLO https://raw.githubusercontent.com/Morse2580/socom/main/bin/socom
-chmod +x socom && ./socom install        # symlinks onto ~/.local/bin, no sudo
+chmod +x socom && ./socom install        # copies onto ~/.local/bin, no sudo
+rm socom                                 # the download is disposable after install
 
 # 2. In a repo you care about, climb the whole on-ramp in one command
 cd ~/your-repo
