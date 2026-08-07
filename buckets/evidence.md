@@ -18,6 +18,29 @@ nothing in `build.md` can move it. Only rows here can.
   below, which it contradicted — it still read "five engineers". The amendment
   is the authority; this is transcription, not a re-decision. Record the run on
   the sheet at [`bench/exposure/`](../bench/exposure/README.md).)*
+
+  ⚠️ **AMENDED 2026-08-07 by operator ruling
+  [`0006`](../decisions/0006-the-author-is-the-participant.md) — the
+  *non-author* clause above is STRUCK.** The author is the participant. The row
+  ID is kept because `defects.md`, `PILOT.md` and the session prompts all
+  cross-reference it; the name is historical from this date. `0005`'s analysis
+  stands; its refusal is overturned. **The population question is closed in the
+  other direction and is not re-litigated** — reopening trigger is at the foot
+  of `0006`. Of the four prohibitions below, *no demo* and *no doc-fix-first*
+  survive unchanged; *no favour* and *no agent substitute* are moot.
+
+  **FIRST RUN RECORDED — 2026-08-07,
+  [`bench/exposure/2026-08-07-akili.md`](../bench/exposure/2026-08-07-akili.md)**
+  (`buzz`, Rust, `/home/akili`). Stall point captured: `socom gate fast` →
+  `RED — checks.fast failed (rc=127)`, `cargo: not found`; the operator left the
+  tool rather than recovering. One finding generated — a new sign of
+  [[DEF-STATUS-CLAIMS-UNLABELLED-01]] where detection was *correct* and the
+  toolchain absent.
+  ⚠️ **The row stays `READY P0`, not `DONE`.** Two things are outstanding and
+  both are named on the sheet: **§5 voluntary second use is PENDING until
+  2026-08-14**, and that is the row's own headline metric; and the **build under
+  test is unrecorded** — `socom version` was not run, so the sheet cannot name
+  the build the run was against. Fill both, then flip the row.
   This is permitted action (1) of the §10 root gate, named there as
   *"the experiment that raises the tier is cheap and has never been run"* — and
   it is still unrun as of 2026-08-03, two days later. Every other row in this

@@ -1031,6 +1031,29 @@ colleagues. A participant hitting any of them is burned on something recorded he
   §Amendment 1 rule 3 — `PILOT.md` asks *"did a metric mislead you?"* and this is
   the answer a participant is supposed to generate). Recorded so the repair, when
   it comes, has a measured before-state on real repos rather than synthetic ones.
+  **THIRD INSTANCE — 2026-08-07, and it is a NEW SIGN.** Recorded from the first
+  exposure run ([`bench/exposure/2026-08-07-akili.md`](../bench/exposure/2026-08-07-akili.md)
+  §4), repo `buzz`, Rust, `/home/akili`. Every prior instance of this surface was
+  **wrong detection** — `pytest -q` bound on a Rust repo (5-substrate sweep),
+  `make test` bound against a missing venv (`httpie/cli`). This one is
+  **detection working perfectly and the machine lacking the toolchain**:
+  `Cargo.toml` present → socom correctly bound `cargo test` → printed
+  `✓ bound checks.fast/medium/full → 'cargo test' — gates now run YOUR tests`
+  → three commands later, `socom gate fast: RED — checks.fast failed (rc=127)`,
+  `/bin/sh: 1: cargo: not found`. **The repo axis and the machine axis are
+  separate**, and a binding can be right about the project while being
+  unexecutable where it runs. Detection cannot close this class; only executing
+  the command once can. ⚠️ Note the split verdict the operator drew and which
+  this row adopts: **the RED is correct behaviour and is not the defect** — the
+  gate ran the bound command and reported the truth. The defect is the `✓`
+  printed before anything was executed.
+  ⚠️ **The stated reason for holding this row is now DISCHARGED, and the hold is
+  not.** It was held because `PILOT.md` asks *"did a metric mislead you?"* and
+  repairing it first would delete a finding a participant was supposed to
+  generate (0001 §Amendment 1 rule 3). A participant has now generated it —
+  §4 of the 2026-08-07 sheet, in exactly those terms. Whether that releases the
+  repair is the **operator's** call, not a session's; recorded here so the next
+  session does not re-derive the hold from a condition that no longer holds.
 
 - `DEF-INSTALLED-BINARY-LANDS-INSIDE-THE-ADOPTED-REPO-01` **READY P1** — **The
   documented 5-minute path leaves a 421 KB untracked binary in the user's repo,
