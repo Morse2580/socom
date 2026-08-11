@@ -64,7 +64,10 @@ HELP_FLAGS = ("-h", "--help")
 USAGE_EXTRA = {
     "install": f"usage: socom install [<bin-dir>] [--force]  (default: {DEFAULT_BIN_DIR})\n"
                "--force overwrites an existing NON-socom file at the target.\n"
-               "Nothing is copied: the symlink points at the file you ran.",
+               "COPIES the file you ran, so the download is disposable and nothing on\n"
+               "PATH depends on where you left it. A socom SOURCE CHECKOUT\n"
+               "(<root>/bin/socom) is symlinked instead, where following the\n"
+               "checkout is the point.",
     "mcp": 'Register in .mcp.json:\n  {"mcpServers": {"socom": '
            '{"command": "<path>/bin/socom", "args": ["mcp"]}}}',
 }

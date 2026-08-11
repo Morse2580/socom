@@ -85,8 +85,10 @@ Commands:
            (or unset), drop socom's local git config. Leaves planted files —
            it lists them rather than deleting anything. DURABLE: it records the
            exit, no later heal re-wires hooks, and only `adopt` takes it back
-  install  symlink this checkout onto PATH (~/.local/bin) so `socom` just works
-  uninstall remove the socom symlink (only if it points at this checkout).
+  install  put socom on PATH (~/.local/bin) so `socom` just works. COPIES the
+           file you ran — the download is disposable; a socom source checkout
+           is symlinked instead
+  uninstall remove the installed socom (only if it is socom's own).
            Machine-level only — run `unadopt` in each adopted repo first
   version  identify the running artifact: version, build digest, interpreter,
            platform. The DIGEST is the answer to "which build did I run" — the

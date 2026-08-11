@@ -1309,6 +1309,28 @@ check("quickstart: 'gates now run YOUR tests' is guarded by a resolution check "
 check("quickstart: the unresolved branch names rc=127 rather than saying 'checks failed'",
       "rc=127" in _qs_src[_qs_i:_qs_i + 1200])
 
+# ── install's HELP must describe install's BEHAVIOUR ────────────────────────
+# DEF-INSTALL-HELP-DESCRIBES-THE-PRE-REPAIR-BEHAVIOUR-01. f1dce80 changed install
+# from symlink-always to copy-unless-dev-checkout and left both user-facing strings
+# describing the old behaviour, in the first command a new person runs. The
+# docstring on cmd_install was updated; the two strings a USER sees were not — so
+# these assert on the strings, not the docstring. They FAIL against the pre-fix tree.
+_help_srcs = {
+    "cli.py (socom install --help)": (REPO / "src" / "socom" / "cli.py").read_text(),
+    "__init__.py (socom --help table)": (REPO / "src" / "socom" / "__init__.py").read_text(),
+}
+for _where, _txt in _help_srcs.items():
+    _seg = _txt[_txt.index("install"):] if "install" in _txt else ""
+    check(f"install help: {_where} does not claim symlink-always",
+          "Nothing is copied" not in _txt
+          and "symlink this checkout onto PATH" not in _txt)
+check("install help: the assembled artifact tells a user it COPIES",
+      "COPIES" in (REPO / "bin" / "socom").read_text())
+# the behaviour the strings must match, asserted separately so a future change to
+# EITHER side fails rather than silently re-diverging.
+check("install help: _is_dev_checkout still decides copy-vs-symlink",
+      hasattr(socom, "_is_dev_checkout"))
+
 # _bind_checks: writes the detected command into the placeholders, preserving comments,
 # and never clobbers a real binding.
 _qb = Path(_tf.mkdtemp())

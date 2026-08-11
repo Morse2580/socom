@@ -1227,6 +1227,49 @@ colleagues. A participant hitting any of them is burned on something recorded he
   kept, distinguishably from the failure lines around it.
   **Files:** `src/socom/lifecycle.py` (the CI-adapter write path).
 
+- `DEF-INSTALL-HELP-DESCRIBES-THE-PRE-REPAIR-BEHAVIOUR-01` **DONE P1** — **The
+  first command a new person runs described behaviour socom stopped having four
+  days earlier, and the repair that changed it is the one that left the
+  description behind.** FOUND 2026-08-11 while answering *"do they need to
+  reinstall?"* — not by a participant, and not by a test.
+  VERIFIED, two user-facing strings, both unconditional:
+  `socom install --help` read *"Nothing is copied: the symlink points at the file
+  you ran"* and the `socom --help` table read *"install — symlink this checkout
+  onto PATH"*. `f1dce80` (2026-08-07) changed `cmd_install` to **copy** for every
+  location except a socom source checkout — `_is_dev_checkout` decides — which is
+  the documented `curl` path a new person actually takes. So both strings were
+  false for the majority case, in the command with the highest first-contact
+  traffic.
+  ⚠️ **`cmd_install`'s DOCSTRING was correct and detailed throughout** — it
+  explains the copy, names this row's parent
+  [[DEF-INSTALLED-BINARY-LANDS-INSIDE-THE-ADOPTED-REPO-01]], and cites both
+  sightings. **The docstring is not the product.** A reader of the source was
+  told the truth; a user running `--help` was not. That gap is the row.
+  ⚠️ **Why rule 3 does NOT apply, stated because every other P1 here is held by
+  it.** `0001` §Amendment 1 rule 3 protects a finding the exposure is *supposed
+  to generate* — `PILOT.md` asks *"did a metric mislead you?"* and holding those
+  rows keeps the question answerable. **Nobody is collecting "did the install
+  help text match the install behaviour."** It is not a designed surface, it is
+  our own repair's residue, and repairing it deletes no measurement. This is the
+  narrow class rule 3 was never written to cover, and the argument is recorded
+  here so the next session does not have to re-derive it — or, if the argument is
+  wrong, can find and overturn it.
+  **Falsifiable acceptance:** no user-facing help string claims socom symlinks
+  unconditionally, and the assembled artifact tells a reader it copies.
+  **FIXED 2026-08-11.** Both strings now say socom **COPIES** the file you ran,
+  that the download is therefore disposable, and that a socom source checkout is
+  symlinked instead — with the reason.
+  **RE-RUN EVIDENCE:** `socom install --help` → *"COPIES the file you ran, so the
+  download is disposable and nothing on PATH depends on where you left it. A
+  socom SOURCE CHECKOUT (`<root>/bin/socom`) is symlinked instead…"*;
+  `socom --help` table matches. **4 unit assertions added; 3 of them FAIL against
+  a `git archive HEAD` of the pre-fix tree** (the fourth asserts `_is_dev_checkout`
+  still decides copy-vs-symlink and passes on BOTH sides **by design** — it is the
+  invariant that makes the other three meaningful, and it is not claimed as
+  pre-fix evidence). `unit: 395 → 399`, `gate full` PASS.
+  **Files:** `src/socom/cli.py` (the `install` usage entry),
+  `src/socom/__init__.py` (the command table).
+
 - `DEF-INDEX-COUNTS-THE-TOOL-NOT-THE-REPO-01` **READY P1** — **`socom index`
   reports a chunk count that sounds like the adopted repo's codebase and can only
   ever contain socom's own paperwork.** OBSERVED by a non-author on `buzz`,
