@@ -95,8 +95,12 @@ chmod +x /tmp/socom.pre && /tmp/socom.pre --help | head -3 && /tmp/socom.pre ver
 ```
 
 Expect `http=200`, a non-trivial byte count, and the command list. Last verified
-2026-08-06 against `3aad54a` — **200, 430621 bytes**, byte-identical to
-`bin/socom` (`cmp`), build **`a1cf0802daef`**.
+2026-08-11 against `55d1397` — **200, 436923 bytes**, byte-identical to
+`bin/socom` (`cmp`), build **`77425a0cead4`**.
+⚠️ This number was **three builds stale** here on 2026-08-11 (it still read
+`430621` / `a1cf0802daef` from 2026-08-06, across the `f1dce80` install repair
+and the `0008` quickstart repair). That is Regression Test 1 recurring in the one
+file a participant is told to trust, which is why the warning below exists.
 
 ⚠️ **Record the `version` build digest on the sheet** — it is the build-under-test
 row, and a result that cannot name its build is not reproducible evidence. The

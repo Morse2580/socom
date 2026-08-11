@@ -27,29 +27,31 @@ alone: a ruling is now pending. Everything below re-run today, not carried.
             ⚠️ It is recorded as a **FIELD REPORT, not a protocol run** — no
             observer, no recruitment screen, and **no `socom version` digest**,
             which is the one cell that cannot be reconstructed later.
-  REWRITTEN decisions ....... 7 -> **8 files**. `0008` added — **Status
-            PROPOSED, awaiting operator acceptance** *(measured: `ls decisions/`
-            = 8; `sed -n '3p' decisions/0008-*.md`)*
-  REWRITTEN the P1 hold ..... `DEF-STATUS-CLAIMS-UNLABELLED-01` has a **FOURTH
-            sighting** appended, first by a non-author. Row is **still READY
-            P1** and still unrepaired — `0008` is the drafted lift and covers
-            **one surface only** *(L977 @ `d85381b`; re-`grep` it)*
+  REWRITTEN decisions ....... 7 -> **8 files**. `0008` added, **Accepted the
+            same day by operator ruling, and REPAIRED** *(measured:
+            `ls decisions/` = 8; `sed -n '3p' decisions/0008-*.md` reads
+            "**Accepted 2026-08-11** — operator ruling")*
+  REWRITTEN the P1 hold ..... `DEF-STATUS-CLAIMS-UNLABELLED-01` gained a
+            **FOURTH sighting** (first by a non-author) and **surface 1 of 7 was
+            REPAIRED** under `0008`. Row is **STILL READY P1** — six surfaces
+            remain held under `0001` rule 3 *(measured: the row still reads
+            `**READY P1**`; re-`grep` it)*. ⚠️ Do not finish the row.
   VERIFIED  §5 ............... `2026-08-07-akili.md` §5 still **PENDING**, still
             due **2026-08-14** *(L99 + L120)*. The new report does **not**
             substitute for it — §5 asks whether the OPERATOR returned; the
             engineer is a different person, with a separate and also-pending §5.
-  VERIFIED  public artifact . **434361** bytes, **`a1354b03b292`**, http=200,
-            `cmp` byte-identical *(measured: `curl -w` + `cmp` + `version`)*.
-            **Did NOT move** — correctly: `git log -1 -- bin/socom` is still
-            `f1dce80`. Re-measured anyway; that is the rule.
-  VERIFIED  defects ......... 9 DONE P0 / 0 READY P0 / 1 DONE P1 / 8 READY P1,
-            unchanged *(measured: 9/0/1/8 via `grep -cE`)*
+  REWRITTEN public artifact . 434361 -> **436923** bytes, `a1354b03b292` ->
+            **`77425a0cead4`**, http=200, `cmp` byte-identical *(measured:
+            `curl -w` + `cmp` + `version` after the 0008 repair shipped)*.
+            **MOVED** — `bin/socom` changed. Regression Test 1, sixth time.
+  REWRITTEN defects ......... 8 -> **10 READY P1** *(measured: 9/0/1/10 via
+            `grep -cE`)* — two rows filed from the field report. P0 unchanged.
   VERIFIED  build.md ........ 1 READY (R1) + 8 BLOCKED, unchanged *(measured: 1/8)*
   VERIFIED  EV row .......... `EV-NONAUTHOR-EXPOSURE-01` still **READY P0** —
             correctly, because §5 is unfilled *(L15 @ `d85381b`)*
-  VERIFIED  suites .......... unit **386** / r1corpus **146** (18 paired, 11
-            controls, 19 repos) / gate full **PASS** / `build.py --check` clean
-            *(measured: all four re-run at `d85381b`)*
+  REWRITTEN suites .......... unit 386 -> **395** / r1corpus 146 / gate full
+            **PASS** / `build.py --check` clean *(measured: all four re-run
+            after the `0008` repair)* — +9 from the `_resolve_check` assertions
   VERIFIED  code cites ...... all eight re-`sed`-ed, all resolve to the cited
             symbol, none moved *(mechanism verified: `bb_do_claim`
             `blackboard.py:520`, `is_generated` `core.py:137`, `log_breach`
@@ -67,10 +69,12 @@ alone: a ruling is now pending. Everything below re-run today, not carried.
   ⚠️ **`0007` and `INDEX.md` are still NOT a queue.** Both are analysis. `0007`
   is Proposed — BLOCKED on §5; `INDEX.md` §6 authorises nothing, and its item 2
   was run, refuted and **withdrawn by operator ruling** on 2026-08-11.
-  ⚠️ **`0008` IS different — but only once it reads Accepted.** It is the one
-  thing in this repo that can move from analysis to work, and it does so on the
-  operator's signature, not a session's reading. **Proposed means do not touch
-  the code.**
+  ⚠️ **`0008` WAS different, and it is now CLOSED.** Accepted by operator ruling
+  and repaired the same day at `55d1397`. It was the one item in this repo that
+  could move from analysis to work, and it did. **It is not a precedent a session
+  may extend to itself** — `0008` §"counter-argument, kept" says so, and its
+  §Acceptance records the operator's words and the reading taken, so a later
+  session can overturn the reading rather than inherit it silently.
 
   ⚠️ NEW LABEL, declared so it is not read as an unlabelled claim. This pass
   uses a fourth annotation the `prompt-verify-pass` skill does not define:
@@ -84,7 +88,7 @@ alone: a ruling is now pending. Everything below re-run today, not carried.
   to lean on one. If this convention survives a pass, promote it into the skill.
 -->
 
-# Next session — check `0008`'s status first. Then §5, not before 2026-08-14.
+# Next session — file two rows. §5 on 2026-08-14. `0008` is DONE.
 
 > ⚠️ **The filename is historical.** It says "run-n1-exposure"; the run happened
 > on 2026-08-07. The name is kept because thirteen verify passes of audit trail
@@ -172,18 +176,17 @@ whole on build `a1354b03b292`)*.
 
 ## What this session is for — read in this order
 
-**Step 1. `sed -n '3p' decisions/0008-*.md`.** One line decides the session.
-
-- **Reads `PROPOSED`** → the repair is **not authorised**. Do not touch
-  `src/socom/install.py`. Say so and go to step 2.
-- **Reads `Accepted`** → the repair is live, scoped to **one surface**, and
-  `0008` §Scope names the files and the falsifiable acceptance. `ship-and-verify`
-  is the loop. **A pre-fix-failing test is what makes it real** — build one with
-  `git archive HEAD | tar -x -C <dir>` or the row does not close
-  (`bucket-ledger-reconcile`: DONE = Changed + Pinned + Effect).
-  ⚠️ **One surface. Then stop.** Six other surfaces of that row stay held under
-  `0001` rule 3, and `0008` §"counter-argument, kept" exists because a repair
-  backlog reproduces the 6/6 pattern as easily as a feature backlog.
+**Step 1 — DONE 2026-08-11, do not redo it.** `0008` was accepted by operator
+ruling and **the repair shipped the same day** at `55d1397`: `_resolve_check`
+gates the `✓ … gates now run YOUR tests` claim behind an actual resolution, the
+exposure scenario reproduces honestly, `unit: 386 → 395`, and 9 of the 10
+pre-fix-tree failures are those assertions. See `0008` §Repair.
+⚠️ **`DEF-STATUS-CLAIMS-UNLABELLED-01` is STILL READY P1 and that is correct** —
+one of seven surfaces is repaired; the other six stay held under `0001` rule 3
+because `PILOT.md`'s *"did a metric mislead you?"* has six answers left to
+collect. **Do not "finish the row."** `0008` §Scope is one surface and
+§"counter-argument, kept" exists because a repair backlog reproduces the 6/6
+pattern as easily as a feature backlog.
 
 **Step 2. §5 — only on or after 2026-08-14.** Ask once, write the answer down.
 
@@ -197,28 +200,19 @@ asks whether **the operator** returned. The engineer is a different person and
 carries their own, separately pending, §5 — see that sheet's §5 note on whether
 it can be asked at all without contaminating it.
 
-**Step 3. Two findings from the field report need ROWS — filing only.** The
-mechanism for both is already verified and written up in that sheet's §7; this
-is transcription into `buckets/defects.md`, not investigation, and **filing is
-not repairing**.
+**Step 3 — DONE 2026-08-11.** The two field-report findings are filed as
+`DEF-INDEX-COUNTS-THE-TOOL-NOT-THE-REPO-01` and
+`DEF-HOOKS-COLLISION-IS-SILENT-AFTER-THE-FACT-01`, both **READY P1**, both
+UNREPAIRED *(measured: `grep -nE '^- \`DEF-(INDEX-COUNTS|HOOKS-COLLISION)'`)*.
+The hooks row is filed **narrower than the report framed it**: the guard behaved
+correctly on the information it had, and the defect is the unwarned LATER
+collision. Read the row before acting on the report's wording.
 
-1. **`socom index` indexes the tool, not the repo.** It reported *"93 chunks of
-   knowledge retrievable"* on `buzz` and **none of `buzz` is in it** — `cmd_index`
-   globs `(root / SOCOM_DIR).rglob("*.xml")`, i.e. `.socom/` only *(mechanism
-   verified: `retrieval.py:75`)*. Same class as
-   `DEF-STATUS-CLAIMS-UNLABELLED-01` — a true number implying something false —
-   but a **distinct surface with a distinct fix**, so it is its own row.
-2. **Hooks: no warning on a LATER collision.** socom took `core.hooksPath`
-   because `buzz`'s own hooks were uninstalled (`just setup` never run in that
-   clone), so `.git/hooks/` was genuinely empty and `_default_hooks_present`
-   *(lifecycle.py:426)* behaved **correctly**. The gap is narrower than the
-   report frames it: install the repo's hooks afterwards and git silently ignores
-   them, with **no warning from socom**.
-
-**If `0008` reads PROPOSED and the date is before 2026-08-14, step 3 is the
-whole session** — and it is small. Everything in `buckets/build.md` is still
-blocked, every other P1 is still deliberately unrepaired, and `0002` is still
-HELD. Say so and stop.
+**So: if the date is before 2026-08-14, there is again NO WORK.** Steps 1 and 3
+are done, everything in `buckets/build.md` is blocked, `0002` is still HELD, and
+the ten remaining P1s are deliberately unrepaired — including the six surviving
+surfaces of `DEF-STATUS-CLAIMS-UNLABELLED-01`. Say so and stop. **The 2026-08-11
+session cleared the queue it was given; it did not license a new one.**
 
 ⚠️ **Do not fill §5 early.** A week is the measurement, not a formality. Asking
 on day 2 measures politeness.
@@ -276,10 +270,10 @@ curl -fsSL -o /tmp/socom.pre \
 chmod +x /tmp/socom.pre && /tmp/socom.pre --help | head -3 && /tmp/socom.pre version
 ```
 
-Re-verified 2026-08-10 at `d85381b`: `http=200`, **434361 bytes**, `cmp`
-byte-identical to `bin/socom`, build **`a1354b03b292`** — unchanged, because the
-last commit touching `bin/socom` is still `f1dce80` *(measured: `curl -w` +
-`cmp` + `socom version` + `git log -1 -- bin/socom`)*.
+Re-measured 2026-08-11 after the `0008` repair: `http=200`, **436923 bytes**,
+`cmp` byte-identical to `bin/socom`, build **`77425a0cead4`** *(measured:
+`curl -w` + `cmp` + `socom version`)*. It MOVED — `bin/socom` changed for the
+first time since `f1dce80`.
 `--help` prints on **stdout, exit 0**, so `| head -3` truncates as written; bare
 `socom` still exits 1 on stderr.
 **Also confirm macOS/Linux/WSL** — native Windows is unsupported (`fcntl`).
@@ -449,14 +443,14 @@ place.
 | Thing | State |
 |---|---|
 | socom `main` | `d85381b`, clean, pushed, CI **success @ `d85381b`** *(measured: `git log --oneline -1`, `git status --porcelain` = 0, `gh run list -L1`)*. `git log --oneline -3` and re-probe rather than trusting this SHA. |
-| Buckets | `defects.md` **9 DONE P0 + 0 READY P0 + 1 DONE P1 + 8 READY P1** *(measured: 9/0/1/8 via `grep -cE`)* · `build.md` 1 READY (R1) + 8 BLOCKED *(measured: 1/8)* · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` **READY P0 — run recorded, §5 pending** *(L15 @ `d85381b`)* |
+| Buckets | `defects.md` **9 DONE P0 + 0 READY P0 + 1 DONE P1 + 10 READY P1** *(measured: 9/0/1/10 via `grep -cE`)* — was 8; two rows filed from the 2026-08-11 field report · `build.md` 1 READY (R1) + 8 BLOCKED *(measured: 1/8)* · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` **READY P0 — run recorded, §5 pending** *(L15 @ `d85381b`)* |
 | Exposure | **TWO events on file** *(measured: `ls bench/exposure/` = README + TEMPLATE + **two** dated sheets)*. (1) **RUN 2026-08-07** — `2026-08-07-akili.md`, protocol-conforming, §1-§4/§6/§7 filled, **§5 PENDING until 2026-08-14**. (2) **FIELD REPORT 2026-08-11** — `2026-08-11-buzz-engineer-report.md`, a **non-author** engineer on `buzz`; ⚠️ **not a protocol run** (no observer, no recruitment screen, **no `socom version` digest**) and its own §5 is separately PENDING |
 | Proof tier | **operator to set** — `0006` declines to derive it and this repo does not define `D0`/`D1`. This prompt asserts no tier. |
-| Suite | `unit: 386 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean *(measured: all four re-run at `d85381b`)* |
-| Artifact | http=200, **434361** bytes, build **`a1354b03b292`**, `cmp` byte-identical to `bin/socom` *(measured at `d85381b`; unchanged — `bin/socom` last moved at `f1dce80`)*. ⚠️ **Re-measure — never carry.** |
-| Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork · `0004` two-boundaries-socom-does-not-represent · `0005` the-user-is-an-agent-the-adopter-is-not · `0006` the-author-is-the-participant (Accepted) · `0007` adopt-the-sensor-contract-not-the-sensor (Proposed — BLOCKED on §5) · **`0008` the-guess-must-resolve-before-it-is-claimed (PROPOSED — the one thing awaiting a signature)** *(measured: 8 files; `sed -n '3p' decisions/0008-*.md`)* |
+| Suite | `unit: 395 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean *(measured: all four re-run 2026-08-11 after the repair)* |
+| Artifact | http=200, **436923** bytes, build **`77425a0cead4`**, `cmp` byte-identical to `bin/socom` *(measured 2026-08-11 after the `0008` repair shipped)*. ⚠️ **Re-measure — never carry.** |
+| Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork · `0004` two-boundaries-socom-does-not-represent · `0005` the-user-is-an-agent-the-adopter-is-not · `0006` the-author-is-the-participant (Accepted) · `0007` adopt-the-sensor-contract-not-the-sensor (Proposed — BLOCKED on §5) · **`0008` the-guess-must-resolve-before-it-is-claimed (Accepted 2026-08-11 — REPAIRED, surface 1 of 7)** *(measured: 8 files; `sed -n '3p' decisions/0008-*.md`)* |
 | Analysis landed 2026-08-10/11 | `0007` + `INDEX.md` — operator-requested, **authorise nothing**. `INDEX.md` item 2 was run, **refuted** (adopt produces no ledger) and **withdrawn by operator ruling**; item 1b records the operator's ask to be given repos to test, **gated behind §5** |
-| ⚠️ Awaiting a signature | **`0008`** — lifts the P1 hold on ONE surface of `DEF-STATUS-CLAIMS-UNLABELLED-01`. **PROPOSED. Nothing may be repaired until it reads Accepted.** Step 1 of this session is reading that line |
+| `0008` — closed | **Accepted and REPAIRED 2026-08-11** at `55d1397`. One surface of `DEF-STATUS-CLAIMS-UNLABELLED-01`; the row stays **READY P1** with six surfaces held. ⚠️ **Do not finish the row** |
 
 Probes: `./bin/socom gate full` · `python3 build.py --check` ·
 `python3 tests/unit.py` · `python3 tests/r1corpus.py` · `grep -c '^- \`' buckets/*.md`
