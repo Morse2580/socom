@@ -1054,6 +1054,33 @@ colleagues. A participant hitting any of them is burned on something recorded he
   §4 of the 2026-08-07 sheet, in exactly those terms. Whether that releases the
   repair is the **operator's** call, not a session's; recorded here so the next
   session does not re-derive the hold from a condition that no longer holds.
+  **FOURTH INSTANCE — 2026-08-11, and it is the first by a NON-AUTHOR.** Recorded
+  from [`bench/exposure/2026-08-11-buzz-engineer-report.md`](../bench/exposure/2026-08-11-buzz-engineer-report.md)
+  — an engineer, same repo `buzz`, same command, same `cargo: not found`. Three
+  things are new. (a) **They diagnosed the mechanism unprompted and exactly:**
+  *"it checked whether a file existed, not whether the command actually runs."*
+  (b) **They made it their lead finding** and argued severity the row had not:
+  a person who walks away after setup has a gate red on **every commit,
+  permanently**, reported as `checks failed` — which reads as *your tests are
+  broken*, not *the tool never worked*. (c) **They charged it against socom's own
+  first principle:** *"the guide makes a specific promise: when it can't figure
+  something out honestly, it tells you and stops. It guessed and reported
+  success."* That promise is `verify-never-claim`, `canon/constitution.xml:6`,
+  **`rank="1"`** *(mechanism verified: `grep -n` — the `rank="1"` attribute is on
+  the `verify-never-claim` principle)*. The row files this as a labelling defect;
+  the fourth sighting makes it a **rank-1 constitutional violation by socom's own
+  binary**, which is a different severity argument from the one on file.
+  Mechanism re-verified this pass: `install.py:255` is
+  `if (root / "Cargo.toml").exists()`, `install.py:364` prints the `✓`, and
+  `shutil.which` is present in this codebase and applied correctly at
+  `spawn.py:413` and `install.py:331` — **the guard is inconsistently applied,
+  not missing** *(mechanism verified: `grep -n shutil.which src/socom/*.py`)*.
+  ⚠️ **Still READY P1 and still NOT repaired.** The lift is drafted as
+  [`decisions/0008`](../decisions/0008-the-guess-must-resolve-before-it-is-claimed.md),
+  **Status Proposed**, and covers **one surface only** — detect-then-claim. The
+  other six surfaces stay held under rule 3, which is the argument for a narrow
+  lift rather than a general one. Nothing may be repaired until `0008` reads
+  Accepted.
 
 - `DEF-INSTALLED-BINARY-LANDS-INSIDE-THE-ADOPTED-REPO-01` **DONE P1** — **The
   documented 5-minute path leaves a 421 KB untracked binary in the user's repo,

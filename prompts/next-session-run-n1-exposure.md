@@ -11,23 +11,33 @@ Passes 1-11 (2026-08-05 → 2026-08-08) are compacted to their standing verdicts
   premise, not only the numbers.
 Full pass-by-pass history: `git log -p prompts/next-session-run-n1-exposure.md`.
 
-REWRITTEN 2026-08-10 (TWELFTH pass, at `569f4d2`). **The premise held this
-time** — probed first, per pass eleven's lesson: the run is still the last
-exposure event, §5 is still unfilled, and no work happened against the queue.
-Two operator-requested documents landed and **three claims moved**. Everything
-below was re-run today at `569f4d2`, not carried.
-  REWRITTEN decisions ....... 6 -> **7 files**. `0007` added
-            *(measured: `ls decisions/` = 7; `sed -n '3p' decisions/0007-*.md` =
-            "**Status:** **Proposed — BLOCKED on §5.**")*. The eleventh pass's
-            "(measured: 6 files)" is now false and is corrected in both places.
-  REWRITTEN HEAD / CI ....... `f1dce80` -> **`569f4d2`**, clean, CI **success @
-            `569f4d2`** *(measured: `git log --oneline -1`,
-            `git status --porcelain` = 0 lines, `gh run list -L1`)*
-  REWRITTEN root docs ....... **`INDEX.md` is new** and the prompt did not name
-            it *(verified `569f4d2`)*. See §Standing context.
-  VERIFIED  THE RUN ......... still **2026-08-07**, still the only sheet
-            *(measured: `ls bench/exposure/` = README + TEMPLATE + one dated
-            sheet)*. §5 still **PENDING** *(L99 + L120 @ `569f4d2`)*
+Pass TWELVE (2026-08-10, `569f4d2`) is compacted: it corrected `decisions` 6→7,
+HEAD/CI, and the unnamed `INDEX.md`, and it caught six annotations reading
+`@ f1dce80` on claims re-probed that day — the values matched, the measurement
+point did not, which is the fail-closed rule's "the annotation lied" case.
+
+REWRITTEN 2026-08-11 (THIRTEENTH pass). **This pass changes the SHAPE of the
+file, not only its numbers.** A second field report arrived — from an engineer,
+**not the author** — and the premise "the queue is one question" no longer holds
+alone: a ruling is now pending. Everything below re-run today, not carried.
+  REWRITTEN THE PREMISE ..... **A SECOND EXPOSURE EVENT IS ON FILE**, and it is
+            the first by a **non-author**:
+            `bench/exposure/2026-08-11-buzz-engineer-report.md` *(measured:
+            `ls bench/exposure/` = README + TEMPLATE + **two** dated sheets)*.
+            ⚠️ It is recorded as a **FIELD REPORT, not a protocol run** — no
+            observer, no recruitment screen, and **no `socom version` digest**,
+            which is the one cell that cannot be reconstructed later.
+  REWRITTEN decisions ....... 7 -> **8 files**. `0008` added — **Status
+            PROPOSED, awaiting operator acceptance** *(measured: `ls decisions/`
+            = 8; `sed -n '3p' decisions/0008-*.md`)*
+  REWRITTEN the P1 hold ..... `DEF-STATUS-CLAIMS-UNLABELLED-01` has a **FOURTH
+            sighting** appended, first by a non-author. Row is **still READY
+            P1** and still unrepaired — `0008` is the drafted lift and covers
+            **one surface only** *(L977 @ this SHA; re-`grep` it)*
+  VERIFIED  §5 ............... `2026-08-07-akili.md` §5 still **PENDING**, still
+            due **2026-08-14** *(L99 + L120)*. The new report does **not**
+            substitute for it — §5 asks whether the OPERATOR returned; the
+            engineer is a different person, with a separate and also-pending §5.
   VERIFIED  public artifact . **434361** bytes, **`a1354b03b292`**, http=200,
             `cmp` byte-identical *(measured: `curl -w` + `cmp` + `version`)*.
             **Did NOT move** — correctly: `git log -1 -- bin/socom` is still
@@ -54,11 +64,13 @@ below was re-run today at `569f4d2`, not carried.
             not defined in this repo. This prompt does NOT assert a tier.
   HYPOTHESIS none.
 
-  ⚠️ **`0007` and `INDEX.md` are NOT a queue.** Both are analysis, landed on
-  operator request, and both say so in their own headers. `0007` is **Proposed —
-  BLOCKED on §5**; `INDEX.md` §5 ranks leverage and §6 states it authorises
-  nothing. A session that reads either as a work list has made exactly the
-  mistake this file exists to prevent. **The queue is still one question.**
+  ⚠️ **`0007` and `INDEX.md` are still NOT a queue.** Both are analysis. `0007`
+  is Proposed — BLOCKED on §5; `INDEX.md` §6 authorises nothing, and its item 2
+  was run, refuted and **withdrawn by operator ruling** on 2026-08-11.
+  ⚠️ **`0008` IS different — but only once it reads Accepted.** It is the one
+  thing in this repo that can move from analysis to work, and it does so on the
+  operator's signature, not a session's reading. **Proposed means do not touch
+  the code.**
 
   ⚠️ NEW LABEL, declared so it is not read as an unlabelled claim. This pass
   uses a fourth annotation the `prompt-verify-pass` skill does not define:
@@ -72,10 +84,10 @@ below was re-run today at `569f4d2`, not carried.
   to lean on one. If this convention survives a pass, promote it into the skill.
 -->
 
-# Next session — fill §5 of the exposure sheet. Not before 2026-08-14.
+# Next session — check `0008`'s status first. Then §5, not before 2026-08-14.
 
 > ⚠️ **The filename is historical.** It says "run-n1-exposure"; the run happened
-> on 2026-08-07. The name is kept because twelve verify passes of audit trail
+> on 2026-08-07. The name is kept because thirteen verify passes of audit trail
 > live in this file's history and `prompt-verify-pass` globs
 > `prompts/next-session-*.md`. Same convention `0006` used for the row ID.
 
@@ -95,12 +107,56 @@ has. `0005`'s analysis stands; its refusal is overturned. **The population
 question is closed in the other direction and is not re-litigated** — the
 reopening trigger is at the foot of `0006` (fork > 0, or a second person running
 socom unprompted).
+⚠️ **2026-08-11: the trigger is now LIVE-ADJACENT and is the operator's to
+call.** A second person — an engineer, not the author — ran socom on `buzz` and
+reported back in writing. **Whether it was *unprompted* is `NOT OBSERVED`**
+(field report §1: recruitment was not screened because nobody recruited), and
+that word is the whole trigger. Do not re-litigate the population question from
+a session; establish the fact or leave it open. `0008` deliberately does **not**
+depend on it.
 
 The run: repo `buzz` (Rust, `/home/akili`), build `a1cf0802daef` — **live
 shipped code**, `cmp` byte-identical to the public artifact, not a local build.
 **Stall point captured:** `socom gate fast` → `RED — checks.fast failed
 (rc=127)`, `cargo: not found`. The participant did not recover inside the tool;
 they escalated out of it. That is the datum the row asks for and it is on file.
+
+## The second event — 2026-08-11, a non-author, and it is NOT a protocol run
+
+`bench/exposure/2026-08-11-buzz-engineer-report.md`. An engineer installed socom
+on `buzz` and wrote up what happened. **Read the sheet's header before leaning on
+any of it:** there was no observer, no recruitment screen, no prohibition check,
+and — the cell that cannot be reconstructed later — **no `socom version`
+digest**. It is the strongest field evidence on file *and* weaker than a
+conforming run. Both halves are true.
+
+**The stall is the same one, third sighting:** `checks.fast` bound to
+`cargo test`, `cargo` not on PATH, `cargo: not found`. **They recovered** — the
+material difference from 2026-08-07, where the participant escalated out. They
+rebound `checks.*` to `just` targets by hand and continued.
+
+**Their diagnosis is exact and unprompted:** *"it checked whether a file existed,
+not whether the command actually runs."* Verified: `install.py:255` is
+`(root / "Cargo.toml").exists()`; `install.py:364` prints
+`✓ … gates now run YOUR tests`; `shutil.which` is in this codebase and applied
+correctly at `spawn.py:413` and `install.py:331` *(mechanism verified:
+`grep -n shutil.which src/socom/*.py`)* — **the guard is inconsistently applied,
+not missing.** Their charge lands on `verify-never-claim`,
+`canon/constitution.xml:6`, **`rank="1"`**. That is `0008`.
+
+⚠️ **Do NOT count their gate catch as evidence of value.** They planted a
+formatting error deliberately to test the gate. §3 of the sheet excludes planted
+defects by rule — *"3/5 of the agent cohort did exactly that and it produced zero
+evidence of value."* It proves the **mechanism** works end-to-end when correctly
+bound, which is the first such proof by a non-author, and it is **not** the
+unstaged catch the row asks for. Do not let the two be conflated.
+
+⚠️ **One repair of ours was confirmed in the field:** socom wrote
+`CLAUDE.socom.md` rather than overwriting their `CLAUDE.md`, and they called it
+out unprompted as the right call. That is the 2026-08-06 sidecar repair holding
+up under a non-author.
+
+## What the first run produced
 
 **One finding produced a code change** — the first time an exposure run has.
 `DEF-INSTALLED-BINARY-LANDS-INSIDE-THE-ADOPTED-REPO-01` was sighted a second
@@ -114,17 +170,55 @@ present *(measured: 4 of 10 new `tests/smoke.sh` §18 assertions FAIL against a
 `git archive HEAD` of the pre-fix tree; `unit: 378 → 386`; acceptance re-run
 whole on build `a1354b03b292`)*.
 
-## The one thing this session is for
+## What this session is for — read in this order
 
-**Nothing, until 2026-08-14.** Then: ask the §5 question, once, and write down
-the answer.
+**Step 1. `sed -n '3p' decisions/0008-*.md`.** One line decides the session.
+
+- **Reads `PROPOSED`** → the repair is **not authorised**. Do not touch
+  `src/socom/install.py`. Say so and go to step 2.
+- **Reads `Accepted`** → the repair is live, scoped to **one surface**, and
+  `0008` §Scope names the files and the falsifiable acceptance. `ship-and-verify`
+  is the loop. **A pre-fix-failing test is what makes it real** — build one with
+  `git archive HEAD | tar -x -C <dir>` or the row does not close
+  (`bucket-ledger-reconcile`: DONE = Changed + Pinned + Effect).
+  ⚠️ **One surface. Then stop.** Six other surfaces of that row stay held under
+  `0001` rule 3, and `0008` §"counter-argument, kept" exists because a repair
+  backlog reproduces the 6/6 pattern as easily as a feature backlog.
+
+**Step 2. §5 — only on or after 2026-08-14.** Ask once, write the answer down.
 
 > *"No obligation either way — did you end up running it again?"*
 
 That wording is already on the sheet. **First use is compliance. Second use is
-value.** §5 is binary, cheap and unfakeable, and it is the headline metric —
-which is why it is filled in a **separate sitting**, a week after the run, and
-not today.
+value.** §5 is binary, cheap and unfakeable, it is the headline metric, and it
+is filled in a **separate sitting** a week after the run.
+⚠️ **The 2026-08-11 field report does NOT fill it and does not replace it.** §5
+asks whether **the operator** returned. The engineer is a different person and
+carries their own, separately pending, §5 — see that sheet's §5 note on whether
+it can be asked at all without contaminating it.
+
+**Step 3. Two findings from the field report need ROWS — filing only.** The
+mechanism for both is already verified and written up in that sheet's §7; this
+is transcription into `buckets/defects.md`, not investigation, and **filing is
+not repairing**.
+
+1. **`socom index` indexes the tool, not the repo.** It reported *"93 chunks of
+   knowledge retrievable"* on `buzz` and **none of `buzz` is in it** — `cmd_index`
+   globs `(root / SOCOM_DIR).rglob("*.xml")`, i.e. `.socom/` only *(mechanism
+   verified: `retrieval.py:75`)*. Same class as
+   `DEF-STATUS-CLAIMS-UNLABELLED-01` — a true number implying something false —
+   but a **distinct surface with a distinct fix**, so it is its own row.
+2. **Hooks: no warning on a LATER collision.** socom took `core.hooksPath`
+   because `buzz`'s own hooks were uninstalled (`just setup` never run in that
+   clone), so `.git/hooks/` was genuinely empty and `_default_hooks_present`
+   *(lifecycle.py:426)* behaved **correctly**. The gap is narrower than the
+   report frames it: install the repo's hooks afterwards and git silently ignores
+   them, with **no warning from socom**.
+
+**If `0008` reads PROPOSED and the date is before 2026-08-14, step 3 is the
+whole session** — and it is small. Everything in `buckets/build.md` is still
+blocked, every other P1 is still deliberately unrepaired, and `0002` is still
+HELD. Say so and stop.
 
 ⚠️ **Do not fill §5 early.** A week is the measurement, not a formality. Asking
 on day 2 measures politeness.
@@ -350,18 +444,19 @@ place.
   explicitly **supporting, not blocking**. Run it by hand if you want it;
   **building** a harness for it is capability.
 
-## State — measured 2026-08-10 at `569f4d2`, re-probe anything you lean on
+## State — measured 2026-08-11, re-probe anything you lean on
 
 | Thing | State |
 |---|---|
 | socom `main` | `569f4d2`, clean, pushed, CI **success @ `569f4d2`** *(measured: `git log --oneline -1`, `git status --porcelain` = 0, `gh run list -L1`)*. `git log --oneline -3` and re-probe rather than trusting this SHA. |
 | Buckets | `defects.md` **9 DONE P0 + 0 READY P0 + 1 DONE P1 + 8 READY P1** *(measured: 9/0/1/8 via `grep -cE`)* · `build.md` 1 READY (R1) + 8 BLOCKED *(measured: 1/8)* · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` **READY P0 — run recorded, §5 pending** *(L15 @ `569f4d2`)* |
-| Exposure | **RUN 2026-08-07** — `bench/exposure/2026-08-07-akili.md` *(measured: `ls bench/exposure/` = README + TEMPLATE + one dated sheet)*. §1-§4, §6, §7 filled; **§5 PENDING until 2026-08-14** |
+| Exposure | **TWO events on file** *(measured: `ls bench/exposure/` = README + TEMPLATE + **two** dated sheets)*. (1) **RUN 2026-08-07** — `2026-08-07-akili.md`, protocol-conforming, §1-§4/§6/§7 filled, **§5 PENDING until 2026-08-14**. (2) **FIELD REPORT 2026-08-11** — `2026-08-11-buzz-engineer-report.md`, a **non-author** engineer on `buzz`; ⚠️ **not a protocol run** (no observer, no recruitment screen, **no `socom version` digest**) and its own §5 is separately PENDING |
 | Proof tier | **operator to set** — `0006` declines to derive it and this repo does not define `D0`/`D1`. This prompt asserts no tier. |
 | Suite | `unit: 386 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean *(measured: all four re-run at `569f4d2`)* |
 | Artifact | http=200, **434361** bytes, build **`a1354b03b292`**, `cmp` byte-identical to `bin/socom` *(measured at `569f4d2`; unchanged — `bin/socom` last moved at `f1dce80`)*. ⚠️ **Re-measure — never carry.** |
-| Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork · `0004` two-boundaries-socom-does-not-represent · `0005` the-user-is-an-agent-the-adopter-is-not · `0006` the-author-is-the-participant (Accepted — supersedes `0005`'s disposition) · **`0007` adopt-the-sensor-contract-not-the-sensor (Proposed — BLOCKED on §5)** *(measured: 7 files; `sed -n '3p' decisions/0007-*.md`)* |
-| Analysis landed 2026-08-10 | **`0007`** + **`INDEX.md`** — operator-requested, **authorise nothing**, see the ⚠️ in the header block *(verified `569f4d2`)* |
+| Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork · `0004` two-boundaries-socom-does-not-represent · `0005` the-user-is-an-agent-the-adopter-is-not · `0006` the-author-is-the-participant (Accepted) · `0007` adopt-the-sensor-contract-not-the-sensor (Proposed — BLOCKED on §5) · **`0008` the-guess-must-resolve-before-it-is-claimed (PROPOSED — the one thing awaiting a signature)** *(measured: 8 files; `sed -n '3p' decisions/0008-*.md`)* |
+| Analysis landed 2026-08-10/11 | `0007` + `INDEX.md` — operator-requested, **authorise nothing**. `INDEX.md` item 2 was run, **refuted** (adopt produces no ledger) and **withdrawn by operator ruling**; item 1b records the operator's ask to be given repos to test, **gated behind §5** |
+| ⚠️ Awaiting a signature | **`0008`** — lifts the P1 hold on ONE surface of `DEF-STATUS-CLAIMS-UNLABELLED-01`. **PROPOSED. Nothing may be repaired until it reads Accepted.** Step 1 of this session is reading that line |
 
 Probes: `./bin/socom gate full` · `python3 build.py --check` ·
 `python3 tests/unit.py` · `python3 tests/r1corpus.py` · `grep -c '^- \`' buckets/*.md`
