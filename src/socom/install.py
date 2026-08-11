@@ -259,6 +259,38 @@ def _detect_checks(root: Path):
     return None
 
 
+def _resolve_check(command: str, root: Path):
+    """Resolve the executable a detected check command would actually run.
+
+    Returns `(binary, resolved_path_or_None)`.
+
+    Detection and resolution are SEPARATE AXES and `_detect_checks` only reads the
+    first: a `Cargo.toml` is evidence about the PROJECT, never about whether `cargo`
+    exists on THIS machine. A binding can be exactly right about the repo and
+    unrunnable where it runs — measured three times, most recently by a non-author on
+    a Rust repo whose toolchain lived in an unactivated local `bin/`
+    (`bench/exposure/2026-08-11-buzz-engineer-report.md`). Reporting the first as
+    though the second had been checked is a §verify-never-claim violation, which is
+    constitution rank 1; see `decisions/0008`.
+
+    This is the guard `spawn --exec` already applies (`spawn.py`, `shutil.which` then
+    refuse) — applied here for consistency, not invented. It answers "does this
+    resolve", NOT "does this pass": executing an adopter's test suite during setup is
+    not socom's to do, and a resolvable command that fails is the gate working."""
+    parts = shlex.split(command) if command else []
+    if not parts:
+        return command, None
+    binary = parts[0]
+    hit = shutil.which(binary)
+    if hit is None and os.sep in binary and not os.path.isabs(binary):
+        # a repo-relative script (`tests/smoke.sh`): which() resolves paths against
+        # CWD, and the gate will run it from the repo root instead.
+        cand = root / binary
+        if cand.is_file() and os.access(cand, os.X_OK):
+            hit = str(cand)
+    return binary, hit
+
+
 # the placeholder values adoption_rung treats as "unbound" (None/""/"true"); the
 # init template ships quoted "true" -> the string "true"; unquoted true -> bool True.
 _CHECK_PLACEHOLDERS = (None, "", "true", True)
@@ -361,7 +393,20 @@ def cmd_quickstart(args):
               "in socom.yaml to your suite, then `socom compile` — gates stay vacuous "
               "until you do.")
     elif _bind_checks(root, detected):
-        print(f"  ✓ bound checks.fast/medium/full → {detected!r} — gates now run YOUR tests")
+        # BIND either way — a command that is right about the repo is worth binding
+        # even where it cannot run — but CLAIM only what was resolved (0008).
+        binary, resolved = _resolve_check(detected, root)
+        if resolved:
+            print(f"  ✓ bound checks.fast/medium/full → {detected!r} — gates now run YOUR tests")
+        else:
+            print(f"  ! bound checks.fast/medium/full → {detected!r} — but {binary!r} is NOT "
+                  f"on PATH here, so socom has NOT verified this runs.")
+            print(f"    Detection read your REPO (it found the project layout); it cannot read "
+                  f"your MACHINE. Both can be true: right command, missing toolchain.")
+            print(f"    Until {binary!r} resolves, every gate fails with rc=127 — that is this "
+                  f"binding, not your code.")
+            print(f"    Fix either side: install or activate {binary!r}, or edit checks.fast in "
+                  f"socom.yaml and re-run `socom compile`.")
         cmd_compile([str(root)])  # re-render adapters so the source hash tracks socom.yaml
     else:
         print(f"  · checks already bound — left as-is (detected {detected!r}, not clobbering)")

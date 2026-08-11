@@ -1254,6 +1254,61 @@ _qr3 = Path(_tf.mkdtemp())
 eq("_detect_checks: a Makefile with no test target is not a make hit",
    socom._detect_checks(_qr3), None)
 
+# ── _resolve_check: detection reads the REPO, resolution reads the MACHINE ──
+# decision 0008. Three sightings of the same failure: socom bound a command that was
+# right about the project and absent from the box, then printed a success claim over
+# it. §verify-never-claim is constitution rank 1, so the claim is the defect — the
+# binding is not. These assertions FAIL against the pre-fix tree: `_resolve_check`
+# does not exist there.
+# Absence is itself an assertion, and it must REPORT rather than abort — a suite that
+# crashes on the pre-fix tree cannot be used as the pre-fix/post-fix witness 0008's
+# falsifiable acceptance calls for.
+_has_rc = hasattr(socom, "_resolve_check")
+check("_resolve_check: exists (0008 — the guard spawn --exec already applies)", _has_rc)
+_rc_root = Path(_tf.mkdtemp())
+(_rc_root / "tests").mkdir()
+_rc_script = _rc_root / "tests" / "smoke.sh"
+_rc_script.write_text("#!/bin/sh\nexit 0\n")
+_rc_script.chmod(0o755)
+(_rc_root / "tests" / "not-exec.sh").write_text("#!/bin/sh\nexit 0\n")
+# Every case below is a REACHABILITY assertion first: if the function is absent the
+# case FAILS, it does not pass against a stub. A sentinel that satisfies `is not None`
+# would make the two positive cases vacuous on the pre-fix tree — which is the exact
+# defect r1corpus keeps a non-vacuity control for.
+_RC_CASES = [
+    ("a present binary resolves to a path",
+     lambda f: f("sh -c true", _rc_root)[1] is not None),
+    ("reports the binary it looked for",
+     lambda f: f("cargo test", _rc_root)[0] == "cargo"),
+    ("an absent binary resolves to None, it does not raise",
+     lambda f: f("definitely-not-a-real-binary-xyz test", _rc_root)[1] is None),
+    ("empty command degrades to (command, None), never IndexError",
+     lambda f: f("", _rc_root) == ("", None)),
+    # a repo-relative script is what socom binds in its OWN socom.yaml
+    # (tests/smoke.sh); which() resolves paths against CWD, but the gate runs them
+    # from the repo root.
+    ("a repo-relative executable script resolves against the ROOT",
+     lambda f: f("tests/smoke.sh", _rc_root)[1] is not None),
+    ("a non-executable repo-relative path does NOT resolve",
+     lambda f: f("tests/not-exec.sh", _rc_root)[1] is None),
+]
+for _desc, _case in _RC_CASES:
+    if not _has_rc:
+        check(f"_resolve_check: {_desc}  [UNREACHABLE — _resolve_check absent]", False)
+        continue
+    try:
+        check(f"_resolve_check: {_desc}", _case(socom._resolve_check))
+    except Exception as _e:
+        check(f"_resolve_check: {_desc}  [raised {type(_e).__name__}: {_e}]", False)
+# the claim itself: the success sentence is reachable ONLY through a resolved command.
+_qs_src = (REPO / "src" / "socom" / "install.py").read_text()
+_qs_i = _qs_src.index("gates now run YOUR tests")
+check("quickstart: 'gates now run YOUR tests' is guarded by a resolution check "
+      "(0008 falsifiable acceptance)",
+      "_resolve_check" in _qs_src[max(0, _qs_i - 600):_qs_i])
+check("quickstart: the unresolved branch names rc=127 rather than saying 'checks failed'",
+      "rc=127" in _qs_src[_qs_i:_qs_i + 1200])
+
 # _bind_checks: writes the detected command into the placeholders, preserving comments,
 # and never clobbers a real binding.
 _qb = Path(_tf.mkdtemp())

@@ -1075,12 +1075,36 @@ colleagues. A participant hitting any of them is burned on something recorded he
   `shutil.which` is present in this codebase and applied correctly at
   `spawn.py:413` and `install.py:331` — **the guard is inconsistently applied,
   not missing** *(mechanism verified: `grep -n shutil.which src/socom/*.py`)*.
-  ⚠️ **Still READY P1 and still NOT repaired.** The lift is drafted as
-  [`decisions/0008`](../decisions/0008-the-guess-must-resolve-before-it-is-claimed.md),
-  **Status Proposed**, and covers **one surface only** — detect-then-claim. The
-  other six surfaces stay held under rule 3, which is the argument for a narrow
-  lift rather than a general one. Nothing may be repaired until `0008` reads
-  Accepted.
+  **SURFACE 1 OF 7 REPAIRED — 2026-08-11**, under
+  [`decisions/0008`](../decisions/0008-the-guess-must-resolve-before-it-is-claimed.md)
+  (**Accepted**, operator ruling), which lifted the rule-3 hold for the
+  detect-then-claim surface **only**. `_resolve_check` (`src/socom/install.py`)
+  resolves the detected command's first token before `cmd_quickstart` may print
+  `✓ … gates now run YOUR tests`. Binding is unchanged — a command right about
+  the repo is still bound where it cannot run — and only the **claim** is gated.
+  **RE-RUN EVIDENCE, the exposure scenario reproduced end-to-end** (fresh git
+  repo, `Cargo.toml`, `PATH=/usr/bin:/bin` so `cargo` is absent — the 2026-08-07
+  and 2026-08-11 condition):
+  ```
+  ! bound checks.fast/medium/full → 'cargo test' — but 'cargo' is NOT on PATH
+    here, so socom has NOT verified this runs.
+    Detection read your REPO (it found the project layout); it cannot read your
+    MACHINE. Both can be true: right command, missing toolchain.
+    Until 'cargo' resolves, every gate fails with rc=127 — that is this binding,
+    not your code.
+    Fix either side: install or activate 'cargo', or edit checks.fast in
+    socom.yaml and re-run `socom compile`.
+  ```
+  **9 unit assertions added; 9 of the 10 failures against a `git archive HEAD` of
+  the pre-fix tree are those assertions** (the tenth, `_enclosing_git_root`, is
+  environmental — the extracted tree is not a git repo — and is not claimed).
+  `unit: 386 → 395`, `gate full` PASS.
+  ⚠️ **The row stays READY P1 and this is not a bookkeeping quibble.** Six
+  surfaces remain — `socom value`, `doctor`, `precond`, the CI step name,
+  `knowledge N chunks`, the adoption bar — and all six are still held under
+  `0001` §Amendment 1 rule 3, because `PILOT.md`'s *"did a metric mislead you?"*
+  still has six answers left to collect. `DONE` = Changed + Pinned + Effect **for
+  the row**, not for a surface.
 
 - `DEF-INSTALLED-BINARY-LANDS-INSIDE-THE-ADOPTED-REPO-01` **DONE P1** — **The
   documented 5-minute path leaves a 421 KB untracked binary in the user's repo,
