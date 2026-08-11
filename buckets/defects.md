@@ -1203,6 +1203,73 @@ colleagues. A participant hitting any of them is burned on something recorded he
   kept, distinguishably from the failure lines around it.
   **Files:** `src/socom/lifecycle.py` (the CI-adapter write path).
 
+- `DEF-INDEX-COUNTS-THE-TOOL-NOT-THE-REPO-01` **READY P1** — **`socom index`
+  reports a chunk count that sounds like the adopted repo's codebase and can only
+  ever contain socom's own paperwork.** OBSERVED by a non-author on `buzz`,
+  2026-08-11 *(`bench/exposure/2026-08-11-buzz-engineer-report.md` §4)*, in their
+  own words: *"It reports '93 chunks of knowledge retrievable,' which sounds like
+  it indexed your codebase. It didn't. All 93 are the tool's own documentation.
+  None of your code is in there. So its search feature currently answers
+  questions about itself, not about buzz."*
+  VERIFIED, and the mechanism is structural rather than a bug in the count:
+  `cmd_index` walks `(root / SOCOM_DIR).rglob("*.xml")` *(mechanism verified:
+  `src/socom/retrieval.py:75` — the glob is rooted at `SOCOM_DIR`)*, so the
+  corpus is `.socom/`'s planted canon **by construction**. The number is
+  arithmetically true and implies something false; there is no input path by
+  which the adopted repo's source could enter it.
+  ⚠️ **Same class as [[DEF-STATUS-CLAIMS-UNLABELLED-01]], deliberately a SEPARATE
+  row.** That row's scope is *labelling* — each surface stating what it derived
+  its claim from — and it enumerates seven surfaces of which `knowledge N chunks`
+  is one. This row is here because the honest label (*"93 chunks of socom's own
+  canon"*) exposes a second question that labelling does not answer: whether `L1`
+  retrieval over the tool's own documentation is worth shipping to an adopter at
+  all. Repairing the label does not settle that; conflating them would hide it.
+  ⚠️ **NOT a capability request.** Indexing the adopter's source is
+  [[SUBSTRATE-STATUS-TIER-SWEEP-01]]-adjacent at best and is not asked for here.
+  The scope is: stop implying it.
+  **Falsifiable acceptance:** the count either names its corpus (*"N chunks —
+  socom's canon; your source is not indexed"*) or is not printed. On a repo whose
+  source contains zero indexed bytes, no socom surface reports a knowledge figure
+  that a reader could take for the repo's own.
+  **Files:** `src/socom/retrieval.py` (`cmd_index`, and the T4/T5 rung messages
+  in `src/socom/lifecycle.py` that quote the figure).
+
+- `DEF-HOOKS-COLLISION-IS-SILENT-AFTER-THE-FACT-01` **READY P1** — **socom
+  correctly declines to take `core.hooksPath` from a repo that has hooks, and
+  says nothing when that repo installs its hooks afterwards — from which point
+  git silently ignores them.** OBSERVED on `buzz`, 2026-08-11
+  *(`bench/exposure/2026-08-11-buzz-engineer-report.md` §7)*: *"Buzz has its own
+  hooks, but nobody ever ran `just setup` in this clone, so they weren't
+  installed and the tool didn't see them. If you install them later, git will
+  quietly ignore them."*
+  ⚠️ **The guard is NOT the defect and this row does not touch it.**
+  `_default_hooks_present` *(mechanism verified: `src/socom/lifecycle.py:426` —
+  it reads `git rev-parse --git-path hooks` and ignores `.sample` files)* returns
+  `"foreign"` and refuses to wire, and its own docstring names the prior failure
+  it was built to stop. In `buzz` the repo's hooks were **uninstalled** (`just
+  setup` never run in that clone), so `.git/hooks/` was genuinely empty and socom
+  behaved **correctly on the information available**. The reported framing —
+  "socom didn't see them" — is accurate about the outcome and wrong about the
+  fault.
+  The defect is the **unwarned later collision**: `core.hooksPath` is repo-local
+  config that persists, `git` consults it and nothing else, and a subsequent
+  `just setup` / `lefthook install` / `git config core.hooksPath` writing into the
+  default directory produces hooks that never run, with **no diagnostic from
+  either side**. socom already owns the one detector that could notice — the
+  `session-start` gate reaps and re-checks — and it does not check this.
+  ⚠️ **This is `decisions/0004` Class B, not Class A.** socom is not
+  misreporting what it wrote; it wrote something it does not own
+  (`core.hooksPath` is the adopting repo's configuration — see the standing
+  comment at `lifecycle.py:391`) and has no representation of the owner changing
+  their mind later. Class A rows are about claims; this is about custody.
+  **Falsifiable acceptance:** with `core.hooksPath` pointed at socom, a hook
+  appearing in the repo's default hook directory is surfaced — by `doctor`, by
+  `session-start`, or by both — naming the file that will not run and the one
+  command that resolves it. Proved by planting an executable
+  `.git/hooks/pre-commit` after `adopt` and asserting socom says so.
+  **Files:** `src/socom/lifecycle.py` (`_default_hooks_present`, `cmd_doctor`,
+  the `session-start` path).
+
 ## Done
 
 The seven P0 rows above — four on 2026-08-03/04, three on 2026-08-05. No P1 row
