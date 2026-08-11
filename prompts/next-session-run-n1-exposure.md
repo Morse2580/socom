@@ -1,48 +1,64 @@
 <!--
 CLAIM-VERIFY PASS — history. Every pass re-ran its claims; none were carried.
-Passes 1-10 (2026-08-05 → 2026-08-06) are compacted to their standing verdicts:
+Passes 1-11 (2026-08-05 → 2026-08-08) are compacted to their standing verdicts:
   the byte count and build digest move on ANY merge touching `bin/socom` and
   must be re-measured every pass (Regression Test 1, hit three times);
   every `file.py:N` in this prompt is stale by the next edit — re-`sed` it, the
   SYMBOL is the durable cite (Regression Test 3);
-  nine P0 repairs across those ten passes moved the proof tier by NOTHING.
+  nine P0 repairs across eleven passes moved the proof tier by NOTHING;
+  pass ELEVEN refuted the premise of the ten before it — the prompt said the
+  exposure was UNRUN; it had run on 2026-08-07, three commits earlier. Probe the
+  premise, not only the numbers.
 Full pass-by-pass history: `git log -p prompts/next-session-run-n1-exposure.md`.
 
-REWRITTEN 2026-08-08 (ELEVENTH pass, at `f1dce80`). **This pass refutes the
-premise of the ten before it.** The prompt said the exposure was UNRUN and that
-running it was the whole session. The repo says otherwise: the run happened on
-2026-08-07, three commits after the tenth pass wrote this file. Every line below
-was re-run today, not carried.
-  REWRITTEN THE RUN ......... **HAPPENED — 2026-08-07**,
-            `bench/exposure/2026-08-07-akili.md` *(measured: `ls bench/exposure/`
-            — README + TEMPLATE + one dated sheet)*. The ten previous passes all
-            closed with "only the run moves it". It moved.
-  REWRITTEN population ...... **`0006` STRUCK the non-author clause** by operator
-            ruling. The author IS the participant *(verified `f1dce80`:
-            `decisions/0006-the-author-is-the-participant.md`, Status Accepted
-            2026-08-07)*. `0005`'s refusal is overturned; its analysis stands.
-  REWRITTEN decisions ....... 0001-0005 -> **0001-0006** *(measured: 6 files)*
-  REWRITTEN defects ......... 9 DONE P0 / 0 READY P0 / **1 DONE P1** / **8**
-            READY P1 *(measured: 9/0/1/8 via `grep -cE`)*. Was 9/0/0/9 — one P1
-            flipped DONE, see below.
-  REWRITTEN public artifact . 430621 -> **434361** bytes, `a1cf0802daef` ->
-            **`a1354b03b292`**, http=200, `cmp` byte-identical to `bin/socom`
-            *(measured: `curl -w` + `cmp` + `/tmp/socom.pre version`)*. Moved
-            because `f1dce80` touched `bin/socom`. Regression Test 1 again.
-  REWRITTEN suites .......... unit 378 -> **386** / r1corpus 146 / gate full
-            PASS / `build.py --check` clean / CI **success @ `f1dce80`**
-            *(measured: all five re-run at `f1dce80`)*
-  REWRITTEN code cites ...... two cites in the old body were stale and would
-            have resolved to real, wrong lines: `bb_do_claim` `blackboard.py:488`
-            -> **`:520`**; `is_generated` `core.py:140` -> **`:137`**. Re-`sed`
-            before quoting anything below.
+REWRITTEN 2026-08-10 (TWELFTH pass, at `569f4d2`). **The premise held this
+time** — probed first, per pass eleven's lesson: the run is still the last
+exposure event, §5 is still unfilled, and no work happened against the queue.
+Two operator-requested documents landed and **three claims moved**. Everything
+below was re-run today at `569f4d2`, not carried.
+  REWRITTEN decisions ....... 6 -> **7 files**. `0007` added
+            *(measured: `ls decisions/` = 7; `sed -n '3p' decisions/0007-*.md` =
+            "**Status:** **Proposed — BLOCKED on §5.**")*. The eleventh pass's
+            "(measured: 6 files)" is now false and is corrected in both places.
+  REWRITTEN HEAD / CI ....... `f1dce80` -> **`569f4d2`**, clean, CI **success @
+            `569f4d2`** *(measured: `git log --oneline -1`,
+            `git status --porcelain` = 0 lines, `gh run list -L1`)*
+  REWRITTEN root docs ....... **`INDEX.md` is new** and the prompt did not name
+            it *(verified `569f4d2`)*. See §Standing context.
+  VERIFIED  THE RUN ......... still **2026-08-07**, still the only sheet
+            *(measured: `ls bench/exposure/` = README + TEMPLATE + one dated
+            sheet)*. §5 still **PENDING** *(L99 + L120 @ `569f4d2`)*
+  VERIFIED  public artifact . **434361** bytes, **`a1354b03b292`**, http=200,
+            `cmp` byte-identical *(measured: `curl -w` + `cmp` + `version`)*.
+            **Did NOT move** — correctly: `git log -1 -- bin/socom` is still
+            `f1dce80`. Re-measured anyway; that is the rule.
+  VERIFIED  defects ......... 9 DONE P0 / 0 READY P0 / 1 DONE P1 / 8 READY P1,
+            unchanged *(measured: 9/0/1/8 via `grep -cE`)*
   VERIFIED  build.md ........ 1 READY (R1) + 8 BLOCKED, unchanged *(measured: 1/8)*
   VERIFIED  EV row .......... `EV-NONAUTHOR-EXPOSURE-01` still **READY P0** —
-            correctly, because §5 is unfilled *(L15 @ `f1dce80`)*
+            correctly, because §5 is unfilled *(L15 @ `569f4d2`)*
+  VERIFIED  suites .......... unit **386** / r1corpus **146** (18 paired, 11
+            controls, 19 repos) / gate full **PASS** / `build.py --check` clean
+            *(measured: all four re-run at `569f4d2`)*
+  VERIFIED  code cites ...... all eight re-`sed`-ed, all resolve to the cited
+            symbol, none moved *(mechanism verified: `bb_do_claim`
+            `blackboard.py:520`, `is_generated` `core.py:137`, `log_breach`
+            `core.py:94`, `_is_socom_binary` `install.py:41`, `_is_dev_checkout`
+            `install.py:48`, `cmd_install` `install.py:80`,
+            `compromise-recording` `canon/residuality.xml:95`,
+            `BUILD-ACP-RUNTIME-SEAM-01` `buckets/build.md:73`)*
+  VERIFIED  skills ........... four, unchanged *(verified `569f4d2`:
+            `git ls-files .claude/skills/`)*
   VERIFIED  proof tier ...... **operator to set** — `0006` §"does not claim"
             explicitly declines to derive it, and the `D0`/`D1` vocabulary is
             not defined in this repo. This prompt does NOT assert a tier.
   HYPOTHESIS none.
+
+  ⚠️ **`0007` and `INDEX.md` are NOT a queue.** Both are analysis, landed on
+  operator request, and both say so in their own headers. `0007` is **Proposed —
+  BLOCKED on §5**; `INDEX.md` §5 ranks leverage and §6 states it authorises
+  nothing. A session that reads either as a work list has made exactly the
+  mistake this file exists to prevent. **The queue is still one question.**
 
   ⚠️ NEW LABEL, declared so it is not read as an unlabelled claim. This pass
   uses a fourth annotation the `prompt-verify-pass` skill does not define:
@@ -59,12 +75,12 @@ was re-run today, not carried.
 # Next session — fill §5 of the exposure sheet. Not before 2026-08-14.
 
 > ⚠️ **The filename is historical.** It says "run-n1-exposure"; the run happened
-> on 2026-08-07. The name is kept because eleven verify passes of audit trail
+> on 2026-08-07. The name is kept because twelve verify passes of audit trail
 > live in this file's history and `prompt-verify-pass` globs
 > `prompts/next-session-*.md`. Same convention `0006` used for the row ID.
 
 **Row:** `EV-NONAUTHOR-EXPOSURE-01` (`buckets/evidence.md`), **READY P0**, `n=1`
-*(L15 @ `f1dce80`)*.
+*(L15 @ `569f4d2`)*.
 **Governed by** `decisions/0001`, **amended by `0006`**.
 **Sheet:** `bench/exposure/2026-08-07-akili.md` — §1-§4, §6, §7 are FILLED.
 **§5 is PENDING and §5 is the metric.**
@@ -138,7 +154,7 @@ socom's own hooks are not wired in its checkout, so run `./bin/socom gate full`
 yourself before every push.
 
 **Four skills ship in this repo** and are auto-discovered — nothing to install
-*(verified `f1dce80`: `git ls-files .claude/skills/` lists all four)*.
+*(verified `569f4d2`: `git ls-files .claude/skills/` lists all four)*.
 
 - `ship-and-verify` — the push loop: `build.py` → `gate full` **by hand** →
   commit to `main` → `gh run watch` → **re-measure the public curl artifact**.
@@ -166,15 +182,17 @@ curl -fsSL -o /tmp/socom.pre \
 chmod +x /tmp/socom.pre && /tmp/socom.pre --help | head -3 && /tmp/socom.pre version
 ```
 
-Verified 2026-08-08 at `f1dce80`: `http=200`, **434361 bytes**, `cmp`
-byte-identical to `bin/socom`, build **`a1354b03b292`** (last commit touching
-`bin/socom`: `f1dce80`) *(measured: `curl -w` + `cmp` + `socom version`)*.
+Re-verified 2026-08-10 at `569f4d2`: `http=200`, **434361 bytes**, `cmp`
+byte-identical to `bin/socom`, build **`a1354b03b292`** — unchanged, because the
+last commit touching `bin/socom` is still `f1dce80` *(measured: `curl -w` +
+`cmp` + `socom version` + `git log -1 -- bin/socom`)*.
 `--help` prints on **stdout, exit 0**, so `| head -3` truncates as written; bare
 `socom` still exits 1 on stderr.
 **Also confirm macOS/Linux/WSL** — native Windows is unsupported (`fcntl`).
 
 ⚠️ **This number changes on ANY merge touching `bin/socom`.** It has moved five
-times across eleven passes. Re-run the preflight; never carry it forward.
+times across twelve passes *(measured: unchanged at the twelfth — `bin/socom`
+last moved at `f1dce80`)*. Re-run the preflight; never carry it forward.
 ⚠️ **Record the `version` digest on the sheet.** It is a sha256 of the running
 file, so it names the build a participant actually ran. A result that cannot name
 its build is not reproducible evidence.
@@ -182,6 +200,29 @@ its build is not reproducible evidence.
 ## Standing context — recorded so it is not re-derived
 
 Each of these cost a session. None of them is work.
+
+**`0007` + `INDEX.md` — landed 2026-08-10 on operator request. Analysis, not a
+queue.** `0007` reads four external harness-engineering sources (Fowler/Böckeler
+×2, Stripe minions, OpenAI Codex) against socom and decides what is adopted
+**after §5**: a typed gate result, `guidance[]` wiring, a bounded attempt
+budget — and what is refused outright (sidecar daemon, vendored sensors, the
+devbox). Its load-bearing finding: every source's harness sits on an execution
+environment its authors control; socom's bet is the inverse, and the 2026-08-07
+`rc=127` stall is the price of that bet, not a bug in the gate code. External
+claims are tagged `EXTERNAL`, never `MEASURED`, per `0003`'s precedent — and the
+premise (whether a typed gate result changes what a participant does) is tagged
+`UNMEASURED`, which is the shape that sank R1.
+`INDEX.md` measures socom's own surface: 40 verbs, 7,378 lines of `src/`, and
+**5 files of runtime state in the whole checkout** *(measured 2026-08-10 at
+`083e844` — re-probe before quoting)*. The blackboard ref has carried **two rows
+ever** — a lease and its release on the path `"--help"`, residue of the
+flag-parsing bug at `cli.py:54`; zero `attest`, zero `findings`. `gate eval` is
+RED because `.socom/ledger/` does not exist. Its diagnosis is **build order, not
+drift**: every empty layer is second-order, and no workload has ever flowed
+through socom. ⚠️ Its leverage ranking is an ORDERING for after §5 and
+**authorises nothing** — §6 says so. Item 2 (self-adopt locally without
+committing) and the `0001` enforcement-vs-detection question are both flagged
+**for the operator**, not for a session.
 
 **`decisions/0004` — the two boundaries socom does not represent.** Class A:
 socom reports what it WROTE, not what took EFFECT (nine surfaces). Class B: socom
@@ -309,17 +350,18 @@ place.
   explicitly **supporting, not blocking**. Run it by hand if you want it;
   **building** a harness for it is capability.
 
-## State — measured 2026-08-08 at `f1dce80`, re-probe anything you lean on
+## State — measured 2026-08-10 at `569f4d2`, re-probe anything you lean on
 
 | Thing | State |
 |---|---|
-| socom `main` | `f1dce80`, clean, pushed, CI **success** *(measured: `gh run list`)*. `git log --oneline -3` and re-probe rather than trusting this SHA. |
-| Buckets | `defects.md` **9 DONE P0 + 0 READY P0 + 1 DONE P1 + 8 READY P1** *(measured: 9/0/1/8 via `grep -cE`)* · `build.md` 1 READY (R1) + 8 BLOCKED *(measured: 1/8)* · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` **READY P0 — run recorded, §5 pending** *(L15 @ `f1dce80`)* |
+| socom `main` | `569f4d2`, clean, pushed, CI **success @ `569f4d2`** *(measured: `git log --oneline -1`, `git status --porcelain` = 0, `gh run list -L1`)*. `git log --oneline -3` and re-probe rather than trusting this SHA. |
+| Buckets | `defects.md` **9 DONE P0 + 0 READY P0 + 1 DONE P1 + 8 READY P1** *(measured: 9/0/1/8 via `grep -cE`)* · `build.md` 1 READY (R1) + 8 BLOCKED *(measured: 1/8)* · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` **READY P0 — run recorded, §5 pending** *(L15 @ `569f4d2`)* |
 | Exposure | **RUN 2026-08-07** — `bench/exposure/2026-08-07-akili.md` *(measured: `ls bench/exposure/` = README + TEMPLATE + one dated sheet)*. §1-§4, §6, §7 filled; **§5 PENDING until 2026-08-14** |
 | Proof tier | **operator to set** — `0006` declines to derive it and this repo does not define `D0`/`D1`. This prompt asserts no tier. |
-| Suite | `unit: 386 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean *(measured: all four re-run at `f1dce80`)* |
-| Artifact | http=200, **434361** bytes, build **`a1354b03b292`**, `cmp` byte-identical to `bin/socom` *(measured at `f1dce80`)*. ⚠️ **Re-measure — never carry.** |
-| Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork · `0004` two-boundaries-socom-does-not-represent · `0005` the-user-is-an-agent-the-adopter-is-not · **`0006` the-author-is-the-participant (Accepted — supersedes `0005`'s disposition)** *(measured: 6 files)* |
+| Suite | `unit: 386 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean *(measured: all four re-run at `569f4d2`)* |
+| Artifact | http=200, **434361** bytes, build **`a1354b03b292`**, `cmp` byte-identical to `bin/socom` *(measured at `569f4d2`; unchanged — `bin/socom` last moved at `f1dce80`)*. ⚠️ **Re-measure — never carry.** |
+| Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork · `0004` two-boundaries-socom-does-not-represent · `0005` the-user-is-an-agent-the-adopter-is-not · `0006` the-author-is-the-participant (Accepted — supersedes `0005`'s disposition) · **`0007` adopt-the-sensor-contract-not-the-sensor (Proposed — BLOCKED on §5)** *(measured: 7 files; `sed -n '3p' decisions/0007-*.md`)* |
+| Analysis landed 2026-08-10 | **`0007`** + **`INDEX.md`** — operator-requested, **authorise nothing**, see the ⚠️ in the header block *(verified `569f4d2`)* |
 
 Probes: `./bin/socom gate full` · `python3 build.py --check` ·
 `python3 tests/unit.py` · `python3 tests/r1corpus.py` · `grep -c '^- \`' buckets/*.md`
