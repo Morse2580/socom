@@ -78,10 +78,17 @@ Do not repair these first; neither can reach a single-session participant.
 - [[DEF-BLACKBOARD-GRANTS-ON-UNREACHABLE-REMOTE-01]] — needs two concurrent
   sessions.
 
-The four `READY P1` rows in `buckets/defects.md` are likewise deliberately
-unrepaired. `DEF-STATUS-CLAIMS-UNLABELLED-01` most of all: `PILOT.md` asks *"did
-a metric mislead you?"*, so repairing it first deletes a finding the participant
-is meant to generate.
+The **ten** `READY P1` rows in `buckets/defects.md` are likewise deliberately
+unrepaired *(measured 2026-08-11: `grep -cE '^- \`DEF-.*\*\*READY P1'` = 10 —
+this line read "four" until today and had been wrong for some time)*.
+`DEF-STATUS-CLAIMS-UNLABELLED-01` most of all: `PILOT.md` asks *"did a metric
+mislead you?"*, so repairing it first deletes a finding the participant is meant
+to generate.
+⚠️ **One of its seven surfaces WAS repaired on 2026-08-11** — the `quickstart`
+bind claim, under [`decisions/0008`](../../decisions/0008-the-guess-must-resolve-before-it-is-claimed.md),
+after the same failure was sighted four times including once by a non-author. The
+row stays `READY P1`; **the other six surfaces are still held**, and §4 of the
+sheet still has six answers to collect. Do not read the lift as covering them.
 
 ## Preflight (re-run before each session — it is 30 seconds)
 
@@ -95,8 +102,8 @@ chmod +x /tmp/socom.pre && /tmp/socom.pre --help | head -3 && /tmp/socom.pre ver
 ```
 
 Expect `http=200`, a non-trivial byte count, and the command list. Last verified
-2026-08-11 against `55d1397` — **200, 436923 bytes**, byte-identical to
-`bin/socom` (`cmp`), build **`77425a0cead4`**.
+2026-08-11 against `5eb8e81` — **200, 437237 bytes**, byte-identical to
+`bin/socom` (`cmp`), build **`ad0cac783b19`**.
 ⚠️ This number was **three builds stale** here on 2026-08-11 (it still read
 `430621` / `a1cf0802daef` from 2026-08-06, across the `f1dce80` install repair
 and the `0008` quickstart repair). That is Regression Test 1 recurring in the one

@@ -40,8 +40,8 @@ alone: a ruling is now pending. Everything below re-run today, not carried.
             due **2026-08-14** *(L99 + L120)*. The new report does **not**
             substitute for it — §5 asks whether the OPERATOR returned; the
             engineer is a different person, with a separate and also-pending §5.
-  REWRITTEN public artifact . 434361 -> **436923** bytes, `a1354b03b292` ->
-            **`77425a0cead4`**, http=200, `cmp` byte-identical *(measured:
+  REWRITTEN public artifact . 434361 -> 436923 -> **437237** bytes, `a1354b03b292` ->
+            **`ad0cac783b19`** (two repairs shipped 2026-08-11), http=200, `cmp` byte-identical *(measured:
             `curl -w` + `cmp` + `version` after the 0008 repair shipped)*.
             **MOVED** — `bin/socom` changed. Regression Test 1, sixth time.
   REWRITTEN defects ......... 8 -> **10 READY P1** *(measured: 9/0/1/10 via
@@ -49,7 +49,7 @@ alone: a ruling is now pending. Everything below re-run today, not carried.
   VERIFIED  build.md ........ 1 READY (R1) + 8 BLOCKED, unchanged *(measured: 1/8)*
   VERIFIED  EV row .......... `EV-NONAUTHOR-EXPOSURE-01` still **READY P0** —
             correctly, because §5 is unfilled *(L15 @ `d85381b`)*
-  REWRITTEN suites .......... unit 386 -> **395** / r1corpus 146 / gate full
+  REWRITTEN suites .......... unit 386 -> **399** / r1corpus 146 / gate full
             **PASS** / `build.py --check` clean *(measured: all four re-run
             after the `0008` repair)* — +9 from the `_resolve_check` assertions
   VERIFIED  code cites ...... all eight re-`sed`-ed, all resolve to the cited
@@ -270,9 +270,10 @@ curl -fsSL -o /tmp/socom.pre \
 chmod +x /tmp/socom.pre && /tmp/socom.pre --help | head -3 && /tmp/socom.pre version
 ```
 
-Re-measured 2026-08-11 after the `0008` repair: `http=200`, **436923 bytes**,
-`cmp` byte-identical to `bin/socom`, build **`77425a0cead4`** *(measured:
-`curl -w` + `cmp` + `socom version`)*. It MOVED — `bin/socom` changed for the
+Re-measured 2026-08-11 after BOTH repairs shipped: `http=200`, **437237
+bytes**, `cmp` byte-identical to `bin/socom`, build **`ad0cac783b19`**
+*(measured: `curl -w` + `cmp` + `socom version` at `5eb8e81`)*. It moved twice
+today — `bin/socom` had not changed since `f1dce80` before that. It MOVED — `bin/socom` changed for the
 first time since `f1dce80`.
 `--help` prints on **stdout, exit 0**, so `| head -3` truncates as written; bare
 `socom` still exits 1 on stderr.
@@ -443,11 +444,11 @@ place.
 | Thing | State |
 |---|---|
 | socom `main` | `d85381b`, clean, pushed, CI **success @ `d85381b`** *(measured: `git log --oneline -1`, `git status --porcelain` = 0, `gh run list -L1`)*. `git log --oneline -3` and re-probe rather than trusting this SHA. |
-| Buckets | `defects.md` **9 DONE P0 + 0 READY P0 + 1 DONE P1 + 10 READY P1** *(measured: 9/0/1/10 via `grep -cE`)* — was 8; two rows filed from the 2026-08-11 field report · `build.md` 1 READY (R1) + 8 BLOCKED *(measured: 1/8)* · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` **READY P0 — run recorded, §5 pending** *(L15 @ `d85381b`)* |
+| Buckets | `defects.md` **9 DONE P0 + 0 READY P0 + 2 DONE P1 + 10 READY P1** *(measured: 9/0/2/10 via `grep -cE`)* · `build.md` 1 READY (R1) + 8 BLOCKED *(measured: 1/8)* · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` **READY P0 — run recorded, §5 pending** *(L15 @ `d85381b`)* |
 | Exposure | **TWO events on file** *(measured: `ls bench/exposure/` = README + TEMPLATE + **two** dated sheets)*. (1) **RUN 2026-08-07** — `2026-08-07-akili.md`, protocol-conforming, §1-§4/§6/§7 filled, **§5 PENDING until 2026-08-14**. (2) **FIELD REPORT 2026-08-11** — `2026-08-11-buzz-engineer-report.md`, a **non-author** engineer on `buzz`; ⚠️ **not a protocol run** (no observer, no recruitment screen, **no `socom version` digest**) and its own §5 is separately PENDING |
 | Proof tier | **operator to set** — `0006` declines to derive it and this repo does not define `D0`/`D1`. This prompt asserts no tier. |
-| Suite | `unit: 395 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean *(measured: all four re-run 2026-08-11 after the repair)* |
-| Artifact | http=200, **436923** bytes, build **`77425a0cead4`**, `cmp` byte-identical to `bin/socom` *(measured 2026-08-11 after the `0008` repair shipped)*. ⚠️ **Re-measure — never carry.** |
+| Suite | `unit: 399 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean *(measured: all four re-run 2026-08-11 after the repair)* |
+| Artifact | http=200, **437237** bytes, build **`ad0cac783b19`**, `cmp` byte-identical to `bin/socom` *(measured 2026-08-11 after the `0008` repair shipped)*. ⚠️ **Re-measure — never carry.** |
 | Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork · `0004` two-boundaries-socom-does-not-represent · `0005` the-user-is-an-agent-the-adopter-is-not · `0006` the-author-is-the-participant (Accepted) · `0007` adopt-the-sensor-contract-not-the-sensor (Proposed — BLOCKED on §5) · **`0008` the-guess-must-resolve-before-it-is-claimed (Accepted 2026-08-11 — REPAIRED, surface 1 of 7)** *(measured: 8 files; `sed -n '3p' decisions/0008-*.md`)* |
 | Analysis landed 2026-08-10/11 | `0007` + `INDEX.md` — operator-requested, **authorise nothing**. `INDEX.md` item 2 was run, **refuted** (adopt produces no ledger) and **withdrawn by operator ruling**; item 1b records the operator's ask to be given repos to test, **gated behind §5** |
 | `0008` — closed | **Accepted and REPAIRED 2026-08-11** at `55d1397`. One surface of `DEF-STATUS-CLAIMS-UNLABELLED-01`; the row stays **READY P1** with six surfaces held. ⚠️ **Do not finish the row** |
