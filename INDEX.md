@@ -112,7 +112,19 @@ whether one row closes, it is the first datum on whether **anything** flows
 through the substrate at all.
 ⚠️ Do not fill early and do not prompt it — see the sheet and `0001`.
 
-### 2 — Let socom self-adopt LOCALLY, without committing it. `EFFORT: ~1h. NOT AUTHORISED.`
+**1b — More runs, on repos the operator holds. `AFTER §5. Operator has asked to
+be given them.`**
+Recorded 2026-08-11 from the ruling that withdrew item 2: *"tell me to test in
+other repos and I can give back the feedback."* That is the instrument — under
+`0006` the operator testing across their machines **is** the verification chain
+this project has, and it is the thing self-adoption was a substitute for.
+⚠️ **Gated, and the gate is not a formality.** The standing prohibition holds
+until §5 is filled: *"a second run before §5 is filled does not produce a nicer
+answer, it destroys the one measurement in flight."* On 2026-08-14, §5 first —
+then the next repo. Recording the ask here so it is not lost, **not** licensing
+it early.
+
+### ~~2 — Let socom self-adopt LOCALLY, without committing it.~~ **WITHDRAWN 2026-08-11 by operator ruling. Ran, refuted, reverted.**
 **CORRECTED 2026-08-10** — the first draft of this item marked it *"NOT
 AUTHORISED, a decision to revisit."* That was wrong on both counts; `546227e`
 was then read in full and it does not merely permit local self-adoption, it
@@ -136,6 +148,33 @@ lands a capability beyond R1"* — running `adopt` lands no commit. The lane rul
 (`0001`:155) catches anything that *"adds a surface, a knob, a mechanism, or an
 authorization that does not exist today"*; `adopt` ships today, and running an
 existing verb is not building one.
+
+### ⛔ OPERATOR RULING 2026-08-11 — item 2 is WITHDRAWN, not deferred
+
+> *"Unadopt — it is really important that this be done the right way, by telling
+> me to test in other repos and I can give back the feedback."*
+
+**The instrument is the operator running socom on repos they hold, and reporting
+back.** Self-adoption is not a cheaper version of that; it is a different and
+weaker thing wearing its clothes, and ranking it #2 pointed the next session at
+the substitute instead of the instrument. `0006` already settled this — the
+operator directing, the agent building, the operator testing across their
+machines **is** the verification chain this project has. Item 2 proposed
+measuring socom with socom.
+
+**Reverted the same day:** `socom unadopt` (hooks restored to unset, exit
+recorded as `socom.unadopted`), then adopt's planted files removed by hand —
+`unadopt` deliberately leaves them and says so. `.socom/` is back to its five
+pre-adopt files, `.claude/` to its four tracked skills, tracked tree clean
+*(measured: `find .socom -type f` = 5, `git status --porcelain` = 0,
+`git config core.hooksPath` → rc=1)*. `ship-and-verify`'s "hooks are unset
+here" is accurate again.
+
+**The item stays written, struck, with its refutation intact** — it cost a run
+to learn, and a later session that rediscovers the idea should find the answer
+rather than the idea. Everything below is the record of that run.
+
+---
 
 ### ⚠️ RUN 2026-08-10 — and the payoff claim above is REFUTED
 
