@@ -11,7 +11,7 @@ Passes 1-11 (2026-08-05 → 2026-08-08) are compacted to their standing verdicts
   premise, not only the numbers.
 Full pass-by-pass history: `git log -p prompts/next-session-run-n1-exposure.md`.
 
-Pass TWELVE (2026-08-10, `d85381b`) is compacted: it corrected `decisions` 6→7,
+Pass TWELVE (2026-08-10, `569f4d2`) is compacted: it corrected `decisions` 6→7,
 HEAD/CI, and the unnamed `INDEX.md`, and it caught six annotations reading
 `@ f1dce80` on claims re-probed that day — the values matched, the measurement
 point did not, which is the fail-closed rule's "the annotation lied" case.
