@@ -11,7 +11,7 @@ Passes 1-11 (2026-08-05 → 2026-08-08) are compacted to their standing verdicts
   premise, not only the numbers.
 Full pass-by-pass history: `git log -p prompts/next-session-run-n1-exposure.md`.
 
-Pass TWELVE (2026-08-10, `569f4d2`) is compacted: it corrected `decisions` 6→7,
+Pass TWELVE (2026-08-10, `d85381b`) is compacted: it corrected `decisions` 6→7,
 HEAD/CI, and the unnamed `INDEX.md`, and it caught six annotations reading
 `@ f1dce80` on claims re-probed that day — the values matched, the measurement
 point did not, which is the fail-closed rule's "the annotation lied" case.
@@ -33,7 +33,7 @@ alone: a ruling is now pending. Everything below re-run today, not carried.
   REWRITTEN the P1 hold ..... `DEF-STATUS-CLAIMS-UNLABELLED-01` has a **FOURTH
             sighting** appended, first by a non-author. Row is **still READY
             P1** and still unrepaired — `0008` is the drafted lift and covers
-            **one surface only** *(L977 @ this SHA; re-`grep` it)*
+            **one surface only** *(L977 @ `d85381b`; re-`grep` it)*
   VERIFIED  §5 ............... `2026-08-07-akili.md` §5 still **PENDING**, still
             due **2026-08-14** *(L99 + L120)*. The new report does **not**
             substitute for it — §5 asks whether the OPERATOR returned; the
@@ -46,10 +46,10 @@ alone: a ruling is now pending. Everything below re-run today, not carried.
             unchanged *(measured: 9/0/1/8 via `grep -cE`)*
   VERIFIED  build.md ........ 1 READY (R1) + 8 BLOCKED, unchanged *(measured: 1/8)*
   VERIFIED  EV row .......... `EV-NONAUTHOR-EXPOSURE-01` still **READY P0** —
-            correctly, because §5 is unfilled *(L15 @ `569f4d2`)*
+            correctly, because §5 is unfilled *(L15 @ `d85381b`)*
   VERIFIED  suites .......... unit **386** / r1corpus **146** (18 paired, 11
             controls, 19 repos) / gate full **PASS** / `build.py --check` clean
-            *(measured: all four re-run at `569f4d2`)*
+            *(measured: all four re-run at `d85381b`)*
   VERIFIED  code cites ...... all eight re-`sed`-ed, all resolve to the cited
             symbol, none moved *(mechanism verified: `bb_do_claim`
             `blackboard.py:520`, `is_generated` `core.py:137`, `log_breach`
@@ -57,7 +57,7 @@ alone: a ruling is now pending. Everything below re-run today, not carried.
             `install.py:48`, `cmd_install` `install.py:80`,
             `compromise-recording` `canon/residuality.xml:95`,
             `BUILD-ACP-RUNTIME-SEAM-01` `buckets/build.md:73`)*
-  VERIFIED  skills ........... four, unchanged *(verified `569f4d2`:
+  VERIFIED  skills ........... four, unchanged *(verified `d85381b`:
             `git ls-files .claude/skills/`)*
   VERIFIED  proof tier ...... **operator to set** — `0006` §"does not claim"
             explicitly declines to derive it, and the `D0`/`D1` vocabulary is
@@ -92,7 +92,7 @@ alone: a ruling is now pending. Everything below re-run today, not carried.
 > `prompts/next-session-*.md`. Same convention `0006` used for the row ID.
 
 **Row:** `EV-NONAUTHOR-EXPOSURE-01` (`buckets/evidence.md`), **READY P0**, `n=1`
-*(L15 @ `569f4d2`)*.
+*(L15 @ `d85381b`)*.
 **Governed by** `decisions/0001`, **amended by `0006`**.
 **Sheet:** `bench/exposure/2026-08-07-akili.md` — §1-§4, §6, §7 are FILLED.
 **§5 is PENDING and §5 is the metric.**
@@ -248,7 +248,7 @@ socom's own hooks are not wired in its checkout, so run `./bin/socom gate full`
 yourself before every push.
 
 **Four skills ship in this repo** and are auto-discovered — nothing to install
-*(verified `569f4d2`: `git ls-files .claude/skills/` lists all four)*.
+*(verified `d85381b`: `git ls-files .claude/skills/` lists all four)*.
 
 - `ship-and-verify` — the push loop: `build.py` → `gate full` **by hand** →
   commit to `main` → `gh run watch` → **re-measure the public curl artifact**.
@@ -276,7 +276,7 @@ curl -fsSL -o /tmp/socom.pre \
 chmod +x /tmp/socom.pre && /tmp/socom.pre --help | head -3 && /tmp/socom.pre version
 ```
 
-Re-verified 2026-08-10 at `569f4d2`: `http=200`, **434361 bytes**, `cmp`
+Re-verified 2026-08-10 at `d85381b`: `http=200`, **434361 bytes**, `cmp`
 byte-identical to `bin/socom`, build **`a1354b03b292`** — unchanged, because the
 last commit touching `bin/socom` is still `f1dce80` *(measured: `curl -w` +
 `cmp` + `socom version` + `git log -1 -- bin/socom`)*.
@@ -444,16 +444,16 @@ place.
   explicitly **supporting, not blocking**. Run it by hand if you want it;
   **building** a harness for it is capability.
 
-## State — measured 2026-08-11, re-probe anything you lean on
+## State — measured 2026-08-11 at `d85381b`, re-probe anything you lean on
 
 | Thing | State |
 |---|---|
-| socom `main` | `569f4d2`, clean, pushed, CI **success @ `569f4d2`** *(measured: `git log --oneline -1`, `git status --porcelain` = 0, `gh run list -L1`)*. `git log --oneline -3` and re-probe rather than trusting this SHA. |
-| Buckets | `defects.md` **9 DONE P0 + 0 READY P0 + 1 DONE P1 + 8 READY P1** *(measured: 9/0/1/8 via `grep -cE`)* · `build.md` 1 READY (R1) + 8 BLOCKED *(measured: 1/8)* · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` **READY P0 — run recorded, §5 pending** *(L15 @ `569f4d2`)* |
+| socom `main` | `d85381b`, clean, pushed, CI **success @ `d85381b`** *(measured: `git log --oneline -1`, `git status --porcelain` = 0, `gh run list -L1`)*. `git log --oneline -3` and re-probe rather than trusting this SHA. |
+| Buckets | `defects.md` **9 DONE P0 + 0 READY P0 + 1 DONE P1 + 8 READY P1** *(measured: 9/0/1/8 via `grep -cE`)* · `build.md` 1 READY (R1) + 8 BLOCKED *(measured: 1/8)* · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` **READY P0 — run recorded, §5 pending** *(L15 @ `d85381b`)* |
 | Exposure | **TWO events on file** *(measured: `ls bench/exposure/` = README + TEMPLATE + **two** dated sheets)*. (1) **RUN 2026-08-07** — `2026-08-07-akili.md`, protocol-conforming, §1-§4/§6/§7 filled, **§5 PENDING until 2026-08-14**. (2) **FIELD REPORT 2026-08-11** — `2026-08-11-buzz-engineer-report.md`, a **non-author** engineer on `buzz`; ⚠️ **not a protocol run** (no observer, no recruitment screen, **no `socom version` digest**) and its own §5 is separately PENDING |
 | Proof tier | **operator to set** — `0006` declines to derive it and this repo does not define `D0`/`D1`. This prompt asserts no tier. |
-| Suite | `unit: 386 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean *(measured: all four re-run at `569f4d2`)* |
-| Artifact | http=200, **434361** bytes, build **`a1354b03b292`**, `cmp` byte-identical to `bin/socom` *(measured at `569f4d2`; unchanged — `bin/socom` last moved at `f1dce80`)*. ⚠️ **Re-measure — never carry.** |
+| Suite | `unit: 386 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean *(measured: all four re-run at `d85381b`)* |
+| Artifact | http=200, **434361** bytes, build **`a1354b03b292`**, `cmp` byte-identical to `bin/socom` *(measured at `d85381b`; unchanged — `bin/socom` last moved at `f1dce80`)*. ⚠️ **Re-measure — never carry.** |
 | Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork · `0004` two-boundaries-socom-does-not-represent · `0005` the-user-is-an-agent-the-adopter-is-not · `0006` the-author-is-the-participant (Accepted) · `0007` adopt-the-sensor-contract-not-the-sensor (Proposed — BLOCKED on §5) · **`0008` the-guess-must-resolve-before-it-is-claimed (PROPOSED — the one thing awaiting a signature)** *(measured: 8 files; `sed -n '3p' decisions/0008-*.md`)* |
 | Analysis landed 2026-08-10/11 | `0007` + `INDEX.md` — operator-requested, **authorise nothing**. `INDEX.md` item 2 was run, **refuted** (adopt produces no ledger) and **withdrawn by operator ruling**; item 1b records the operator's ask to be given repos to test, **gated behind §5** |
 | ⚠️ Awaiting a signature | **`0008`** — lifts the P1 hold on ONE surface of `DEF-STATUS-CLAIMS-UNLABELLED-01`. **PROPOSED. Nothing may be repaired until it reads Accepted.** Step 1 of this session is reading that line |
