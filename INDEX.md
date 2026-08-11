@@ -113,15 +113,72 @@ through the substrate at all.
 ⚠️ Do not fill early and do not prompt it — see the sheet and `0001`.
 
 ### 2 — Let socom self-adopt LOCALLY, without committing it. `EFFORT: ~1h. NOT AUTHORISED.`
-The reversal at `546227e` was about not **committing** socom-in-socom, and
-`.gitignore:7` already excludes `/.socom/`. Running `socom adopt` in this
-checkout and leaving the state untracked does not reproduce what that commit
-reversed. It is the only path by which the Measurement layer — 10 verbs, 750
-handler SLOC, `retrieval.py`'s 702 — ever receives a single real row, and it
-turns `gate eval` from a structural RED into a number. **25% of the verb surface
-is currently unfalsifiable**, and this is the cheapest thing that changes that.
-*Flagged as a decision to revisit, not a bug: the reversal was deliberate and
-its reasoning has not been re-read against this distinction.*
+**CORRECTED 2026-08-10** — the first draft of this item marked it *"NOT
+AUTHORISED, a decision to revisit."* That was wrong on both counts; `546227e`
+was then read in full and it does not merely permit local self-adoption, it
+**prescribes** it.
+
+- `[why]` objects only to **shipping**: *"a user cloning the tool inherited the
+  author's working diary… the substrate is each user's to generate, never
+  shipped."* The complaint is what a cloner receives, not what the author runs.
+- `[how]` is decisive: *"git rm --cached the generated/self-adopted paths
+  (**kept on disk locally**, now ignored)."* The commit deliberately preserved
+  the self-adoption on disk. It untracked; it did not remove.
+- `[next]`: *"verify a fresh clone is clean and `socom adopt` regenerates the
+  substrate as ignored output."* The commit's own next step is to run `adopt`
+  and confirm it produces ignored output.
+- It is the **last commit touching `.socom`** *(measured: `git log -- .socom`)* —
+  nothing later reversed it. `ROADMAP.md:28` records the pilot repo as socom
+  itself, dogfood, Phase 0 ✅ DONE.
+
+**`0001` does not block it either.** Its falsifiable acceptance is *"No commit
+lands a capability beyond R1"* — running `adopt` lands no commit. The lane rule
+(`0001`:155) catches anything that *"adds a surface, a knob, a mechanism, or an
+authorization that does not exist today"*; `adopt` ships today, and running an
+existing verb is not building one.
+
+### ⚠️ RUN 2026-08-10 — and the payoff claim above is REFUTED
+
+The first two drafts of this item claimed `adopt` *"turns `gate eval` from a
+structural RED into a number."* **It does not.** `socom adopt` was run in this
+checkout and the claim was tested directly:
+
+```
+$ ./bin/socom adopt      # → rung T4, "wired, no retrieval floor", rc=0
+$ ./bin/socom gate eval
+socom cycle: no ledger — .socom/ledger/runs.jsonl absent.   # identical to before
+```
+
+`.socom/` went from 5 files to 16, and `.socom/ledger/` **still does not exist**
+*(measured: `ls .socom/ledger` → No such file)*. The ledger is written only by
+`_append_ledger_row` — from `gate task-completion <promise.xml>`
+(`src/socom/gate.py:147`), `contract verify --record` (`ledger.py:340`), and
+`monarch` (`monarch.py:190`) — **all of which require a promise**, and
+`.socom/promises/` is empty *(mechanism verified: `grep -n _append_ledger_row`,
+`ls .socom/promises/`)*.
+
+**So item 2 does not do what it was ranked for.** Adoption plants the substrate;
+it does not put a workload through the promise spine. Reaching a real ledger row
+needs an actual promise+contract cycle run against real work — which is a
+larger, different item and is **not** ranked here, because nothing has scoped it.
+The 25% unfalsifiable figure stands; the cheap fix for it does not exist.
+
+**Two side effects found by running it, recorded, not repaired:**
+
+1. **`adopt` writes to `.gitignore` — a tracked file** — appending a generated
+   block whose own comment reads *"The rest of `.socom/` (canon, probes,
+   lessons, memory) is SOURCE — keep it committed."* That **contradicts
+   `546227e`**, which untracked `/.socom/` wholesale for this repo. The block was
+   reverted here (`/.gitignore:7` already ignores `/.socom/` entirely, so it was
+   redundant as well as contrary). Not filed — see `0001`'s P1 rule.
+2. `adopt` wires `core.hooksPath=.githooks` and plants a governing `CLAUDE.md`
+   and `AGENTS.md` at the repo root. `ship-and-verify`'s note that socom's own
+   checkout has hooks **unset** is stale from this point. `socom unadopt`
+   reverses it.
+
+**§3b of this document is now historical.** It is measured at `083e844`, before
+this run. `gate eval` is still RED for the same reason, but `.socom/` is no
+longer a 5-file tree — re-probe §1 and §3 before quoting either.
 
 ### 3 — Typed gate result (`0007` item 1). `EFFORT: medium. BLOCKED on §5.`
 `run_check` (`src/socom/gate.py`) returns a bare `returncode`; output is
