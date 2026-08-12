@@ -44,8 +44,10 @@ alone: a ruling is now pending. Everything below re-run today, not carried.
             **`ad0cac783b19`** (two repairs shipped 2026-08-11), http=200, `cmp` byte-identical *(measured:
             `curl -w` + `cmp` + `version` after the 0008 repair shipped)*.
             **MOVED** — `bin/socom` changed. Regression Test 1, sixth time.
-  REWRITTEN defects ......... 8 -> **10 READY P1** *(measured: 9/0/1/10 via
-            `grep -cE`)* — two rows filed from the field report. P0 unchanged.
+  REWRITTEN defects ......... **9 DONE P0 / 0 READY P0 / 2 DONE P1 / 10 READY
+            P1** *(measured: 9/0/2/10 via `grep -cE`)*. Was 9/0/1/8: two rows
+            filed from the field report, one help-text row filed already-DONE.
+            P0 unchanged and unchangeable — see the bucket's own no-growth Note.
   VERIFIED  build.md ........ 1 READY (R1) + 8 BLOCKED, unchanged *(measured: 1/8)*
   VERIFIED  EV row .......... `EV-NONAUTHOR-EXPOSURE-01` still **READY P0** —
             correctly, because §5 is unfilled *(L15 @ `d85381b`)*
@@ -88,10 +90,10 @@ alone: a ruling is now pending. Everything below re-run today, not carried.
   to lean on one. If this convention survives a pass, promote it into the skill.
 -->
 
-# Next session — file two rows. §5 on 2026-08-14. `0008` is DONE.
+# Next session — §5 on 2026-08-14. Until then there is NO WORK.
 
 > ⚠️ **The filename is historical.** It says "run-n1-exposure"; the run happened
-> on 2026-08-07. The name is kept because thirteen verify passes of audit trail
+> on 2026-08-07. The name is kept because fourteen verify passes of audit trail
 > live in this file's history and `prompt-verify-pass` globs
 > `prompts/next-session-*.md`. Same convention `0006` used for the row ID.
 
@@ -444,7 +446,7 @@ place.
 | Thing | State |
 |---|---|
 | socom `main` | `d85381b`, clean, pushed, CI **success @ `d85381b`** *(measured: `git log --oneline -1`, `git status --porcelain` = 0, `gh run list -L1`)*. `git log --oneline -3` and re-probe rather than trusting this SHA. |
-| Buckets | `defects.md` **9 DONE P0 + 0 READY P0 + 2 DONE P1 + 10 READY P1** *(measured: 9/0/2/10 via `grep -cE`)* · `build.md` 1 READY (R1) + 8 BLOCKED *(measured: 1/8)* · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` **READY P0 — run recorded, §5 pending** *(L15 @ `d85381b`)* |
+| Buckets | `defects.md` **9 DONE P0 + 0 READY P0 + 2 DONE P1 + 10 READY P1** *(measured 2026-08-11: 9/0/2/10 via `grep -cE`)* · `build.md` 1 READY (R1) + 8 BLOCKED *(measured: 1/8)* · `evidence.md` `EV-NONAUTHOR-EXPOSURE-01` **READY P0 — run recorded, §5 pending** *(L15 @ `d85381b`)* |
 | Exposure | **TWO events on file** *(measured: `ls bench/exposure/` = README + TEMPLATE + **two** dated sheets)*. (1) **RUN 2026-08-07** — `2026-08-07-akili.md`, protocol-conforming, §1-§4/§6/§7 filled, **§5 PENDING until 2026-08-14**. (2) **FIELD REPORT 2026-08-11** — `2026-08-11-buzz-engineer-report.md`, a **non-author** engineer on `buzz`; ⚠️ **not a protocol run** (no observer, no recruitment screen, **no `socom version` digest**) and its own §5 is separately PENDING |
 | Proof tier | **operator to set** — `0006` declines to derive it and this repo does not define `D0`/`D1`. This prompt asserts no tier. |
 | Suite | `unit: 399 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean *(measured: all four re-run 2026-08-11 after the repair)* |
