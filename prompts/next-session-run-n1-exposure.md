@@ -68,9 +68,12 @@ alone: a ruling is now pending. Everything below re-run today, not carried.
             not defined in this repo. This prompt does NOT assert a tier.
   HYPOTHESIS none.
 
-  ⚠️ **`0007` and `INDEX.md` are still NOT a queue.** Both are analysis. `0007`
-  is Proposed — BLOCKED on §5; `INDEX.md` §6 authorises nothing, and its item 2
-  was run, refuted and **withdrawn by operator ruling** on 2026-08-11.
+  ⚠️ **`0007`, `0009` and `INDEX.md` are NOT a queue.** All three are analysis.
+  `0007` is Proposed — BLOCKED on §5, and **`0009` corrects its confidence**: the
+  enforcement-over-instruction case is an INFERENCE, not a measurement, and the
+  head-to-head has never been run. `0009` itself authorises and gates nothing —
+  no work waits on its signature in either direction. `INDEX.md` §6 authorises
+  nothing and its item 2 was run, refuted and **withdrawn by operator ruling**.
   ⚠️ **`0008` WAS different, and it is now CLOSED.** Accepted by operator ruling
   and repaired the same day at `55d1397`. It was the one item in this repo that
   could move from analysis to work, and it did. **It is not a precedent a session
@@ -365,6 +368,12 @@ carried, re-probe before leaning on it)*: no primary source where a developer
 complains an instruction file told the agent something false. The loud,
 repeatedly-sourced complaint is the mechanical inverse — agents *ignoring* rules
 that are still correct (`anthropics/claude-code#15443`, `#37888`, Cursor forum).
+⚠️ **2026-08-11: THAT REPLACEMENT IS ALSO REFUTED — see `0009`.** A measurement
+(arXiv:2602.11988, `EXTERNAL`) finds adherence is *strong*: a tool named in the
+context file is used 1.6×/instance vs <0.01× unnamed. The files are not ignored,
+they are **redundant**. Complaint volume is not evidence and a measurement is.
+**R1's premise is now refuted in BOTH directions and its evidentiary basis is
+empty.** It remains READY and unbuilt, which is the correct state.
 Caveat kept: no survey has ever *asked*, so absence may be an availability
 effect — you may not assume that. Prior art is PARTIAL (`giacomo/agents-lint`
 ships **existence**-checking; git-history contradiction is its unreleased
@@ -451,7 +460,7 @@ place.
 | Proof tier | **operator to set** — `0006` declines to derive it and this repo does not define `D0`/`D1`. This prompt asserts no tier. |
 | Suite | `unit: 399 passed, 0 failed` · `r1corpus: 146 passed, 0 failed` · `gate full: PASS` · `build.py --check` clean *(measured: all four re-run 2026-08-11 after the repair)* |
 | Artifact | http=200, **437237** bytes, build **`ad0cac783b19`**, `cmp` byte-identical to `bin/socom` *(measured 2026-08-11 after the `0008` repair shipped)*. ⚠️ **Re-measure — never carry.** |
-| Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork · `0004` two-boundaries-socom-does-not-represent · `0005` the-user-is-an-agent-the-adopter-is-not · `0006` the-author-is-the-participant (Accepted) · `0007` adopt-the-sensor-contract-not-the-sensor (Proposed — BLOCKED on §5) · **`0008` the-guess-must-resolve-before-it-is-claimed (Accepted 2026-08-11 — REPAIRED, surface 1 of 7)** *(measured: 8 files; `sed -n '3p' decisions/0008-*.md`)* |
+| Decisions | `0001` exposure-before-capability · `0002` unresolvable-enforcement-must-record (**HELD**) · `0003` no-standard-binds-a-fork · `0004` two-boundaries-socom-does-not-represent · `0005` the-user-is-an-agent-the-adopter-is-not · `0006` the-author-is-the-participant (Accepted) · `0007` adopt-the-sensor-contract-not-the-sensor (Proposed — BLOCKED on §5) · **`0008` the-guess-must-resolve-before-it-is-claimed (Accepted 2026-08-11 — REPAIRED, surface 1 of 7)** · **`0009` the-compiler-is-on-the-wrong-side-of-the-evidence (Proposed — corrects `0007` and R1; authorises and gates NOTHING)** *(measured: 9 files)* |
 | Analysis landed 2026-08-10/11 | `0007` + `INDEX.md` — operator-requested, **authorise nothing**. `INDEX.md` item 2 was run, **refuted** (adopt produces no ledger) and **withdrawn by operator ruling**; item 1b records the operator's ask to be given repos to test, **gated behind §5** |
 | `0008` — closed | **Accepted and REPAIRED 2026-08-11** at `55d1397`. One surface of `DEF-STATUS-CLAIMS-UNLABELLED-01`; the row stays **READY P1** with six surfaces held. ⚠️ **Do not finish the row** |
 
